@@ -632,7 +632,7 @@ async function run() {
     );
 
     if (isEditing) {
-      return React.createElement('div', { style: { height: '54px', border: '1px solid #1890ff', borderRadius: '6px', padding: '4px', background: '#fff', boxSizing: 'border-box', overflow: 'hidden' } },
+      return React.createElement('div', { style: { height: '68px', border: '1px solid #1890ff', borderRadius: '6px', padding: '4px', background: '#fff', boxSizing: 'border-box', overflow: 'hidden' } },
         React.createElement('textarea', {
           value: tempContent,
           onChange: e => setTempContent(e.target.value),
@@ -648,7 +648,7 @@ async function run() {
           autoFocus: true,
           disabled: uploading,
           placeholder: '输入文字...\n支持 Ctrl + V 粘贴截图\nCtrl + Enter 保存，Esc 取消',
-          style: { width: '100%', height: '44px', border: '1px solid #1890ff', borderRadius: '4px', padding: '5px 6px', fontSize: '13px', fontFamily: 'monospace', resize: 'none', background: '#fafafa', lineHeight: '16px', outline: 'none', boxSizing: 'border-box', overflow: 'auto' },
+          style: { width: '100%', height: '58px', border: '1px solid #1890ff', borderRadius: '4px', padding: '5px 6px', fontSize: '13px', fontFamily: 'monospace', resize: 'none', background: '#fafafa', lineHeight: '16px', outline: 'none', boxSizing: 'border-box', overflow: 'auto' },
         })
       );
     }
@@ -662,7 +662,7 @@ async function run() {
     return React.createElement(React.Fragment, null,
       React.createElement('div', {
         onDoubleClick: () => { setTempContent(content || ''); setIsEditing(true); },
-        style: { height: '54px', display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 8px', background: content ? '#fafafa' : '#fff', border: '1px solid #e5e7eb', borderRadius: '6px', cursor: 'cell', overflow: 'hidden', boxSizing: 'border-box' },
+        style: { height: '68px', display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 8px', background: content ? '#fafafa' : '#fff', border: '1px solid #e5e7eb', borderRadius: '6px', cursor: 'cell', overflow: 'hidden', boxSizing: 'border-box' },
       },
         imageUrls.length > 0 && React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 } },
           visibleImages.map((url, i) => React.createElement('img', {
@@ -679,7 +679,7 @@ async function run() {
             placement: 'topLeft',
             mouseEnterDelay: 0.3,
           },
-            React.createElement('div', { style: { fontSize: '13px', color: cleanText ? '#333' : '#999', lineHeight: '18px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } },
+            React.createElement('div', { style: { fontSize: '13px', color: cleanText ? '#333' : '#999', lineHeight: '18px', minHeight: cleanText ? '36px' : undefined, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', wordBreak: 'break-all' } },
               cleanText || (imageUrls.length ? `${imageUrls.length} 张截图` : placeholder)
             )
           ),
