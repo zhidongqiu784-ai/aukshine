@@ -1070,7 +1070,7 @@ async function run() {
       const roleOrder = Object.fromEntries(KW_ROLE_ORDER.map((role, idx) => [role, idx + 1]));
       return [...(records || [])]
         .sort((a, b) => (roleOrder[a.role] || 99) - (roleOrder[b.role] || 99))
-        .map((kw) => {
+        .map((kw, idx) => {
           const roleLabel = KW_ROLE_LABEL[kw.role] || kw.role || '';
           const targetPart = ' 自然位';
           const label = `词:${kw.keyword_name || '未命名'}${roleLabel ? `(${roleLabel})` : ''}${targetPart}`;
@@ -1083,7 +1083,7 @@ async function run() {
             pinned: false,
             width: calcKeywordColWidth(label),
             editable: false,
-            headerColor: '#EB6793',
+            headerColor: idx < 4 ? '#FCC102' : '#EB6793',
             _dynamicKind: 'keyword',
             _kwId: kw.id,
           };
