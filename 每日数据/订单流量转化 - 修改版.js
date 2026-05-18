@@ -2,7 +2,7 @@ async function run() {
 
   const React = ctx.libs.React;
   const { useState, useRef, useMemo, useCallback, useEffect } = React;
-  const { Pagination, Input, InputNumber, Select, DatePicker, Drawer, Table, Button, Popconfirm, ConfigProvider, Tooltip, Modal, Form } = ctx.libs.antd;
+  const { Pagination, Input, InputNumber, Select, DatePicker, Table, Button, Popconfirm, ConfigProvider, Tooltip, Modal, Form } = ctx.libs.antd;
 
   const currentUserId    = await ctx.getVar('ctx.user.id') || null;
   const currentUserName  = await ctx.getVar('ctx.user.username') || 'guest';
@@ -689,17 +689,16 @@ async function run() {
   };
 
   const CompetitorMasterDrawer = ({ visible, onClose, countryAsinOptions, country: propCountry, asin: propAsin, onRefresh }) => {
+    const [tab, setTab] = useState('竞对1');
     const [country, setCountry] = useState(propCountry || null);
     const [asin, setAsin] = useState(propAsin || null);
     const [records, setRecords] = useState([]);
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
-    const [addingRole, setAddingRole] = useState(null);
-    const [newAsin, setNewAsin] = useState('');
-    const [editingId, setEditingId] = useState(null);
-    const [editValue, setEditValue] = useState('');
+    const [name, setName] = useState('');
     const countryAsin = country && asin ? `${country}_${asin}` : null;
     const hasContext = !!(propCountry && propAsin);
+    const title = tab || '竞对';
 
     const countryOpts = useMemo(() => {
       const set = new Set(countryAsinOptions.map(o => o.country).filter(Boolean));
@@ -713,7 +712,7 @@ async function run() {
     }, [countryAsinOptions, country]);
 
     const load = useCallback(async () => {
-      if (!countryAsin) { setRecords([]); return; }
+      if (!visible || !countryAsin) { setRecords([]); return; }
       setLoading(true);
       try {
         const res = await ctx.request({
@@ -727,43 +726,49 @@ async function run() {
       } finally {
         setLoading(false);
       }
-    }, [countryAsin]);
+    }, [visible, countryAsin]);
 
-    useEffect(() => { if (visible) load(); }, [visible, load]);
+    useEffect(() => { load(); }, [load]);
     useEffect(() => {
       if (visible) {
         if (propCountry) setCountry(propCountry);
         if (propAsin) setAsin(propAsin);
       } else {
-        setRecords([]); setAddingRole(null); setNewAsin(''); setEditingId(null); setEditValue('');
+        setRecords([]);
+        setName('');
+        setTab('竞对1');
         if (!propCountry) setCountry(null);
         if (!propAsin) setAsin(null);
       }
     }, [visible, propCountry, propAsin]);
 
-    const byRole = useMemo(() => {
-      const map = {};
-      COMPETITOR_SLOT_ORDER.forEach(role => { map[role] = []; });
-      records.forEach(rec => {
-        const role = rec.role || '竞对1';
-        if (!map[role]) map[role] = [];
-        map[role].push(rec);
-      });
-      return map;
+    useEffect(() => { setName(''); }, [tab, countryAsin]);
+
+    const tabRecords = useMemo(() => {
+      return records.filter((rec) => (rec.role || '竞对1') === tab);
+    }, [records, tab]);
+
+    const sortedRecords = useMemo(() => {
+      const roleOrder = Object.fromEntries(COMPETITOR_SLOT_ORDER.map((role, idx) => [role, idx + 1]));
+      return [...records].sort((a, b) => (roleOrder[a.role] || 99) - (roleOrder[b.role] || 99));
     }, [records]);
 
-    const addRecord = async (role) => {
-      const trimmed = (newAsin || '').trim();
+    const addRecord = async () => {
+      const trimmed = String(name || '').trim();
       if (!countryAsin) { ctx.message.warning('请先选择 Country 和 ASIN'); return; }
       if (!trimmed) { ctx.message.warning('请输入竞对 ASIN'); return; }
-      if ((byRole[role] || []).length >= 1) { ctx.message.warning(`${role} 已经有竞对 ASIN`); return; }
+      if (tabRecords.length >= 1) { ctx.message.warning(`${title} 已经有竞对 ASIN`); return; }
       try {
         setSaving(true);
-        await ctx.request({ url: 'order_link_competitor_asins:create', method: 'post', data: { country_asin: countryAsin, competitor_asin: trimmed, role } });
-        setAddingRole(null); setNewAsin('');
+        await ctx.request({
+          url: 'order_link_competitor_asins:create',
+          method: 'post',
+          data: { country_asin: countryAsin, competitor_asin: trimmed, role: tab },
+        });
+        setName('');
         await load();
         onRefresh?.();
-        ctx.message.success('竞对 ASIN 已添加');
+        ctx.message.success(`${title} 已添加`);
       } catch (err) {
         ctx.message.error(`添加失败：${err?.message || ''}`);
       } finally {
@@ -771,15 +776,20 @@ async function run() {
       }
     };
 
-    const saveName = async (id) => {
-      const trimmed = (editValue || '').trim();
+    const updateRecord = async (item, value) => {
+      const trimmed = String(value || '').trim();
       if (!trimmed) return;
       try {
         setSaving(true);
-        await ctx.request({ url: 'order_link_competitor_asins:update', method: 'post', params: { filterByTk: id }, data: { competitor_asin: trimmed } });
-        setRecords(prev => prev.map(r => r.id === id ? { ...r, competitor_asin: trimmed } : r));
-        setEditingId(null); setEditValue('');
+        await ctx.request({
+          url: 'order_link_competitor_asins:update',
+          method: 'post',
+          params: { filterByTk: item.id },
+          data: { competitor_asin: trimmed },
+        });
+        setRecords(prev => prev.map(r => r.id === item.id ? { ...r, competitor_asin: trimmed } : r));
         onRefresh?.();
+        ctx.message.success('已保存');
       } catch (err) {
         ctx.message.error(`保存失败：${err?.message || ''}`);
       } finally {
@@ -787,12 +797,34 @@ async function run() {
       }
     };
 
-    const deleteRecord = async (id) => {
+    const deleteRecord = async (item) => {
       try {
         setSaving(true);
-        await ctx.request({ url: 'order_link_competitor_asins:destroy', method: 'post', params: { filterByTk: id } });
-        setRecords(prev => prev.filter(r => r.id !== id));
+        let deletedDailyRows = 0;
+        while (true) {
+          const dailyRes = await ctx.request({
+            url: 'order_link_competitor_asins_daily:list',
+            method: 'get',
+            params: {
+              pageSize: 200,
+              filter: JSON.stringify({ competitor_id: { $eq: item.id } }),
+            },
+          });
+          const dailyRows = Array.isArray(dailyRes?.data?.data) ? dailyRes.data.data : [];
+          if (!dailyRows.length) break;
+          for (const row of dailyRows) {
+            await ctx.request({
+              url: 'order_link_competitor_asins_daily:destroy',
+              method: 'post',
+              params: { filterByTk: row.id },
+            });
+            deletedDailyRows += 1;
+          }
+        }
+        await ctx.request({ url: 'order_link_competitor_asins:destroy', method: 'post', params: { filterByTk: item.id } });
+        setRecords(prev => prev.filter(r => r.id !== item.id));
         onRefresh?.();
+        ctx.message.success(`已删除竞对，并清理 ${deletedDailyRows} 条每日记录`);
       } catch (err) {
         ctx.message.error(`删除失败：${err?.message || ''}`);
       } finally {
@@ -800,65 +832,67 @@ async function run() {
       }
     };
 
-    const body = React.createElement(React.Fragment, null,
-      hasContext
-        ? React.createElement('div', { style: { marginBottom: '14px', padding: '12px', background: '#f0f7ff', border: '1px solid #91caff', borderRadius: '6px', display: 'flex', gap: '12px', alignItems: 'center' } },
-            React.createElement('span', { style: { fontWeight: 600, color: '#1677ff' } }, '当前产品：'),
-            React.createElement('span', { style: { fontWeight: 700, fontSize: '15px', color: '#333' } }, `${propCountry} · ${propAsin}`),
-            React.createElement('span', { style: { marginLeft: 'auto', color: '#666', fontSize: '13px' } }, `共 ${records.length} 个竞对`)
-          )
-        : React.createElement('div', { style: { marginBottom: '14px', padding: '12px', background: '#f0f7ff', border: '1px solid #91caff', borderRadius: '6px', display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' } },
-            React.createElement('span', { style: { fontWeight: 600, color: '#1677ff' } }, '选择产品：'),
-            React.createElement(Select, { placeholder: 'Country', value: country || undefined, options: countryOpts, onChange: (v) => { setCountry(v); setAsin(null); }, style: { minWidth: '140px' }, showSearch: true, allowClear: true }),
-            React.createElement(Select, { placeholder: 'ASIN', value: asin || undefined, options: asinOpts, disabled: !country, onChange: setAsin, style: { minWidth: '180px' }, showSearch: true, allowClear: true })
-          ),
-      !countryAsin
-        ? React.createElement('div', { style: { padding: '60px', textAlign: 'center', color: '#999', background: '#fafafa', borderRadius: '8px' } }, '请先选择 Country 和 ASIN')
-        : React.createElement('div', { style: { display: 'flex', minWidth: `${280 * COMPETITOR_SLOT_ORDER.length}px`, overflowX: 'auto' } },
-            COMPETITOR_SLOT_ORDER.map(role => {
-              const roleRecords = byRole[role] || [];
-              const color = COMPETITOR_SLOT_COLORS[role] || COLOR_BLUE;
-              const isAdding = addingRole === role;
-              return React.createElement('div', { key: role, style: { width: '280px', minWidth: '280px', borderRight: '1px solid #e8e8e8', display: 'flex', flexDirection: 'column' } },
-                React.createElement('div', { style: { background: color, color: getTextColorForBg(color), padding: '10px 12px', fontWeight: 700, textAlign: 'center' } }, role),
-                React.createElement('div', { style: { flex: 1, padding: '10px', minHeight: '100px', background: '#fafafa' } },
-                  roleRecords.length === 0
-                    ? React.createElement('div', { style: { color: '#999', textAlign: 'center', padding: '24px 0' } }, '暂无竞对')
-                    : roleRecords.map(rec => React.createElement('div', { key: rec.id, style: { padding: '10px', marginBottom: '8px', background: '#fff', borderRadius: '6px', border: `1px solid ${color}80` } },
-                        editingId === rec.id
-                          ? React.createElement(Input, { value: editValue, autoFocus: true, onChange: e => setEditValue(e.target.value), onPressEnter: () => saveName(rec.id), onBlur: () => saveName(rec.id), onKeyDown: e => { if (e.key === 'Escape') setEditingId(null); } })
-                          : React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
-                              React.createElement('span', { onDoubleClick: () => { setEditingId(rec.id); setEditValue(rec.competitor_asin || ''); }, style: { flex: 1, fontWeight: 700, cursor: 'cell', wordBreak: 'break-all' } }, rec.competitor_asin || '(未命名)'),
-                              React.createElement(Popconfirm, { title: `确定删除 ${rec.competitor_asin || '该竞对'}？`, onConfirm: () => deleteRecord(rec.id), okText: '确定', cancelText: '取消' },
-                                React.createElement('span', { style: { color: '#ff4d4f', cursor: 'pointer' } }, '✕')
-                              )
-                            )
-                      ))
-                ),
-                React.createElement('div', { style: { padding: '8px', borderTop: `1px solid ${color}30`, background: '#fafafa' } },
-                  isAdding
-                    ? React.createElement('div', { style: { display: 'flex', gap: '6px' } },
-                        React.createElement(Input, { value: newAsin, placeholder: '竞对 ASIN', autoFocus: true, onChange: e => setNewAsin(e.target.value), onPressEnter: () => addRecord(role) }),
-                        React.createElement(Button, { type: 'primary', size: 'small', onClick: () => addRecord(role), loading: saving }, '✓'),
-                        React.createElement(Button, { size: 'small', onClick: () => { setAddingRole(null); setNewAsin(''); } }, '✕')
-                      )
-                    : roleRecords.length >= 1
-                      ? React.createElement('div', { style: { textAlign: 'center', fontSize: '12px', color: '#bbb' } }, '已配置')
-                      : React.createElement(Button, { block: true, size: 'small', type: 'dashed', onClick: () => setAddingRole(role) }, '添加竞对')
-                )
-              );
-            })
-          )
-    );
-
-    return React.createElement(Drawer, {
-      title: '管理竞对 ASIN（按 Country + ASIN）',
-      placement: 'right',
-      width: '80vw',
-      onClose,
+    return React.createElement(Modal, {
+      title: countryAsin ? `管理竞对 ASIN：${countryAsin}` : '管理竞对 ASIN',
       open: visible,
-      extra: loading ? React.createElement('span', { style: { color: '#1890ff' } }, '加载中...') : saving ? React.createElement('span', { style: { color: '#fa8c16' } }, '保存中...') : null,
-    }, body);
+      visible,
+      onCancel: onClose,
+      footer: null,
+      width: 720,
+      destroyOnClose: true,
+    },
+      React.createElement('div', null,
+        hasContext
+          ? React.createElement('div', { style: { marginBottom: 12, padding: 12, background: '#f0f7ff', border: '1px solid #91caff', borderRadius: 6, display: 'flex', gap: 12, alignItems: 'center' } },
+              React.createElement('span', { style: { fontWeight: 600, color: '#1677ff' } }, '当前产品：'),
+              React.createElement('span', { style: { fontWeight: 700, color: '#333' } }, `${propCountry} · ${propAsin}`),
+              React.createElement('span', { style: { marginLeft: 'auto', color: '#666', fontSize: 13 } }, `共 ${records.length} 个竞对`)
+            )
+          : React.createElement('div', { style: { marginBottom: 12, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' } },
+              React.createElement(Select, { placeholder: 'Country', value: country || undefined, options: countryOpts, onChange: (v) => { setCountry(v); setAsin(null); }, style: { minWidth: 140 }, showSearch: true, allowClear: true }),
+              React.createElement(Select, { placeholder: 'ASIN', value: asin || undefined, options: asinOpts, disabled: !country, onChange: setAsin, style: { minWidth: 180 }, showSearch: true, allowClear: true })
+            ),
+        !countryAsin
+          ? React.createElement('div', { style: { padding: 24, color: '#999', background: '#fafafa', borderRadius: 6 } }, '请先选择具体 Country 和 ASIN。')
+          : React.createElement(React.Fragment, null,
+              React.createElement('div', { style: { display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' } },
+                COMPETITOR_SLOT_ORDER.map((role) =>
+                  React.createElement(Button, {
+                    key: role,
+                    type: tab === role ? 'primary' : 'default',
+                    onClick: () => setTab(role),
+                    style: tab === role ? { background: COMPETITOR_SLOT_COLORS[role], borderColor: COMPETITOR_SLOT_COLORS[role], color: getTextColorForBg(COMPETITOR_SLOT_COLORS[role]) } : undefined,
+                  }, role)
+                )
+              ),
+              React.createElement('div', { style: { display: 'flex', gap: 8, marginBottom: 12 } },
+                React.createElement(Input, { value: name, placeholder: `新增${title} ASIN`, onChange: (e) => setName(e.target.value), onPressEnter: addRecord, disabled: tabRecords.length >= 1 || saving }),
+                React.createElement(Button, { type: 'primary', loading: saving, disabled: tabRecords.length >= 1, onClick: addRecord }, '新增')
+              ),
+              loading
+                ? React.createElement('div', { style: { padding: 24, textAlign: 'center', color: '#999' } }, '加载中...')
+                : React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
+                    tabRecords.length === 0 && React.createElement('div', { style: { padding: 20, color: '#999', textAlign: 'center', background: '#fafafa', borderRadius: 6 } }, `暂无${title}`),
+                    tabRecords.map((item) => React.createElement('div', {
+                      key: item.id,
+                      style: { display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'center' },
+                    },
+                      React.createElement(Input, {
+                        defaultValue: item.competitor_asin || '',
+                        onBlur: (e) => updateRecord(item, e.target.value.trim()),
+                        onPressEnter: (e) => e.currentTarget.blur(),
+                      }),
+                      React.createElement(Popconfirm, { title: `确定删除「${item.competitor_asin || title}」？`, onConfirm: () => deleteRecord(item), okText: '确定', cancelText: '取消' },
+                        React.createElement(Button, { danger: true }, '删除')
+                      )
+                    )),
+                    sortedRecords.length > tabRecords.length && React.createElement('div', { style: { marginTop: 10, paddingTop: 10, borderTop: '1px solid #f0f0f0', fontSize: 12, color: '#999' } },
+                      `其他竞对：${sortedRecords.filter((item) => (item.role || '竞对1') !== tab).map((item) => `${item.role || '竞对1'}-${item.competitor_asin || '未命名'}`).join('；')}`
+                    )
+                  )
+            )
+      )
+    );
   };
 
   const PushPanel = ({ columns, onClose, anchorPos }) => {
