@@ -1028,14 +1028,27 @@ async function run() {
     const measureTextWidth = (text, fontSize, fontWeight = 600) => {
       if (text == null) return 0;
       try {
-        const canvas = document.createElement('canvas');
-        const ctx2d = canvas.getContext('2d');
-        if (!ctx2d) return estimateTextWidth(text, fontSize);
-        ctx2d.font = `${fontWeight} ${fontSize}px system-ui, sans-serif`;
-        return ctx2d.measureText(String(text)).width;
+        const span = document.createElement('span');
+        span.textContent = String(text);
+        span.style.position = 'fixed';
+        span.style.left = '-9999px';
+        span.style.top = '-9999px';
+        span.style.visibility = 'hidden';
+        span.style.whiteSpace = 'nowrap';
+        span.style.fontFamily = 'system-ui, sans-serif';
+        span.style.fontSize = `${fontSize}px`;
+        span.style.fontWeight = String(fontWeight);
+        document.body.appendChild(span);
+        const width = span.offsetWidth || span.getBoundingClientRect().width;
+        document.body.removeChild(span);
+        return width || estimateTextWidth(text, fontSize);
       } catch {
         return estimateTextWidth(text, fontSize);
       }
+    };
+
+    const calcKeywordColWidth = (label) => {
+      return Math.max(128, Math.min(300, Math.ceil(measureTextWidth(label, FONT_SIZE_SM, 600) + 30)));
     };
 
     const resizeRef   = useRef(null);
@@ -1080,7 +1093,7 @@ async function run() {
             label,
             hidden: false,
             pinned: false,
-            width: Math.max(132, Math.min(360, Math.ceil(measureTextWidth(label, FONT_SIZE_SM, 600) + 38))),
+            width: calcKeywordColWidth(label),
             editable: false,
             headerColor: KW_ROLE_COLORS[kw.role] || '#b5796a',
             _dynamicKind: 'keyword',
@@ -1404,7 +1417,7 @@ async function run() {
 
     const allColumns = useMemo(() => {
       const baseCols = columns.filter(c => !(c.field && (c.field.startsWith('kw_actual_') || c.field.startsWith('competitor_dynamic_'))));
-      const keywordCols = dynamicKeywordCols;
+      const keywordCols = dynamicKeywordCols.map((col) => ({ ...col, width: calcKeywordColWidth(col.label) }));
       const competitorCols = dynamicCompetitorCols;
       const insertKeywordAfter = baseCols.findIndex(c => c.key === 'weekly_zongcvr');
       const withKeywords = insertKeywordAfter >= 0
