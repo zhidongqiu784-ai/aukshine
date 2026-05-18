@@ -1987,11 +1987,9 @@ async function run() {
         wrap.scrollTop = pos.top;
         wrap.scrollLeft = pos.left;
       };
-      window.requestAnimationFrame(() => {
-        apply();
-        window.requestAnimationFrame(apply);
-        window.setTimeout(apply, 80);
-      });
+      apply();
+      window.setTimeout(apply, 0);
+      window.setTimeout(apply, 80);
     }, []);
 
     const saveOrderLinkRichField = useCallback(async (row, field, newContent) => {
