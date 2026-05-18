@@ -1025,6 +1025,19 @@ async function run() {
       return width * fontSize;
     };
 
+    const measureTextWidth = (text, fontSize, fontWeight = 600) => {
+      if (text == null) return 0;
+      try {
+        const canvas = document.createElement('canvas');
+        const ctx2d = canvas.getContext('2d');
+        if (!ctx2d) return estimateTextWidth(text, fontSize);
+        ctx2d.font = `${fontWeight} ${fontSize}px system-ui, sans-serif`;
+        return ctx2d.measureText(String(text)).width;
+      } catch {
+        return estimateTextWidth(text, fontSize);
+      }
+    };
+
     const resizeRef   = useRef(null);
     const dragColKey  = useRef(null);
     const inputRef    = useRef(null);
@@ -1067,7 +1080,7 @@ async function run() {
             label,
             hidden: false,
             pinned: false,
-            width: Math.max(150, Math.min(520, Math.ceil(estimateTextWidth(label, FONT_SIZE_SM) + 46))),
+            width: Math.max(132, Math.min(360, Math.ceil(measureTextWidth(label, FONT_SIZE_SM, 600) + 38))),
             editable: false,
             headerColor: KW_ROLE_COLORS[kw.role] || '#b5796a',
             _dynamicKind: 'keyword',
