@@ -1058,7 +1058,7 @@ async function run() {
         .sort((a, b) => (roleOrder[a.role] || 99) - (roleOrder[b.role] || 99))
         .map((kw) => {
           const roleLabel = KW_ROLE_LABEL[kw.role] || kw.role || '';
-          const targetPart = kw.key_target ? ` / ${kw.key_target}` : '';
+          const targetPart = ' / 自然位';
           return {
             key: `kw_actual_${kw.id}`,
             src: 'keyword_position',
