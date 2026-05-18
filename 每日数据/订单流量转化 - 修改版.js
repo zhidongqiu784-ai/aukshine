@@ -2097,11 +2097,11 @@ async function run() {
       isResizing && React.createElement('div', { onMouseMove: onOverlayMove, onMouseUp: onOverlayUp, onMouseLeave: onOverlayUp, style: { position: 'fixed', inset: 0, zIndex: 9999, cursor: 'col-resize', background: 'transparent' } }),
 
       React.createElement('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '10px', alignItems: 'center' } },
-        React.createElement('button', { onClick: () => setCompetitorMasterVisible(true), style: btnStyle('#fff7e6', '#fa8c16', '#fa8c16') }, '管理竞对 ASIN'),
         IS_ADMIN && React.createElement('button', { onClick: resetColumns, style: btnStyle('#1890ff', '#fff', '#1890ff') }, '？ 重置列'),
         React.createElement('button', { ref: panelBtnRef, onClick: () => { setShowPanel((v) => !v); setShowPush(false); }, style: btnStyle(showPanel ? '#e6f7ff' : '#fff', '#333', showPanel ? '#1890ff' : '#d9d9d9') }, '👁️ 列设置'),
         IS_ADMIN && React.createElement('button', { ref: pushBtnRef, onClick: () => { setShowPush((v) => !v); setShowPanel(false); }, style: btnStyle(showPush ? '#fff7e6' : '#fff', showPush ? '#fa8c16' : '#333', showPush ? '#fa8c16' : '#d9d9d9') }, '📤 推送配置'),
         React.createElement('button', { onClick: refreshData, style: btnStyle('#fff', '#333', '#d9d9d9') }, '🔄 刷新'),
+        React.createElement('button', { onClick: () => setCompetitorMasterVisible(true), style: btnStyle('#fff7e6', '#fa8c16', '#fa8c16') }, '管理竞对 ASIN'),
         IS_ADMIN && React.createElement(Popconfirm, {
           title: `确定要重新计算当前页 ${data.length} 条订单结构公式吗？`,
           onConfirm: recalcAllOrderLinkFormulas,
