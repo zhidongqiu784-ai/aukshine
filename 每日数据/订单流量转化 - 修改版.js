@@ -422,6 +422,10 @@ async function run() {
     { src:'competitor', label:'竞对 ASIN', color:COLOR_BLUE },
   );
 
+  const isDynamicColumnKey = (key) => {
+    return String(key || '').startsWith('kw_actual_') || String(key || '').startsWith('competitor_dynamic_');
+  };
+
   const saveColsToUser = async (cols) => {
     if (!currentUserId) return false;
     try {
@@ -432,9 +436,12 @@ async function run() {
       }));
       const userRes = await ctx.request({ url: 'users:get', method: 'get', params: { filterByTk: currentUserId } });
       const existingSetting = userRes?.data?.data?.setting || {};
+      const existingCols = Array.isArray(existingSetting[BLOCK_UID]) ? existingSetting[BLOCK_UID] : [];
+      const colKeys = new Set(colPayload.map((c) => c.key));
+      const preservedDynamic = existingCols.filter((c) => isDynamicColumnKey(c?.key) && !colKeys.has(c.key));
       await ctx.request({
         url: 'users:update', method: 'post', params: { filterByTk: currentUserId },
-        data: { setting: { ...existingSetting, [BLOCK_UID]: colPayload } },
+        data: { setting: { ...existingSetting, [BLOCK_UID]: [...colPayload, ...preservedDynamic] } },
       });
       return true;
     } catch { ctx.message.error('列设置保存失败'); return false; }
@@ -995,6 +1002,7 @@ async function run() {
     const [competitorMasterVisible, setCompetitorMasterVisible] = useState(false);
     const [dynamicKeywordCols, setDynamicKeywordCols] = useState([]);
     const [dynamicCompetitorCols, setDynamicCompetitorCols] = useState([]);
+    const [dynamicColumnPrefs, setDynamicColumnPrefs] = useState({});
     const [selectedRange, setSelectedRange]     = useState(null);
     const selectingRef = useRef(false);
     const autoWidthDoneRef = useRef(false);
@@ -1038,6 +1046,18 @@ async function run() {
     const calcKeywordColWidth = (label) => {
       return Math.max(128, Math.min(300, Math.ceil(measureTextWidth(label, FONT_SIZE_SM, 600) + 30)));
     };
+
+    const applyDynamicColPrefs = useCallback((col) => {
+      const pref = dynamicColumnPrefs[col.key] || {};
+      const autoWidth = col.key.startsWith('kw_actual_') ? calcKeywordColWidth(col.label) : col.width;
+      return {
+        ...col,
+        hidden: Object.prototype.hasOwnProperty.call(pref, 'hidden') ? pref.hidden === true : col.hidden,
+        pinned: Object.prototype.hasOwnProperty.call(pref, 'pinned') ? pref.pinned === true : col.pinned,
+        width: Number(pref.width) || autoWidth,
+        headerColor: Object.prototype.hasOwnProperty.call(pref, 'headerColor') ? pref.headerColor : col.headerColor,
+      };
+    }, [dynamicColumnPrefs]);
 
     const resizeRef   = useRef(null);
     const dragColKey  = useRef(null);
@@ -1143,6 +1163,24 @@ async function run() {
     const toggleGroup = useCallback((src) => { setCollapsedGroups((prev) => ({ ...prev, [src]: !prev[src] })); }, []);
 
     useEffect(() => { (async () => { const cols = await buildColumns(); setColumns(cols); })(); }, []);
+    useEffect(() => {
+      (async () => {
+        const saved = await loadColsFromUser();
+        if (!Array.isArray(saved)) return;
+        const prefs = {};
+        saved.forEach((item) => {
+          if (!isDynamicColumnKey(item?.key)) return;
+          prefs[item.key] = {
+            key: item.key,
+            hidden: item.hidden === true,
+            pinned: item.pinned === true,
+            width: Number(item.width) || undefined,
+            headerColor: item.headerColor || null,
+          };
+        });
+        setDynamicColumnPrefs(prefs);
+      })();
+    }, []);
     useEffect(() => { if (editingCell && inputRef.current) { inputRef.current.focus?.(); inputRef.current.select?.(); } }, [editingCell]);
 
     const updateAndSave = useCallback((updater) => {
@@ -1405,8 +1443,8 @@ async function run() {
 
     const allColumns = useMemo(() => {
       const baseCols = columns.filter(c => !(c.field && (c.field.startsWith('kw_actual_') || c.field.startsWith('competitor_dynamic_'))));
-      const keywordCols = dynamicKeywordCols.map((col) => ({ ...col, width: calcKeywordColWidth(col.label) }));
-      const competitorCols = dynamicCompetitorCols;
+      const keywordCols = dynamicKeywordCols.map(applyDynamicColPrefs);
+      const competitorCols = dynamicCompetitorCols.map(applyDynamicColPrefs);
       const insertKeywordAfter = baseCols.findIndex(c => c.key === 'order_link_keyword_performance_screenshot');
       const withKeywords = insertKeywordAfter >= 0
         ? [...baseCols.slice(0, insertKeywordAfter + 1), ...keywordCols, ...baseCols.slice(insertKeywordAfter + 1)]
@@ -1415,7 +1453,17 @@ async function run() {
       return insertCompetitorAfter >= 0
         ? [...withKeywords.slice(0, insertCompetitorAfter + 1), ...competitorCols, ...withKeywords.slice(insertCompetitorAfter + 1)]
         : [...withKeywords, ...competitorCols];
-    }, [columns, dynamicKeywordCols, dynamicCompetitorCols]);
+    }, [columns, dynamicKeywordCols, dynamicCompetitorCols, applyDynamicColPrefs]);
+
+    const persistDynamicColPrefs = useCallback((key, patch) => {
+      if (!isDynamicColumnKey(key)) return;
+      setDynamicColumnPrefs((prev) => {
+        const next = { ...prev, [key]: { ...(prev[key] || {}), key, ...patch } };
+        const dynamicCols = Object.values(next).filter((item) => isDynamicColumnKey(item?.key));
+        saveColsToUser([...columns, ...dynamicCols]);
+        return next;
+      });
+    }, [columns]);
 
     const updateDynamicCol = (key, updater) => {
       const setFn = key.startsWith('kw_actual_') ? setDynamicKeywordCols : key.startsWith('competitor_dynamic_') ? setDynamicCompetitorCols : null;
@@ -1424,10 +1472,10 @@ async function run() {
       return true;
     };
 
-    const toggleCol      = (key) => { if (updateDynamicCol(key, c => ({ ...c, hidden: !c.hidden }))) return; updateAndSave((p) => { const col = p.find((c) => c.key === key); if (!col) return p; if (!col.hidden) return p.map((c) => c.key === key ? { ...c, hidden: true } : c); return [...p.filter((c) => c.key !== key), { ...col, hidden: false }]; }); };
-    const togglePin      = (key) => { if (updateDynamicCol(key, c => ({ ...c, pinned: !c.pinned }))) return; updateAndSave((p) => p.map((c) => c.key === key ? { ...c, pinned: !c.pinned } : c)); };
-    const setHColor      = (key, color) => { if (updateDynamicCol(key, c => ({ ...c, headerColor: color }))) return; updateAndSave((p) => p.map((c) => c.key === key ? { ...c, headerColor: color } : c)); };
-    const clearHColor    = (key) => { if (updateDynamicCol(key, c => ({ ...c, headerColor: null }))) return; updateAndSave((p) => p.map((c) => c.key === key ? { ...c, headerColor: null } : c)); };
+    const toggleCol      = (key) => { const cur = allColumns.find(c => c.key === key); if (updateDynamicCol(key, c => ({ ...c, hidden: !c.hidden }))) { persistDynamicColPrefs(key, { hidden: !(cur?.hidden === true), width: cur?.width, pinned: cur?.pinned === true, headerColor: cur?.headerColor || null }); return; } updateAndSave((p) => { const col = p.find((c) => c.key === key); if (!col) return p; if (!col.hidden) return p.map((c) => c.key === key ? { ...c, hidden: true } : c); return [...p.filter((c) => c.key !== key), { ...col, hidden: false }]; }); };
+    const togglePin      = (key) => { const cur = allColumns.find(c => c.key === key); if (updateDynamicCol(key, c => ({ ...c, pinned: !c.pinned }))) { persistDynamicColPrefs(key, { pinned: !(cur?.pinned === true), width: cur?.width, hidden: cur?.hidden === true, headerColor: cur?.headerColor || null }); return; } updateAndSave((p) => p.map((c) => c.key === key ? { ...c, pinned: !c.pinned } : c)); };
+    const setHColor      = (key, color) => { const cur = allColumns.find(c => c.key === key); if (updateDynamicCol(key, c => ({ ...c, headerColor: color }))) { persistDynamicColPrefs(key, { headerColor: color, width: cur?.width, hidden: cur?.hidden === true, pinned: cur?.pinned === true }); return; } updateAndSave((p) => p.map((c) => c.key === key ? { ...c, headerColor: color } : c)); };
+    const clearHColor    = (key) => { const cur = allColumns.find(c => c.key === key); if (updateDynamicCol(key, c => ({ ...c, headerColor: null }))) { persistDynamicColPrefs(key, { headerColor: null, width: cur?.width, hidden: cur?.hidden === true, pinned: cur?.pinned === true }); return; } updateAndSave((p) => p.map((c) => c.key === key ? { ...c, headerColor: null } : c)); };
     const toggleEditable = (key) => updateAndSave((p) => p.map((c) => c.key === key ? { ...c, editable: !c.editable } : c));
     const selectAll      = () => updateAndSave((p) => p.map((c) => ({ ...c, hidden: false })));
     const deselectAll    = () => updateAndSave((p) => p.map((c) => ({ ...c, hidden: true  })));
@@ -1440,8 +1488,21 @@ async function run() {
     const onDrop      = (e, targetKey) => { e.preventDefault(); const fromKey = dragColKey.current; if (!fromKey || fromKey === targetKey) return; if (fromKey.startsWith('kw_actual_') || fromKey.startsWith('competitor_dynamic_') || targetKey.startsWith('kw_actual_') || targetKey.startsWith('competitor_dynamic_')) { dragColKey.current = null; return; } updateAndSave((prev) => { const next = [...prev]; const fi = next.findIndex((c) => c.key === fromKey); const ti = next.findIndex((c) => c.key === targetKey); if (fi < 0 || ti < 0) return prev; const [moved] = next.splice(fi, 1); next.splice(ti, 0, moved); return next; }); dragColKey.current = null; };
 
     const onResizeStart = useCallback((e, colKey) => { e.preventDefault(); e.stopPropagation(); const col = allColumns.find((c) => c.key === colKey); resizeRef.current = { colKey, startX: e.clientX, startWidth: col?.width || 80 }; setIsResizing(true); manuallyResizedRef.current.add(colKey); }, [allColumns]);
-    const onOverlayMove = useCallback((e) => { if (!resizeRef.current) return; const { colKey, startX, startWidth } = resizeRef.current; const nw = Math.max(40, startWidth + (e.clientX - startX)); if (updateDynamicCol(colKey, c => ({ ...c, width: nw }))) return; updateAndSave((p) => p.map((c) => c.key === colKey ? { ...c, width: nw } : c)); }, []);
-    const onOverlayUp   = useCallback(() => { resizeRef.current = null; setIsResizing(false); }, []);
+    const onOverlayMove = useCallback((e) => { if (!resizeRef.current) return; const { colKey, startX, startWidth } = resizeRef.current; const nw = Math.max(40, startWidth + (e.clientX - startX)); resizeRef.current.lastWidth = nw; if (updateDynamicCol(colKey, c => ({ ...c, width: nw }))) return; updateAndSave((p) => p.map((c) => c.key === colKey ? { ...c, width: nw } : c)); }, []);
+    const onOverlayUp   = useCallback(() => {
+      const info = resizeRef.current;
+      if (info?.colKey && isDynamicColumnKey(info.colKey)) {
+        const cur = allColumns.find(c => c.key === info.colKey);
+        persistDynamicColPrefs(info.colKey, {
+          width: Number(info.lastWidth) || cur?.width,
+          hidden: cur?.hidden === true,
+          pinned: cur?.pinned === true,
+          headerColor: cur?.headerColor || null,
+        });
+      }
+      resizeRef.current = null;
+      setIsResizing(false);
+    }, [allColumns, persistDynamicColPrefs]);
 
     const isCellEditable = useCallback((col) => { if (READONLY_FIELDS.has(col.field)) return false; return col.editable === true; }, []);
 
