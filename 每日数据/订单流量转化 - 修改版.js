@@ -632,7 +632,7 @@ async function run() {
     );
 
     if (isEditing) {
-      return React.createElement('div', { style: { minHeight: '96px', border: '1px solid #1890ff', borderRadius: '6px', padding: '6px', background: '#fff', boxSizing: 'border-box' } },
+      return React.createElement('div', { style: { height: '54px', border: '1px solid #1890ff', borderRadius: '6px', padding: '4px', background: '#fff', boxSizing: 'border-box', overflow: 'hidden' } },
         React.createElement('textarea', {
           value: tempContent,
           onChange: e => setTempContent(e.target.value),
@@ -648,18 +648,21 @@ async function run() {
           autoFocus: true,
           disabled: uploading,
           placeholder: '输入文字...\n支持 Ctrl + V 粘贴截图\nCtrl + Enter 保存，Esc 取消',
-          style: { width: '100%', height: '84px', border: '1px solid #1890ff', borderRadius: '4px', padding: '8px', fontSize: '13px', fontFamily: 'monospace', resize: 'vertical', background: '#fafafa', lineHeight: 1.5, outline: 'none', boxSizing: 'border-box' },
+          style: { width: '100%', height: '44px', border: '1px solid #1890ff', borderRadius: '4px', padding: '5px 6px', fontSize: '13px', fontFamily: 'monospace', resize: 'none', background: '#fafafa', lineHeight: '16px', outline: 'none', boxSizing: 'border-box', overflow: 'auto' },
         })
       );
     }
 
     const visibleImages = imageUrls.slice(0, 2);
     const extraCount = Math.max(0, imageUrls.length - visibleImages.length);
+    const helperText = imageUrls.length
+      ? `截图 ${imageUrls.length} 张 · 双击编辑`
+      : (!cleanText ? '支持 Ctrl + V 粘贴截图' : '');
 
     return React.createElement(React.Fragment, null,
       React.createElement('div', {
         onDoubleClick: () => { setTempContent(content || ''); setIsEditing(true); },
-        style: { minHeight: '54px', maxHeight: '72px', display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 8px', background: content ? '#fafafa' : '#fff', border: '1px solid #e5e7eb', borderRadius: '6px', cursor: 'cell', overflow: 'hidden', boxSizing: 'border-box' },
+        style: { height: '54px', display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 8px', background: content ? '#fafafa' : '#fff', border: '1px solid #e5e7eb', borderRadius: '6px', cursor: 'cell', overflow: 'hidden', boxSizing: 'border-box' },
       },
         imageUrls.length > 0 && React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 } },
           visibleImages.map((url, i) => React.createElement('img', {
@@ -680,9 +683,7 @@ async function run() {
               cleanText || (imageUrls.length ? `${imageUrls.length} 张截图` : placeholder)
             )
           ),
-          React.createElement('div', { style: { fontSize: '11px', color: '#aaa', lineHeight: '14px' } },
-            imageUrls.length ? `截图 ${imageUrls.length} 张 · 双击编辑` : '支持 Ctrl + V 粘贴截图'
-          )
+          helperText && React.createElement('div', { style: { fontSize: '11px', color: '#aaa', lineHeight: '14px' } }, helperText)
         )
       ),
       previewLayer
@@ -1973,10 +1974,30 @@ async function run() {
       }
     }, [data, buildOrderLinkFormulaUpdates]);
 
+    const captureTableScroll = useCallback(() => {
+      const wrap = tableWrapRef.current;
+      return wrap ? { top: wrap.scrollTop, left: wrap.scrollLeft } : null;
+    }, []);
+
+    const restoreTableScroll = useCallback((pos) => {
+      if (!pos) return;
+      const apply = () => {
+        const wrap = tableWrapRef.current;
+        if (!wrap) return;
+        wrap.scrollTop = pos.top;
+        wrap.scrollLeft = pos.left;
+      };
+      window.requestAnimationFrame(() => {
+        apply();
+        window.requestAnimationFrame(apply);
+        window.setTimeout(apply, 80);
+      });
+    }, []);
 
     const saveOrderLinkRichField = useCallback(async (row, field, newContent) => {
       const key = row?.country_asin_date || row?.id;
       if (!key) { ctx.message.error('无法找到记录主键'); return false; }
+      const scrollPos = captureTableScroll();
       try {
         const filterStr = JSON.stringify({ country_asin_date: { $eq: key } });
         const res = await ctx.request({ url: 'daily_order_link_tracking:list', method: 'get', params: { filter: filterStr, pageSize: 1 } });
@@ -1997,12 +2018,13 @@ async function run() {
           });
         }
         setData(prev => prev.map(r => (r.country_asin_date || r.id) === key ? { ...r, [field]: newContent || null } : r));
+        restoreTableScroll(scrollPos);
         return true;
       } catch (err) {
         ctx.message.error(`保存失败：${err?.message || ''}`);
         return false;
       }
-    }, []);
+    }, [captureTableScroll, restoreTableScroll]);
 
     const saveKeywordRichCell = useCallback(async (row, col, newContent) => {
       const rowId = row?.country_asin_date || row?.id;
@@ -2010,6 +2032,7 @@ async function run() {
       const kw = payload?.kw;
       const daily = payload?.daily || {};
       if (!rowId || !kw?.id) { ctx.message.error('无法找到关键词记录'); return false; }
+      const scrollPos = captureTableScroll();
       try {
         let nextDaily = { ...daily, actual_rank: newContent || null };
         if (daily.id) {
@@ -2028,12 +2051,13 @@ async function run() {
           nextDaily = { ...nextDaily, ...(res?.data?.data || {}) };
         }
         setData(prev => prev.map(r => (r.country_asin_date || r.id) === rowId ? { ...r, [col.field]: { ...payload, daily: nextDaily } } : r));
+        restoreTableScroll(scrollPos);
         return true;
       } catch (err) {
         ctx.message.error(`保存关键词失败：${err?.message || ''}`);
         return false;
       }
-    }, []);
+    }, [captureTableScroll, restoreTableScroll]);
 
     const saveCompetitorRichCell = useCallback(async (row, col, newContent) => {
       const rowId = row?.country_asin_date || row?.id;
@@ -2041,6 +2065,7 @@ async function run() {
       const competitor = payload?.competitor;
       const daily = payload?.daily || {};
       if (!rowId || !competitor?.id) { ctx.message.error('无法找到竞对记录'); return false; }
+      const scrollPos = captureTableScroll();
       try {
         let nextDaily = { ...daily, notes: newContent || null };
         if (daily.id) {
@@ -2059,12 +2084,13 @@ async function run() {
           nextDaily = { ...nextDaily, ...(res?.data?.data || {}) };
         }
         setData(prev => prev.map(r => (r.country_asin_date || r.id) === rowId ? { ...r, [col.field]: { ...payload, daily: nextDaily } } : r));
+        restoreTableScroll(scrollPos);
         return true;
       } catch (err) {
         ctx.message.error(`保存竞对失败：${err?.message || ''}`);
         return false;
       }
-    }, []);
+    }, [captureTableScroll, restoreTableScroll]);
 
     const refreshData  = useCallback(() => { loadData({ page: curPageRef.current, size: pageSizeRef.current }); ctx.message.success('数据已刷新'); }, [loadData]);
     const resetColumns = useCallback(async () => { const defaults = INITIAL_COLUMNS.map((c) => ({ ...c })); setColumns(defaults); await saveColsToUser(defaults); ctx.message.success('列已重置为默认'); }, []);
