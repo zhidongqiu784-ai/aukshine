@@ -1096,7 +1096,7 @@ async function run() {
             pinned: false,
             width: calcKeywordColWidth(label),
             editable: false,
-            headerColor: KW_ROLE_COLORS[kw.role] || '#b5796a',
+            headerColor: '#EB6793',
             _dynamicKind: 'keyword',
             _kwId: kw.id,
           };
