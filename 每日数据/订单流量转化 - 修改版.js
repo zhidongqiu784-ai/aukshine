@@ -1488,7 +1488,14 @@ async function run() {
     const onDrop      = (e, targetKey) => { e.preventDefault(); const fromKey = dragColKey.current; if (!fromKey || fromKey === targetKey) return; if (fromKey.startsWith('kw_actual_') || fromKey.startsWith('competitor_dynamic_') || targetKey.startsWith('kw_actual_') || targetKey.startsWith('competitor_dynamic_')) { dragColKey.current = null; return; } updateAndSave((prev) => { const next = [...prev]; const fi = next.findIndex((c) => c.key === fromKey); const ti = next.findIndex((c) => c.key === targetKey); if (fi < 0 || ti < 0) return prev; const [moved] = next.splice(fi, 1); next.splice(ti, 0, moved); return next; }); dragColKey.current = null; };
 
     const onResizeStart = useCallback((e, colKey) => { e.preventDefault(); e.stopPropagation(); const col = allColumns.find((c) => c.key === colKey); resizeRef.current = { colKey, startX: e.clientX, startWidth: col?.width || 80 }; setIsResizing(true); manuallyResizedRef.current.add(colKey); }, [allColumns]);
-    const onOverlayMove = useCallback((e) => { if (!resizeRef.current) return; const { colKey, startX, startWidth } = resizeRef.current; const nw = Math.max(40, startWidth + (e.clientX - startX)); resizeRef.current.lastWidth = nw; if (updateDynamicCol(colKey, c => ({ ...c, width: nw }))) return; updateAndSave((p) => p.map((c) => c.key === colKey ? { ...c, width: nw } : c)); }, []);
+    const onOverlayMove = useCallback((e) => {
+      if (!resizeRef.current) return;
+      const { colKey, startX, startWidth } = resizeRef.current;
+      const nw = Math.max(40, startWidth + (e.clientX - startX));
+      resizeRef.current.lastWidth = nw;
+      if (updateDynamicCol(colKey, c => ({ ...c, width: nw }))) return;
+      setColumns((p) => p.map((c) => c.key === colKey ? { ...c, width: nw } : c));
+    }, []);
     const onOverlayUp   = useCallback(() => {
       const info = resizeRef.current;
       if (info?.colKey && isDynamicColumnKey(info.colKey)) {
@@ -1498,6 +1505,12 @@ async function run() {
           hidden: cur?.hidden === true,
           pinned: cur?.pinned === true,
           headerColor: cur?.headerColor || null,
+        });
+      } else if (info?.colKey) {
+        setColumns((prev) => {
+          const next = prev.map((c) => c.key === info.colKey ? { ...c, width: Number(info.lastWidth) || c.width } : c);
+          saveColsToUser(next);
+          return next;
         });
       }
       resizeRef.current = null;
