@@ -526,6 +526,14 @@ async function run() {
     return String(v);
   };
 
+  const getTextColorForBg = (hexColor) => {
+    if (!hexColor || hexColor.length < 7) return '#333';
+    const r = parseInt(hexColor.slice(1, 3), 16);
+    const g = parseInt(hexColor.slice(3, 5), 16);
+    const b = parseInt(hexColor.slice(5, 7), 16);
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return luminance > 0.6 ? '#222' : '#fff';
+  };
 
   const useFloatPos = (btnRef, open) => {
     const [pos, setPos] = useState({ top: 0, left: 0 });
@@ -1003,15 +1011,6 @@ async function run() {
     const urlParams          = useMemo(() => loadUrlParams(), []);
     const filterAsin         = urlParams?.asin    || null;
     const filterCountry      = urlParams?.country || null;
-
-    const getTextColorForBg = (hexColor) => {
-      if (!hexColor || hexColor.length < 7) return '#333';
-      const r = parseInt(hexColor.slice(1, 3), 16);
-      const g = parseInt(hexColor.slice(3, 5), 16);
-      const b = parseInt(hexColor.slice(5, 7), 16);
-      const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-      return luminance > 0.6 ? '#222' : '#fff';
-    };
 
     const countryAsinOptions = useMemo(() => {
       const seen = new Set();
