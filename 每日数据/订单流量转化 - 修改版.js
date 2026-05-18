@@ -211,6 +211,17 @@ async function run() {
     return palette[(Number.isFinite(idx) && idx > 0 ? idx - 1 : 0) % palette.length];
   };
 
+  const COMPETITOR_SUB_FIELDS = [
+    { key: 'rank', label: '排名', width: 88 },
+    { key: 'notes', label: '操作分析', width: 150 },
+  ];
+
+  const getCompetitorColWidth = () => (
+    COMPETITOR_SUB_FIELDS.reduce((sum, item) => sum + item.width, 0)
+    + Math.max(0, COMPETITOR_SUB_FIELDS.length - 1) * 4
+    + 16
+  );
+
 
 
 
@@ -1112,44 +1123,31 @@ async function run() {
     }, []);
 
     const buildDynamicCompetitorCols = useCallback((records) => {
-      const cols = [];
-      [...(records || [])]
+      return [...(records || [])]
         .sort((a, b) => {
           const ai = getCompetitorRoleIndex(a.role);
           const bi = getCompetitorRoleIndex(b.role);
           if (ai !== bi) return ai - bi;
           return String(a.competitor_asin || '').localeCompare(String(b.competitor_asin || ''));
         })
-        .forEach((comp) => {
+        .map((comp) => {
           const role = comp.role || '竞对';
           const asinLabel = comp.competitor_asin || '未命名';
-          const base = {
+          return {
+            key: `competitor_dynamic_${comp.id}`,
             src: 'competitor',
+            field: `competitor_dynamic_${comp.id}`,
+            label: `${role}:${asinLabel}`,
             hidden: false,
             pinned: false,
-            width: 150,
+            width: getCompetitorColWidth(),
             editable: false,
             headerColor: getCompetitorColor(comp.role),
             _dynamicKind: 'competitor',
             _competitorId: comp.id,
+            _isCompetitorColumn: true,
           };
-          cols.push({
-            ...base,
-            key: `competitor_dynamic_${comp.id}_rank`,
-            field: `competitor_dynamic_${comp.id}_rank`,
-            label: `${role}:${asinLabel} 排名`,
-            _competitorField: 'rank',
-          });
-          cols.push({
-            ...base,
-            key: `competitor_dynamic_${comp.id}_notes`,
-            field: `competitor_dynamic_${comp.id}_notes`,
-            label: `${role}:${asinLabel} 操作分析`,
-            width: 190,
-            _competitorField: 'notes',
-          });
         });
-      return cols;
     }, []);
 
     const DATE_FILTER_OPTIONS = [
@@ -1514,6 +1512,9 @@ async function run() {
     const deselectAll    = () => updateAndSave((p) => p.map((c) => ({ ...c, hidden: true  })));
 
     const visibleCols   = useMemo(() => { const vis = allColumns.filter((c) => !c.hidden && c.src !== 'tool'); return [...vis.filter((c) => c.pinned), ...vis.filter((c) => !c.pinned)]; }, [allColumns]);
+    const hasCompetitorColumns = useMemo(() => visibleCols.some((c) => c._isCompetitorColumn), [visibleCols]);
+    const HEADER_MAIN_HEIGHT = 30;
+    const HEADER_SUB_HEIGHT = 24;
     const pinnedLeftMap = useMemo(() => { const map = {}; let left = 0; visibleCols.forEach((col) => { if (col.pinned) { map[col.key] = left; left += col.width || 80; } }); return map; }, [visibleCols]);
 
     const onDragStart = (e, key) => { if (isResizing) { e.preventDefault(); return; } dragColKey.current = key; e.dataTransfer.effectAllowed = 'move'; };
@@ -2403,8 +2404,10 @@ async function run() {
                     const canEdit  = isCellEditable(col);
                     const hdrColor = getColHeaderColor(col);
                     const formulaDesc = FORMULA_DESCRIPTIONS[col.field] || null;
+                    const isCompetitorCol = !!col._isCompetitorColumn;
                     
                     return React.createElement('th', {
+                      rowSpan: isCompetitorCol ? 1 : (hasCompetitorColumns ? 2 : 1),
                       key: col.key, draggable: true, onDragStart: (e) => onDragStart(e, col.key), onDragOver, onDrop: (e) => onDrop(e, col.key), onClick: () => handleSort(col.key),
                       style: {
                         position: 'sticky',
@@ -2412,14 +2415,15 @@ async function run() {
                         left: isPinned ? `${leftOff}px` : undefined,
                         zIndex: isPinned ? 4 : 2,
                         width: `${col.width || 80}px`,
-                        padding: '8px 18px 8px 8px',
+                        height: isCompetitorCol ? `${HEADER_MAIN_HEIGHT}px` : undefined,
+                        padding: isCompetitorCol ? '3px 6px' : '8px 18px 8px 8px',
                         background: hdrColor,
                         color: getTextColorForBg(hdrColor),
-                        borderBottom: '2px solid rgba(0,0,0,0.1)',
+                        borderBottom: isCompetitorCol ? '1px solid rgba(0,0,0,0.08)' : '2px solid rgba(0,0,0,0.1)',
                         borderRight: isPinned ? '2px solid rgba(0,0,0,0.15)' : '1px solid rgba(0,0,0,0.08)',
-                        textAlign: 'left',
+                        textAlign: isCompetitorCol ? 'center' : 'left',
                         fontWeight: 600,
-                        fontSize: `${FONT_SIZE_SM}px`,
+                        fontSize: isCompetitorCol ? `${FONT_SIZE_XS}px` : `${FONT_SIZE_SM}px`,
                         userSelect: 'none',
                         cursor: 'pointer',
                         whiteSpace: 'nowrap',
@@ -2485,7 +2489,7 @@ async function run() {
                           }, '？')
                         ),
 
-                        React.createElement('span', {
+                        !isCompetitorCol && React.createElement('span', {
                           style: {
                             marginLeft: '3px',
                             opacity: sortConfig.key === col.key ? 1 : 0.4,
@@ -2510,6 +2514,63 @@ async function run() {
                       }),
                     );
                   })
+                ),
+                hasCompetitorColumns && React.createElement('tr', null,
+                  visibleCols.map((col) => {
+                    if (!col._isCompetitorColumn) return null;
+                    const isPinned = col.pinned;
+                    const leftOff = isPinned ? pinnedLeftMap[col.key] : undefined;
+                    const hdrColor = getColHeaderColor(col);
+                    const textColor = getTextColorForBg(hdrColor);
+                    return React.createElement('th', {
+                      key: `${col.key}_sub`,
+                      style: {
+                        position: 'sticky',
+                        top: `${HEADER_MAIN_HEIGHT}px`,
+                        left: isPinned ? `${leftOff}px` : undefined,
+                        zIndex: isPinned ? 4 : 2,
+                        width: `${col.width || getCompetitorColWidth()}px`,
+                        height: `${HEADER_SUB_HEIGHT}px`,
+                        padding: 0,
+                        background: hdrColor,
+                        borderBottom: '2px solid rgba(0,0,0,0.12)',
+                        borderRight: isPinned ? '2px solid rgba(0,0,0,0.15)' : '1px solid rgba(0,0,0,0.08)',
+                        boxSizing: 'border-box',
+                      },
+                    },
+                      React.createElement('div', {
+                        style: {
+                          display: 'flex',
+                          width: '100%',
+                          height: `${HEADER_SUB_HEIGHT}px`,
+                          boxSizing: 'border-box',
+                          gap: '4px',
+                          padding: '2px 4px',
+                          alignItems: 'center',
+                        },
+                      },
+                        COMPETITOR_SUB_FIELDS.map((sub) => React.createElement('div', {
+                          key: sub.key,
+                          style: {
+                            flex: `0 0 ${sub.width}px`,
+                            maxWidth: `${sub.width}px`,
+                            textAlign: 'center',
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            color: textColor,
+                            padding: '2px 2px',
+                            lineHeight: '16px',
+                            background: 'rgba(255,255,255,0.15)',
+                            borderRadius: '3px',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            boxSizing: 'border-box',
+                          },
+                        }, sub.label))
+                      )
+                    );
+                  })
                 )
               ),
               React.createElement('tbody', null,
@@ -2527,18 +2588,48 @@ async function run() {
                       const cIdx      = visibleCols.findIndex((c) => c.key === col.key);
                       const selected  = isCellSelected(rIdx, cIdx);
 
-                      if (col._dynamicKind === 'keyword' || col._dynamicKind === 'competitor' || RICH_TEXT_FIELDS.has(col.field)) {
+                      if (col._isCompetitorColumn) {
+                        const payload = row[col.field] || {};
+                        return React.createElement('td', {
+                          key: col.key,
+                          onMouseDown: (e) => handleCellMouseDown(e, rIdx, cIdx),
+                          onMouseEnter: () => handleCellMouseEnter(rIdx, cIdx),
+                          style: {
+                            position: isPinned ? 'sticky' : undefined,
+                            left: isPinned ? `${leftOff}px` : undefined,
+                            zIndex: isPinned ? 1 : undefined,
+                            background: selected ? '#e6f4ff' : (rIdx % 2 === 0 ? '#fff' : '#fafafa'),
+                            padding: '2px 4px',
+                            borderBottom: '1px solid #f0f0f0',
+                            borderRight: isPinned ? '2px solid rgba(0,0,0,0.08)' : '1px solid #f5f5f5',
+                            verticalAlign: 'middle',
+                            boxSizing: 'border-box',
+                            boxShadow: selected ? 'inset 0 0 0 2px #1677ff' : undefined,
+                          },
+                        },
+                          React.createElement('div', { style: { display: 'flex', gap: '4px', width: '100%', alignItems: 'center' } },
+                            COMPETITOR_SUB_FIELDS.map((sub) => React.createElement('div', {
+                              key: sub.key,
+                              style: { flex: `0 0 ${sub.width}px`, maxWidth: `${sub.width}px`, minWidth: 0 },
+                            },
+                              React.createElement(RichTextImageCell, {
+                                value: payload.daily?.[sub.key],
+                                onSave: (next) => saveCompetitorRichCell(row, { ...col, _competitorField: sub.key }, next),
+                                placeholder: sub.key === 'rank' ? '双击填写排名' : '双击编辑 / 粘贴截图',
+                              })
+                            ))
+                          )
+                        );
+                      }
+
+                      if (col._dynamicKind === 'keyword' || RICH_TEXT_FIELDS.has(col.field)) {
                         const richValue =
                           col._dynamicKind === 'keyword'
                             ? row[col.field]?.daily?.actual_rank
-                            : col._dynamicKind === 'competitor'
-                            ? row[col.field]?.daily?.[col._competitorField || 'notes']
                             : row[col.field];
                         const saveRich =
                           col._dynamicKind === 'keyword'
                             ? (next) => saveKeywordRichCell(row, col, next)
-                            : col._dynamicKind === 'competitor'
-                            ? (next) => saveCompetitorRichCell(row, col, next)
                             : (next) => saveOrderLinkRichField(row, col.field, next);
 
                         return React.createElement('td', {
@@ -2560,7 +2651,7 @@ async function run() {
                         }, React.createElement(RichTextImageCell, {
                           value: richValue,
                           onSave: saveRich,
-                          placeholder: col._dynamicKind === 'keyword' ? '双击填写自然位 / 粘贴截图' : (col._competitorField === 'rank' ? '双击填写排名' : '双击编辑 / 粘贴截图'),
+                          placeholder: col._dynamicKind === 'keyword' ? '双击填写自然位 / 粘贴截图' : '双击编辑 / 粘贴截图',
                         }));
                       }
 
