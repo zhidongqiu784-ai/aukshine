@@ -154,7 +154,6 @@ async function run() {
     'actual_review_qty',
     'offsite_bg_orders','offsite_xx_orders','offsite_acc_orders',
     'total_offsite_orders','total_onsite_orders','onsite_organic_orders','onsite_ad_orders',
-    'competitor1_rank','competitor2_rank','competitor3_rank',
   ]);
   const ZERO_AS_EMPTY_FIELDS = new Set([]);
 
@@ -180,9 +179,6 @@ async function run() {
   ]);
 
   const RICH_TEXT_FIELDS = new Set([
-    'competitor1_notes',
-    'competitor2_notes',
-    'competitor3_notes',
     'review_screenshot',
     'bad_review_notes',
     'keyword_trend_screenshot',
@@ -387,15 +383,6 @@ async function run() {
     { key:'order_link_sb_orders_ratio',                  src:'order_link', field:'sb_orders_ratio',                    label:'⑧SB 广告单占比',           hidden:false, pinned:false, width:120, editable:false },
     { key:'order_link_sbv_orders_ratio',                 src:'order_link', field:'sbv_orders_ratio',                   label:'⑨SBV 广告单占比',          hidden:false, pinned:false, width:120, editable:false },
     { key:'order_link_order_structure_diagnostic',       src:'order_link', field:'order_structure_diagnostic',         label:'订单结构公式诊断',        hidden:false, pinned:false, width:130, editable:false },
-    { key:'order_link_competitor1_asin',                 src:'order_link', field:'competitor1_asin',                   label:'目标竞对 asin1',           hidden:false, pinned:false, width:110, editable:false },
-    { key:'order_link_competitor1_rank',                 src:'order_link', field:'competitor1_rank',                   label:'目标竞对 asin1 排名',       hidden:false, pinned:false, width:110, editable:false },
-    { key:'order_link_competitor1_notes',                src:'order_link', field:'competitor1_notes',                  label:'目标竞对 asin1 操作分析',   hidden:false, pinned:false, width:130, editable:false },
-    { key:'order_link_competitor2_asin',                 src:'order_link', field:'competitor2_asin',                   label:'目标竞对 asin2',           hidden:false, pinned:false, width:110, editable:false },
-    { key:'order_link_competitor2_rank',                 src:'order_link', field:'competitor2_rank',                   label:'目标竞对 asin2 排名',       hidden:false, pinned:false, width:110, editable:false },
-    { key:'order_link_competitor2_notes',                src:'order_link', field:'competitor2_notes',                  label:'目标竞对 asin2 操作分析',   hidden:false, pinned:false, width:130, editable:false },
-    { key:'order_link_competitor3_asin',                 src:'order_link', field:'competitor3_asin',                   label:'目标竞对 asin3',           hidden:false, pinned:false, width:110, editable:false },
-    { key:'order_link_competitor3_rank',                 src:'order_link', field:'competitor3_rank',                   label:'目标竞对 asin3 排名',       hidden:false, pinned:false, width:110, editable:false },
-    { key:'order_link_competitor3_notes',                src:'order_link', field:'competitor3_notes',                  label:'目标竞对 asin3 操作分析',   hidden:false, pinned:false, width:130, editable:false },
     { key:'order_link_review_screenshot',                src:'order_link', field:'review_screenshot',                   label:'review 详细截图',          hidden:false, pinned:false, width:140, editable:false },
     { key:'order_link_bad_review_notes',                 src:'order_link', field:'bad_review_notes',                   label:'差评 rating/差评',                 hidden:false, pinned:false, width:100, editable:false },
     { key:'order_link_keyword_trend_screenshot',         src:'order_link', field:'keyword_trend_screenshot',           label:'Asin 西柚/sif 搜索词排名趋势截图',       hidden:false, pinned:false, width:140, editable:false },
