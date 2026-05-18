@@ -1006,6 +1006,7 @@ async function run() {
     const [selectedRange, setSelectedRange]     = useState(null);
     const selectingRef = useRef(false);
     const autoWidthDoneRef = useRef(false);
+    const hasSavedColumnPrefsRef = useRef(false);
     const manuallyResizedRef = useRef(new Set());
 
     const estimateTextWidth = (text, fontSize) => {
@@ -1162,7 +1163,17 @@ async function run() {
 
     const toggleGroup = useCallback((src) => { setCollapsedGroups((prev) => ({ ...prev, [src]: !prev[src] })); }, []);
 
-    useEffect(() => { (async () => { const cols = await buildColumns(); setColumns(cols); })(); }, []);
+    useEffect(() => {
+      (async () => {
+        const saved = await loadColsFromUser();
+        hasSavedColumnPrefsRef.current = Array.isArray(saved) && saved.length > 0;
+        if (hasSavedColumnPrefsRef.current) {
+          manuallyResizedRef.current = new Set(saved.map((item) => item?.key).filter(Boolean));
+        }
+        const cols = await buildColumns();
+        setColumns(cols);
+      })();
+    }, []);
     useEffect(() => {
       (async () => {
         const saved = await loadColsFromUser();
@@ -1372,6 +1383,10 @@ async function run() {
 
     useEffect(() => {
       if (!data.length || autoWidthDoneRef.current) return;
+      if (hasSavedColumnPrefsRef.current) {
+        autoWidthDoneRef.current = true;
+        return;
+      }
       const padding = 24;
       const sample = data.length <= 500 ? data : data.slice(0, 500);
       setColumns((prev) => {
