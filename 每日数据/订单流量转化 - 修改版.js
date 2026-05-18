@@ -1407,7 +1407,7 @@ async function run() {
       const baseCols = columns.filter(c => !(c.field && (c.field.startsWith('kw_actual_') || c.field.startsWith('competitor_dynamic_'))));
       const keywordCols = dynamicKeywordCols.map((col) => ({ ...col, width: calcKeywordColWidth(col.label) }));
       const competitorCols = dynamicCompetitorCols;
-      const insertKeywordAfter = baseCols.findIndex(c => c.key === 'weekly_zongcvr');
+      const insertKeywordAfter = baseCols.findIndex(c => c.key === 'order_link_keyword_performance_screenshot');
       const withKeywords = insertKeywordAfter >= 0
         ? [...baseCols.slice(0, insertKeywordAfter + 1), ...keywordCols, ...baseCols.slice(insertKeywordAfter + 1)]
         : [...baseCols, ...keywordCols];
