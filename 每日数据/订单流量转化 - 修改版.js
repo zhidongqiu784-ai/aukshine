@@ -1112,26 +1112,44 @@ async function run() {
     }, []);
 
     const buildDynamicCompetitorCols = useCallback((records) => {
-      return [...(records || [])]
+      const cols = [];
+      [...(records || [])]
         .sort((a, b) => {
           const ai = getCompetitorRoleIndex(a.role);
           const bi = getCompetitorRoleIndex(b.role);
           if (ai !== bi) return ai - bi;
           return String(a.competitor_asin || '').localeCompare(String(b.competitor_asin || ''));
         })
-        .map((comp) => ({
-          key: `competitor_dynamic_${comp.id}`,
-          src: 'competitor',
-          field: `competitor_dynamic_${comp.id}`,
-          label: `${comp.role || '竞对'}:${comp.competitor_asin || '未命名'}`,
-          hidden: false,
-          pinned: false,
-          width: 180,
-          editable: false,
-          headerColor: getCompetitorColor(comp.role),
-          _dynamicKind: 'competitor',
-          _competitorId: comp.id,
-        }));
+        .forEach((comp) => {
+          const role = comp.role || '竞对';
+          const asinLabel = comp.competitor_asin || '未命名';
+          const base = {
+            src: 'competitor',
+            hidden: false,
+            pinned: false,
+            width: 150,
+            editable: false,
+            headerColor: getCompetitorColor(comp.role),
+            _dynamicKind: 'competitor',
+            _competitorId: comp.id,
+          };
+          cols.push({
+            ...base,
+            key: `competitor_dynamic_${comp.id}_rank`,
+            field: `competitor_dynamic_${comp.id}_rank`,
+            label: `${role}:${asinLabel} 排名`,
+            _competitorField: 'rank',
+          });
+          cols.push({
+            ...base,
+            key: `competitor_dynamic_${comp.id}_notes`,
+            field: `competitor_dynamic_${comp.id}_notes`,
+            label: `${role}:${asinLabel} 操作分析`,
+            width: 190,
+            _competitorField: 'notes',
+          });
+        });
+      return cols;
     }, []);
 
     const DATE_FILTER_OPTIONS = [
@@ -2138,12 +2156,13 @@ async function run() {
       const payload = row?.[col.field];
       const competitor = payload?.competitor;
       const daily = payload?.daily || {};
+      const fieldName = col._competitorField || 'notes';
       if (!rowId || !competitor?.id) { ctx.message.error('无法找到竞对记录'); return false; }
       const scrollPos = captureTableScroll();
       try {
-        let nextDaily = { ...daily, notes: newContent || null };
+        let nextDaily = { ...daily, [fieldName]: newContent || null };
         if (daily.id) {
-          await ctx.request({ url: 'order_link_competitor_asins_daily:update', method: 'post', params: { filterByTk: daily.id }, data: { notes: newContent || null } });
+          await ctx.request({ url: 'order_link_competitor_asins_daily:update', method: 'post', params: { filterByTk: daily.id }, data: { [fieldName]: newContent || null } });
         } else {
           const res = await ctx.request({
             url: 'order_link_competitor_asins_daily:create',
@@ -2152,7 +2171,7 @@ async function run() {
               country_asin_date: rowId,
               competitor_id: competitor.id,
               date: row.date ? String(row.date).slice(0, 10) : null,
-              notes: newContent || null,
+              [fieldName]: newContent || null,
             },
           });
           nextDaily = { ...nextDaily, ...(res?.data?.data || {}) };
@@ -2513,7 +2532,7 @@ async function run() {
                           col._dynamicKind === 'keyword'
                             ? row[col.field]?.daily?.actual_rank
                             : col._dynamicKind === 'competitor'
-                            ? row[col.field]?.daily?.notes
+                            ? row[col.field]?.daily?.[col._competitorField || 'notes']
                             : row[col.field];
                         const saveRich =
                           col._dynamicKind === 'keyword'
@@ -2541,7 +2560,7 @@ async function run() {
                         }, React.createElement(RichTextImageCell, {
                           value: richValue,
                           onSave: saveRich,
-                          placeholder: col._dynamicKind === 'keyword' ? '双击填写自然位 / 粘贴截图' : '双击编辑 / 粘贴截图',
+                          placeholder: col._dynamicKind === 'keyword' ? '双击填写自然位 / 粘贴截图' : (col._competitorField === 'rank' ? '双击填写排名' : '双击编辑 / 粘贴截图'),
                         }));
                       }
 
