@@ -1059,14 +1059,15 @@ async function run() {
         .map((kw) => {
           const roleLabel = KW_ROLE_LABEL[kw.role] || kw.role || '';
           const targetPart = ' 自然位';
+          const label = `词:${kw.keyword_name || '未命名'}${roleLabel ? `(${roleLabel})` : ''}${targetPart}`;
           return {
             key: `kw_actual_${kw.id}`,
             src: 'keyword_position',
             field: `kw_actual_${kw.id}`,
-            label: `词:${kw.keyword_name || '未命名'}${roleLabel ? `(${roleLabel})` : ''}${targetPart}`,
+            label,
             hidden: false,
             pinned: false,
-            width: 160,
+            width: Math.max(150, Math.min(520, Math.ceil(estimateTextWidth(label, FONT_SIZE_SM) + 46))),
             editable: false,
             headerColor: KW_ROLE_COLORS[kw.role] || '#b5796a',
             _dynamicKind: 'keyword',
