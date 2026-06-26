@@ -43,6 +43,19 @@
     },
     timePickerLocale: { placeholder: '请选择时间' },
   };
+  const PAGINATION_LOCALE = {
+    items_per_page: '条/页',
+    jump_to: '跳至',
+    jump_to_confirm: '确定',
+    page: '页',
+    prev_page: '上一页',
+    next_page: '下一页',
+    prev_5: '向前 5 页',
+    next_5: '向后 5 页',
+    prev_3: '向前 3 页',
+    next_3: '向后 3 页',
+    page_size: '页码',
+  };
 
   const GLOBAL_KEY  = '__urlParams_global';
   const readGlobal  = ()     => ctx.engine[GLOBAL_KEY] || null;
@@ -5329,7 +5342,29 @@
       }));
     }, [data, load, mergeTermColumns, refreshData]);
 
-    const btnStyle = (bg, color, border) => ({ padding: '5px 12px', background: bg, color, border: `1px solid ${border}`, borderRadius: '4px', cursor: 'pointer', fontSize: `${FONT_SIZE}px`, whiteSpace: 'nowrap' });
+    const btnStyle = (bg, color, border) => ({
+      minHeight: '30px',
+      padding: '5px 12px',
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '4px',
+      background: bg,
+      color,
+      border: `1px solid ${border}`,
+      borderRadius: '6px',
+      cursor: 'pointer',
+      fontSize: `${FONT_SIZE_SM}px`,
+      fontWeight: 700,
+      lineHeight: '18px',
+      whiteSpace: 'nowrap',
+      boxSizing: 'border-box',
+      letterSpacing: 0,
+      boxShadow: '0 1px 2px rgba(15,23,42,0.08), inset 0 1px 0 rgba(255,255,255,0.24)',
+      transitionProperty: 'box-shadow, opacity',
+      transitionDuration: '120ms',
+      transitionTimingFunction: 'cubic-bezier(0.2, 0, 0, 1)',
+    });
 
     const renderEditInput = (col) => {
       const commonProps = { ref: inputRef, value: editValue, onBlur: () => saveEdit(), onKeyDown: (e) => { if (e.key === 'Escape') cancelEdit(); }, style: { width: '100%' }, size: 'small' };
@@ -5855,19 +5890,22 @@
     const headerInfoEl = React.createElement('div', {
       style: {
         display: 'inline-flex',
+        alignItems: 'center',
         gap: '8px',
         flexWrap: 'wrap',
-        marginBottom: 0,
-        padding: '1px 4px',
+        minHeight: '30px',
+        marginBottom: '4px',
+        padding: '5px 10px',
         background: '#fafafa',
         border: '1px solid #d9d9d9',
-        borderRadius: '4px',
-        boxShadow: 'none',
+        borderRadius: '8px',
+        boxShadow: '0 1px 2px rgba(15,23,42,0.05)',
         maxWidth: '100%',
+        boxSizing: 'border-box',
       },
     },
       ...topInfoItems.map((item, index) =>
-        React.createElement('div', { key: item.label, style: { minWidth: 0, borderLeft: index === 0 ? 'none' : '1px solid #d9d9d9', paddingLeft: index === 0 ? 0 : '6px', color: '#333', fontSize: `${FONT_SIZE_SM}px`, fontWeight: 600, lineHeight: '15px', whiteSpace: 'nowrap' } },
+        React.createElement('div', { key: item.label, style: { minWidth: 0, borderLeft: index === 0 ? 'none' : '1px solid #d9d9d9', paddingLeft: index === 0 ? 0 : '6px', color: '#333', fontSize: `${FONT_SIZE_SM}px`, fontWeight: 600, lineHeight: '18px', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' } },
           React.createElement('span', { style: { color: '#4d7f78', fontWeight: 600 } }, `${item.label}：`),
           React.createElement('span', null, item.value)
         )
@@ -5922,7 +5960,7 @@
       isResizing && React.createElement('div', { onMouseMove: onOverlayMove, onMouseUp: onOverlayUp, onMouseLeave: onOverlayUp, style: { position: 'fixed', inset: 0, zIndex: 9999, cursor: 'col-resize', background: 'transparent' } }),
 
       React.createElement('div', {
-        style: { display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: 0 },
+        style: { display: 'flex', alignItems: 'center', columnGap: '14px', rowGap: '6px', flexWrap: 'wrap', marginBottom: '4px' },
       },
         headerInfoEl,
         React.createElement('div', {
@@ -5930,16 +5968,19 @@
             display: 'inline-flex',
             width: 'fit-content',
             maxWidth: '100%',
-            gap: '3px',
+            columnGap: '8px',
+            rowGap: '4px',
             flexWrap: 'wrap',
-            marginBottom: 0,
-            padding: '1px 4px',
+            minHeight: '30px',
+            marginBottom: '4px',
+            padding: '5px 10px',
             background: '#fafafa',
-            borderRadius: '4px',
+            borderRadius: '8px',
             border: '1px solid #d9d9d9',
             alignItems: 'center',
             fontSize: `${FONT_SIZE_XS}px`,
             boxSizing: 'border-box',
+            boxShadow: '0 1px 2px rgba(15,23,42,0.05)',
           }
         },
           React.createElement('span', { style: { fontWeight: 600, color: '#555', marginRight: '4px' } }, '列头颜色：'),
@@ -5962,82 +6003,105 @@
 
       termQuickIndexItems.length > 0 && React.createElement('div', {
       style: {
-      display: 'flex',
+      display: 'inline-flex',
       alignItems: 'center',
-      gap: '6px',
-      marginBottom: '8px',
-      padding: '4px 8px',
+      columnGap: '10px',
+      rowGap: '5px',
+      flexWrap: 'wrap',
+      maxWidth: '100%',
+      minHeight: '30px',
+      marginBottom: '4px',
+      padding: '5px 10px',
       border: '1px solid #e8e8e8',
-      borderRadius: '4px',
-      background: '#fff',
+      borderRadius: '8px',
+      background: '#fafafa',
+      boxShadow: '0 1px 2px rgba(15,23,42,0.05)',
       overflowX: 'auto',
       whiteSpace: 'nowrap',
       fontSize: `${FONT_SIZE_XS}px`,
+      boxSizing: 'border-box',
       }
       },
       React.createElement('span', { style: { color: '#666', fontWeight: 600, flexShrink: 0 } }, '快速跳转：'),
       termQuickIndexItems.map((item) => React.createElement('button', {
       key: item.key,
+      type: 'button',
       onClick: () => scrollToTermGroup(item.left),
       title: `${item.typeLabel}：${item.label}`,
       style: {
       flexShrink: 0,
-      padding: '2px 8px',
+      minHeight: '24px',
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '2px 9px',
       border: '1px solid #d9d9d9',
-      borderRadius: '4px',
+      borderRadius: '5px',
       background: item.typeLabel === '词根' ? '#f0fdfa' : '#f5f3ff',
       color: item.typeLabel === '词根' ? '#0f766e' : '#6d28d9',
       cursor: 'pointer',
       fontSize: `${FONT_SIZE_XS}px`,
+      fontWeight: 700,
       whiteSpace: 'nowrap',
+      boxSizing: 'border-box',
+      letterSpacing: 0,
+      boxShadow: '0 1px 2px rgba(15,23,42,0.08), inset 0 1px 0 rgba(255,255,255,0.24)',
+      transitionProperty: 'box-shadow, opacity',
+      transitionDuration: '120ms',
+      transitionTimingFunction: 'cubic-bezier(0.2, 0, 0, 1)',
       }
       }, `${item.label}（${item.typeLabel}）`))
       ),
 
-      React.createElement('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px', marginBottom: '4px', alignItems: 'stretch' } },
+      React.createElement('div', { style: { display: 'flex', columnGap: '8px', rowGap: '6px', flexWrap: 'wrap', marginTop: '8px', marginBottom: '6px', alignItems: 'stretch' } },
         React.createElement('div', {
           style: {
             display: 'flex',
-            gap: '4px',
+            columnGap: '5px',
+            rowGap: '5px',
             flexWrap: 'wrap',
             alignItems: 'center',
-            minHeight: '34px',
+            minHeight: '38px',
             boxSizing: 'border-box',
-            padding: '5px 8px',
+            padding: '6px 8px',
             background: '#ffe1e1',
             border: '2px solid #f5222d',
-            borderRadius: '4px',
-            boxShadow: '0 0 0 1px rgba(245,34,45,0.12)',
+            borderRadius: '8px',
+            boxShadow: '0 1px 3px rgba(245,34,45,0.12)',
           },
         },
-          React.createElement('span', { style: { color: '#a8071a', fontSize: `${FONT_SIZE + 1}px`, fontWeight: 900, marginRight: '4px', whiteSpace: 'nowrap' } }, '需设置：'),
-          React.createElement('button', { ref: panelBtnRef, onClick: () => { setShowPanel((v) => !v); setShowPush(false); setShowCrossHighlightPanel(false); setShowDefaultTermConfig(false); }, style: btnStyle('#EB6793', '#fff', '#d84f7c') }, '👁️ 列设置'),
-          IS_ADMIN && React.createElement('button', { ref: pushBtnRef, onClick: () => { setShowPush((v) => !v); setShowPanel(false); setShowCrossHighlightPanel(false); setShowDefaultTermConfig(false); }, style: btnStyle('#EB6793', '#fff', '#d84f7c') }, '📤 推送配置'),
+          React.createElement('span', { style: { color: '#a8071a', fontSize: `${FONT_SIZE}px`, fontWeight: 800, marginRight: '3px', lineHeight: '20px', whiteSpace: 'nowrap' } }, '需设置：'),
+          React.createElement('button', { ref: panelBtnRef, type: 'button', onClick: () => { setShowPanel((v) => !v); setShowPush(false); setShowCrossHighlightPanel(false); setShowDefaultTermConfig(false); }, style: btnStyle('#EB6793', '#fff', '#d84f7c') }, '👁️ 列设置'),
+          IS_ADMIN && React.createElement('button', { ref: pushBtnRef, type: 'button', onClick: () => { setShowPush((v) => !v); setShowPanel(false); setShowCrossHighlightPanel(false); setShowDefaultTermConfig(false); }, style: btnStyle('#EB6793', '#fff', '#d84f7c') }, '📤 推送配置'),
           React.createElement('button', {
           ref: crossHighlightBtnRef,
+          type: 'button',
           onClick: () => { setShowCrossHighlightPanel((v) => !v); setShowPanel(false); setShowPush(false); setShowDefaultTermConfig(false); },
           style: btnStyle('#EB6793', '#fff', '#d84f7c'),
         }, crossHighlightEnabled ? '高亮行列：开' : '高亮行列'),
-          React.createElement('button', { onClick: openStageDefaultModal, style: btnStyle('#EB6793', '#fff', '#d84f7c') }, '目标份额默认值'),
-          React.createElement('button', { onClick: () => { setShowTermManager(true); setShowDefaultTermConfig(false); }, style: btnStyle('#EB6793', '#fff', '#d84f7c') }, '🔑 管理关键词/词根'),
-          IS_ADMIN && React.createElement('button', { onClick: () => { setShowDefaultTermConfig(true); setShowPanel(false); setShowPush(false); setShowCrossHighlightPanel(false); }, style: btnStyle('#EB6793', '#fff', '#d84f7c') }, '默认词配置'),
-          React.createElement('button', { onClick: () => { setShowChartModal(true); setShowPanel(false); setShowPush(false); setShowCrossHighlightPanel(false); setShowDefaultTermConfig(false); }, style: btnStyle('#EB6793', '#fff', '#d84f7c') }, '📈 打开图表')
+          React.createElement('button', { type: 'button', onClick: openStageDefaultModal, style: btnStyle('#EB6793', '#fff', '#d84f7c') }, '目标份额默认值'),
+          React.createElement('button', { type: 'button', onClick: () => { setShowTermManager(true); setShowDefaultTermConfig(false); }, style: btnStyle('#EB6793', '#fff', '#d84f7c') }, '🔑 管理关键词/词根'),
+          IS_ADMIN && React.createElement('button', { type: 'button', onClick: () => { setShowDefaultTermConfig(true); setShowPanel(false); setShowPush(false); setShowCrossHighlightPanel(false); }, style: btnStyle('#EB6793', '#fff', '#d84f7c') }, '默认词配置'),
+          React.createElement('button', { type: 'button', onClick: () => { setShowChartModal(true); setShowPanel(false); setShowPush(false); setShowCrossHighlightPanel(false); setShowDefaultTermConfig(false); }, style: btnStyle('#EB6793', '#fff', '#d84f7c') }, '📈 打开图表')
         ),
         React.createElement('div', {
         style: {
         display: 'flex',
-        gap: '4px',
+        columnGap: '6px',
+        rowGap: '5px',
         flexWrap: 'wrap',
         alignItems: 'center',
-        minHeight: '34px',
+        minHeight: '38px',
         boxSizing: 'border-box',
-        padding: '5px 8px',
+        padding: '6px 8px',
         background: '#fff',
         border: '1px solid #d9d9d9',
-        borderRadius: '4px',
+        borderRadius: '8px',
+        boxShadow: '0 1px 3px rgba(15,23,42,0.06)',
         },
         },
         React.createElement('button', {
+        type: 'button',
         onClick: refreshData,
         disabled: actionBusy,
         style: {
@@ -6049,14 +6113,20 @@
         React.createElement(Select, { value: dateFilterType, onChange: (v) => { setDateFilterType(v); if (v !== 'custom') setCustomDateRange(null); }, options: DATE_FILTER_OPTIONS, style: { width: '120px' }, size: 'small' }),
         React.createElement('span', {
         style: {
-        padding: '2px 6px',
+        minHeight: '26px',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '0 8px',
         border: '1px solid #d9d9d9',
-        borderRadius: '4px',
+        borderRadius: '6px',
         background: '#fafafa',
         color: '#555',
         fontSize: `${FONT_SIZE_XS}px`,
         fontWeight: 700,
+        lineHeight: '16px',
         whiteSpace: 'nowrap',
+        boxSizing: 'border-box',
         },
         }, '日期范围'),
         React.createElement(DatePicker.RangePicker, {
@@ -6428,8 +6498,8 @@
             )
       ),
 
-      React.createElement('div', { style: { marginTop: '12px', display: 'flex', justifyContent: 'flex-end' } },
-        React.createElement(Pagination, { current: curPage, pageSize, total, pageSizeOptions: PAGE_SIZE_OPTIONS, showSizeChanger: true, showQuickJumper: true, showTotal: (t, range) => `第 ${range[0]}-${range[1]} 条，共 ${t} 条`, onChange: onPageChange, onShowSizeChange: onShowSizeChange, disabled: loading })
+      React.createElement('div', { style: { marginTop: '6px', padding: '0 2px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' } },
+        React.createElement(Pagination, { current: curPage, pageSize, total, pageSizeOptions: PAGE_SIZE_OPTIONS, showSizeChanger: true, showQuickJumper: true, locale: PAGINATION_LOCALE, showTotal: (t, range) => `第 ${range[0]}-${range[1]} 条，共 ${t} 条`, onChange: onPageChange, onShowSizeChange: onShowSizeChange, disabled: loading })
       )
     );
   };
@@ -6440,7 +6510,7 @@
       DatePicker: DATE_PICKER_LOCALE,
     };
     return React.createElement(ConfigProvider, { locale: zhCN },
-      React.createElement('div', { style: { padding: '16px', fontFamily: 'system-ui, sans-serif', fontSize: `${FONT_SIZE}px` } },
+      React.createElement('div', { style: { padding: '16px', fontFamily: 'system-ui, sans-serif', fontSize: `${FONT_SIZE}px`, WebkitFontSmoothing: 'antialiased', textRendering: 'optimizeLegibility', fontVariantNumeric: 'tabular-nums' } },
         React.createElement(MergedTable, null)
       )
     );
