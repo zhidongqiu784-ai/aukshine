@@ -1,0 +1,1090 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>利润试算面板 · 设计Demo v74</title>
+<style>
+:root{
+  --bg:#f7f8fa; --panel:#fff; --line:#e8eaed; --txt:#333; --sub:#8a8f99;
+  --pink:#fce7ef; --pink-deep:#e85d8a; --pink-line:#f5b8cd;
+  --green:#e6f4ec; --green-deep:#2e9e63; --teal:#d9efe9; --teal-head:#bfe3d8;
+  --blue:#3a7afe; --orange:#e8590c; --yellow:#fff7df; --yellow-line:#f0dfa0;
+  --purple:#7b5cd6;
+}
+*{box-sizing:border-box;margin:0;padding:0;font-family:"Microsoft YaHei","PingFang SC",sans-serif}
+body{background:var(--bg);color:var(--txt);font-size:13px}
+.app{display:flex;min-height:100vh}
+
+/* ===== 左侧菜单 ===== */
+.sidebar{width:158px;background:#fff;border-right:1px solid var(--line);padding:12px 0;flex-shrink:0}
+.logo{font-size:17px;font-weight:700;font-style:italic;padding:4px 16px 14px;letter-spacing:.5px}
+.menu-item{padding:9px 16px;color:#555;cursor:pointer;display:flex;align-items:center;gap:7px;font-size:12.5px}
+.menu-item:hover{background:#f4f6f9}
+.menu-item.active{background:#fdf0f5;color:var(--pink-deep);font-weight:600;border-right:3px solid var(--pink-deep)}
+.menu-item.new::after{content:"新";background:var(--pink-deep);color:#fff;font-size:10px;padding:0 4px;border-radius:3px;margin-left:auto}
+.dot{width:6px;height:6px;border-radius:2px;background:#c5cad3;flex-shrink:0}
+.menu-item.active .dot{background:var(--pink-deep)}
+
+/* ===== 主区 ===== */
+.main{flex:1;min-width:0;padding:14px 18px 60px}
+.crumb{font-size:12px;color:var(--sub);margin-bottom:10px}
+.crumb b{color:var(--txt)}
+
+/* ===== 通用 ===== */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:14px}
+.btn{display:inline-block;padding:6px 14px;border-radius:5px;border:1px solid var(--line);background:#fff;cursor:pointer;font-size:12.5px;color:#444}
+.btn:hover{border-color:#c9cdd4}
+.btn.primary{background:var(--pink-deep);border-color:var(--pink-deep);color:#fff}
+.btn.small{padding:3px 10px;font-size:12px}
+.tag{display:inline-block;padding:1px 7px;border-radius:3px;font-size:11.5px}
+.tag.linked{background:var(--green);color:var(--green-deep)}
+.tag.virtual{background:#eef1f6;color:#6b7280}
+.tag.fill{background:var(--pink);color:var(--pink-deep)}
+.hint{background:var(--yellow);border:1px solid var(--yellow-line);border-radius:6px;padding:8px 12px;font-size:12px;color:#7a6420;margin-bottom:12px;line-height:1.7}
+.hint b{color:#5e4c10}
+input[type=number],input[type=text],select{border:1px solid #d8dce3;border-radius:4px;padding:5px 8px;font-size:12.5px;width:100%;background:#fff}
+input:focus,select:focus{outline:none;border-color:var(--pink-deep)}
+.fill-cell input{background:#fff5f9;border-color:var(--pink-line)}
+.muted{color:var(--sub)}
+
+/* ===== 视图1：列表页 ===== */
+table.list{width:100%;border-collapse:collapse;background:#fff}
+table.list th{font-size:12px;color:var(--sub);font-weight:500;text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);background:#fafbfc}
+table.list td{padding:11px 12px;border-bottom:1px solid #f2f3f5;font-size:12.5px}
+table.list tr:hover td{background:#fcfcfd}
+.asin-link{color:var(--blue);cursor:pointer}
+.asin-link:hover{text-decoration:underline}
+
+/* ===== 视图2：工作台 ===== */
+.head-bar{display:flex;align-items:center;gap:0;background:linear-gradient(90deg,#6e8efb,#7b5cd6);border-radius:8px;padding:10px 16px;color:#fff;margin-bottom:12px;flex-wrap:wrap}
+.head-bar .kv{margin-right:26px}
+.head-bar .kv .k{font-size:11px;opacity:.75}
+.head-bar .kv .v{font-size:14px;font-weight:600}
+.head-bar select{width:auto;background:rgba(255,255,255,.92);border:none;font-size:12.5px}
+.link-state{margin-left:auto;font-size:12px;background:rgba(255,255,255,.18);padding:5px 12px;border-radius:5px;line-height:1.6;max-width:330px}
+
+.tabs{display:flex;gap:4px;border-bottom:2px solid var(--line);margin-bottom:14px}
+.tab{padding:9px 18px;cursor:pointer;font-size:13.5px;color:#666;border-bottom:2px solid transparent;margin-bottom:-2px}
+.tab.active{color:var(--pink-deep);font-weight:700;border-bottom-color:var(--pink-deep)}
+
+/* —— Tab1 单台试算 —— */
+.t1-wrap{display:flex;gap:14px;align-items:flex-start}
+.t1-left{width:300px;flex-shrink:0}
+.t1-right{flex:1;min-width:0}
+.sec-title{font-size:13px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.sec-title .bar{width:4px;height:14px;border-radius:2px;background:var(--pink-deep)}
+.sec-title.green .bar{background:var(--green-deep)}
+.frow{display:flex;align-items:center;margin-bottom:9px;gap:8px}
+.frow label{width:108px;font-size:12.5px;color:#555;flex-shrink:0;line-height:1.4}
+.frow .unit{font-size:11.5px;color:var(--sub);width:34px;flex-shrink:0}
+.fold{border:1px solid var(--line);border-radius:6px;margin-top:12px;overflow:hidden}
+.fold-head{padding:9px 12px;background:#fafbfc;cursor:pointer;font-size:12.5px;color:#555;display:flex;justify-content:space-between}
+.fold-head .arrow{transition:.2s}
+.fold.open .arrow{transform:rotate(90deg)}
+.fold-body{display:none;padding:10px 12px;border-top:1px solid var(--line)}
+.fold.open .fold-body{display:block}
+.def-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px}
+.def-row .dv{display:flex;align-items:center;gap:5px}
+.def-row input{width:64px;padding:2px 6px;font-size:12px;text-align:right}
+.def-src{font-size:10.5px;color:#b0b6c0}
+
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+.kcard{border-radius:8px;padding:12px 14px;background:var(--green);border:1px solid #cfe9da}
+.kcard.loss{background:#fdeeee;border-color:#f3cccc}
+.kcard .lab{font-size:11.5px;color:#6a7a70;margin-bottom:4px}
+.kcard.loss .lab{color:#9a6868}
+.kcard .num{font-size:21px;font-weight:700;color:var(--green-deep)}
+.kcard.loss .num{color:#d64545}
+.kcard .sub{font-size:11px;color:#8aa093;margin-top:2px}
+.cost-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.cgi{background:#fafbfc;border:1px solid var(--line);border-radius:5px;padding:4px 8px;display:flex;flex-direction:column;justify-content:center;min-height:34px}
+.cgi .lab{font-size:10px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cgi .num{font-size:12px;font-weight:600}
+
+table.plan-list{width:100%;border-collapse:collapse;margin-top:8px}
+table.plan-list th{font-size:11.5px;color:var(--sub);font-weight:500;text-align:left;padding:7px 10px;border-bottom:1px solid var(--line)}
+table.plan-list td{padding:8px 10px;border-bottom:1px solid #f2f3f5;font-size:12.5px}
+.pbar-wrap{background:#eef1f4;border-radius:4px;height:14px;position:relative;min-width:120px}
+.pbar{height:100%;border-radius:4px;background:var(--green-deep)}
+.pbar-flex{display:flex;align-items:center;gap:8px}
+.pbar-wrap{position:relative}
+.pbar-pct{position:absolute;left:6px;top:0;line-height:14px;font-size:10px;color:#fff;font-weight:700}
+.pbar-amt{font-size:11px;color:#555;white-space:nowrap}
+.del{color:#d64545;cursor:pointer;font-size:12px}
+
+/* —— Tab2 推广计划 —— */
+.tpl-bar{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.colctrl{display:flex;align-items:center;gap:16px;margin-bottom:8px;padding:7px 12px;background:#f7f8fa;border:1px solid var(--line);border-radius:7px;flex-wrap:wrap}
+.colctrl-label{font-size:12.5px;color:#888;font-weight:600}
+.colctrl .chk{font-size:12.5px;color:#444}
+.tpl-bar label{font-size:12.5px;color:#555}
+.tpl-bar select,.tpl-bar input{width:auto}
+.legend{display:flex;gap:14px;font-size:11.5px;color:var(--sub);margin-bottom:8px;flex-wrap:wrap}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.scrollx{overflow-x:auto;border:1px solid var(--line);border-radius:6px}
+table.plan{border-collapse:collapse;min-width:1640px;background:#fff}
+table.plan th{font-size:11.5px;font-weight:600;padding:7px 8px;border:none;border-bottom:1px solid #dfe4e6;border-right:1px solid #eef1f3;white-space:nowrap;background:#eef4f1;color:#3a6557}
+table.plan th.fillh{background:#fbeaf1;color:#c14b75}
+table.plan th.defh{background:#fdf6e3;color:#9a7d2e}
+table.plan td{padding:5px 8px;border:none;border-bottom:1px solid #eef0f2;border-right:1px solid #f4f5f7;font-size:12px;text-align:right;white-space:nowrap}
+table.plan td.l{text-align:left}
+table.plan tbody tr:hover td{background:#eef2f7}
+/* 板块之间的留白沟槽：用空隙(不是线)把每组分成独立的块 */
+table.plan th.gsl,table.plan td.gsl{border-left:2px solid #ccd1da}
+table.plan td input{width:62px;padding:4px 5px;font-size:12px;text-align:right;border:none;background:transparent;border-radius:0}
+table.plan td input:hover{background:rgba(120,140,170,.06)}
+table.plan td input:focus{background:#fff;box-shadow:0 0 0 1.5px var(--pink-deep);border-radius:3px;outline:none}
+table.plan td input:disabled{color:#c2c6cc;background:transparent}
+table.plan td.fill input{background:#fdf4f8}
+table.plan td.fill input:focus{background:#fff}
+table.plan td.def input{background:transparent}
+table.plan tr.sum td{background:#f3f6f9;font-weight:700;border-top:2px solid #c9d4dd}
+.neg{color:#d64545}.pos{color:var(--green-deep)}
+.stage-tag{font-size:10.5px;padding:1px 5px;border-radius:3px;background:#eef1f6;color:#667}
+.note{font-size:11.5px;color:var(--sub);margin-top:8px;line-height:1.8}
+.add-row{margin-top:8px}
+
+/* v2: 填写区醒目化 */
+.fill-zone{background:#fdf2f7;border:1.5px solid var(--pink-line);border-radius:8px;padding:12px;margin-bottom:4px}
+.step-num{display:inline-flex;width:18px;height:18px;border-radius:50%;background:var(--pink-deep);color:#fff;font-size:11px;align-items:center;justify-content:center;margin-right:6px;flex-shrink:0}
+.fill-zone .frow label{display:flex;align-items:center;font-weight:600;color:#444}
+.fill-zone input{background:#fff;border:1.5px solid var(--pink-deep);font-size:14px;font-weight:600}
+.t-toggle{font-size:12.5px;color:var(--pink-deep);cursor:pointer;padding:8px 0 2px;user-select:none}
+.t-body{display:none;padding-top:6px}
+.t-open .t-body{display:block}
+.t-open .t-toggle .tri{transform:rotate(90deg);display:inline-block}
+
+/* v3: 类型切换pill */
+.pillrow{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+.pillrow .pl{width:64px;font-size:12px;color:#555;flex-shrink:0}
+.pills{display:flex;border:1px solid #d8dce3;border-radius:5px;overflow:hidden;flex:1}
+.pills span{flex:1;text-align:center;padding:5px 0;font-size:12.5px;cursor:pointer;background:#fff;color:#666}
+.pills span.on{background:var(--blue);color:#fff;font-weight:600}
+.pills.woot span.on{background:#7b5cd6}
+.zero-tag{font-size:10px;background:#ede7fb;color:#7b5cd6;border-radius:3px;padding:0 4px;margin-left:4px}
+
+.woot-hint{font-size:11.5px;color:#7b5cd6;margin:2px 0 14px 0;padding:6px 8px;line-height:1.9;background:#f7f4fd;border-radius:5px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.woot-hint a{color:#fff;background:#7b5cd6;text-decoration:none;cursor:pointer;font-weight:600;padding:2px 10px;border-radius:4px;white-space:nowrap}
+input.invalid{border-color:#d64545 !important;background:#fdf2f2 !important}
+
+.kcard.warn{background:#fdeeee;border-color:#f3cccc}
+.kcard.warn .num{color:#d64545}
+.kcard.warn .lab{color:#9a6868}
+.bm-tip{font-size:11px;color:#d64545;margin-top:5px;line-height:1.7}
+.bm-tip a{color:#fff;background:#d64545;padding:1px 8px;border-radius:4px;cursor:pointer;text-decoration:none;font-weight:600;white-space:nowrap}
+.demo-badge{position:fixed;right:14px;bottom:14px;background:#333;color:#fff;font-size:11px;padding:5px 10px;border-radius:5px;opacity:.75}
+
+/* v50 保存内联警示 */
+.save-warn{margin-top:8px;padding:9px 12px;background:#fdecec;border:1px solid #f5b5b5;border-radius:6px;color:#c0392b;font-size:11.5px;line-height:1.85}
+.save-warn b{color:#a93226}
+/* v49 参数分块底色 */
+.def-group{border-radius:6px;padding:7px 9px;margin-bottom:7px}
+.def-group-float{background:#fbfcfd;border:1px solid #eef1f4}
+.def-group-fixed{background:#faf9fc;border:1px solid #efedf5}
+.def-group .def-block-t{border-bottom:none;padding-top:0;color:#8a94a2}
+.tacos-note{background:#fff6f0 !important;color:#9a6a3a !important}
+.tacos-note b{color:#d9730d}
+/* v48 参数分块 */
+.tail-note{font-size:10.5px;font-weight:400;color:#a89; color:#b5829a;margin-left:10px}
+/* v48b */
+.def-block-t{font-size:11px;font-weight:700;color:#9aa4b0;padding:4px 0 2px;border-bottom:1px dashed #e0e4e8;margin-bottom:3px}
+.def-note-inline{font-size:10.5px;color:#a08; color:#b5829a; background:#fdf4f8; padding:4px 7px;border-radius:4px;margin:3px 0;line-height:1.5}
+.info-i{display:inline-block;width:13px;height:13px;line-height:13px;text-align:center;background:#c5ccd4;color:#fff;border-radius:50%;font-size:9px;margin-left:4px;cursor:help;font-style:normal}
+.tacos-row,.bm-row{background:#fafbfc}
+/* v45 口径说明换行排版 */
+.note-list{margin-top:0}
+.note-row{font-size:12px;line-height:1.65;color:#666;padding:5px 0;border-bottom:1px solid #f2f2f2}
+.note-row:last-child{border-bottom:none}
+.note-k{display:inline-block;min-width:62px;font-weight:700;color:#444;margin-right:8px}
+.note-foot{color:#999;font-style:italic;padding-top:8px}
+/* v42 净利拆解弹层 */
+.bd-mask{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1000;display:flex;align-items:center;justify-content:center}
+.bd-box{background:#fff;border-radius:12px;width:440px;max-width:92vw;max-height:86vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.25)}
+.bd-head{padding:14px 18px;font-weight:700;font-size:15px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;background:var(--pink);color:#fff;border-radius:12px 12px 0 0}
+.bd-x{cursor:pointer;font-size:16px;opacity:.9}
+.bd-body{padding:16px 18px}
+.bd-sec{margin-bottom:14px}
+.bd-t{font-weight:600;font-size:13px;color:#333;margin-bottom:6px}
+.bd-tbl{width:100%;font-size:12.5px;border-collapse:collapse}
+.bd-tbl td{padding:4px 6px;border-bottom:1px solid #f0f0f0;color:#555}
+.bd-tbl .bd-r{text-align:right;font-variant-numeric:tabular-nums}
+.bd-tbl .bd-sum td{font-weight:700;color:#222;border-top:1px solid #ddd;border-bottom:none}
+.bd-total{margin-top:8px;padding:12px 14px;background:#f7f8fa;border-radius:8px;display:flex;justify-content:space-between;align-items:center;font-size:13px}
+/* v31: 列分组 */
+#planTbl th,#planTbl td{min-width:52px}
+#planTbl th:nth-child(3){min-width:88px}
+.grouphead th{font-size:11px;font-weight:600;padding:5px 6px;text-align:center;letter-spacing:.4px}
+.gh-base{background:#eef1f4;color:#5a6472;border-bottom:2.5px solid #98a1b0}
+.gh-price{background:#fff0f6;color:#b03a6e;border-bottom:2.5px solid #d484a3}
+.gh-order{background:#fff7e8;color:#9a6a00;border-bottom:2.5px solid #cea552}
+.gh-ad{background:#eaf3ff;color:#2b6cb0;border-bottom:2.5px solid #4664ad}
+.gh-lowf{background:#f3f0fa;color:#6b46a3;border-bottom:2.5px solid #a288c9}
+.gh-res{background:#e9f5ee;color:#2f7a4d;border-bottom:2.5px solid #57a37f}
+.gh-detail{background:#eceff2;color:#5a6472;border-bottom:2.5px solid #98a1b0}
+.gh-toggle{font-weight:400;font-size:10px;cursor:pointer;text-decoration:underline;margin-left:3px;opacity:.85}
+.col-hidden{display:none}
+/* v26: 操作列固定 */
+table.plan th:last-child,table.plan td:last-child{position:sticky;right:0;background:#fff;border-left:2px solid var(--line);z-index:2}
+table.plan th:last-child{background:#eef4f1}
+table.plan tr.sum td:last-child{background:#f3f6f9}
+/* v22: Tab2低频列与状态 */
+/* 低频列显隐已统一改由 colVisible(JS) 控制；移除旧的 .lowf{display:none}/.show-lowf 机制——它会在列进入DOM后二次隐藏，导致勾选"低频列"无效 */
+td input.warnv{border-color:#e8590c !important;background:#fff4ec !important}
+tr.seed-off td{color:#a5abb5}
+tr.seed-off td .stage-note{font-size:10px;color:#a5abb5}
+td.break-even{background:#e6f4ec !important;font-weight:700}
+.be-tag{font-size:10px;background:var(--green-deep);color:#fff;border-radius:3px;padding:0 4px;margin-left:4px}
+.so-tag{font-size:10px;background:#d64545;color:#fff;border-radius:3px;padding:0 4px;margin-left:4px}
+.chk{font-size:12px;color:#555;display:inline-flex;align-items:center;gap:4px;cursor:pointer}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- 左侧菜单 -->
+  <div class="sidebar">
+    <div class="logo">AukShine</div>
+    <div class="menu-item"><span class="dot"></span>待办</div>
+    <div class="menu-item"><span class="dot"></span>查询</div>
+    <div class="menu-item"><span class="dot"></span>ASIN对照表</div>
+    <div class="menu-item"><span class="dot"></span>测评</div>
+    <div class="menu-item"><span class="dot"></span>返款登记</div>
+    <div class="menu-item"><span class="dot"></span>水位表</div>
+    <div class="menu-item"><span class="dot"></span>客服</div>
+    <div class="menu-item"><span class="dot"></span>预警</div>
+    <div class="menu-item"><span class="dot"></span>月计划</div>
+    <div class="menu-item"><span class="dot"></span>Woot统计</div>
+    <div class="menu-item"><span class="dot"></span>销售额报表</div>
+    <div class="menu-item" onclick="showView('list',true)"><span class="dot"></span>每日数据一览表</div>
+    <div class="menu-item active new" id="menuCalc" onclick="showView('list')"><span class="dot"></span>利润试算</div>
+    <div class="menu-item"><span class="dot"></span>Listing文案合规检测</div>
+  </div>
+
+  <!-- ============ 视图1：利润试算列表页 ============ -->
+  <div class="main" id="viewList">
+    <div class="crumb">销售 / <b>利润试算</b></div>
+
+    <div class="hint">算三件事：卖一台赚多少、刷一台亏多少、推广期整体盈亏。绑 ASIN 则利润联动每日数据；不绑为纯试算，上架后补填即可。</div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div class="sec-title"><span class="bar"></span>试算记录</div>
+        <button class="btn primary" onclick="enterWork('new')">＋ 新建试算</button>
+      </div>
+      <table class="list">
+        <tr><th style="width:40px">#</th><th>型号</th><th>站点</th><th>ASIN</th><th>销售/创建人</th><th>状态</th><th>当前折后价</th><th>单台毛利</th><th>最近更新</th><th style="width:80px">操作</th></tr>
+        <tr>
+          <td>1</td><td>L03Pro</td><td>US</td><td><span class="asin-link" onclick="enterWork('linked')">B0G49VCMHJ</span></td>
+          <td>Uny</td><td><span class="tag linked">已绑定 · 联动每日数据</span></td>
+          <td>$199.00</td><td class="pos">$41.27 / 29.5%</td><td>06-10</td>
+          <td><span class="asin-link" onclick="enterWork('linked')">打开</span></td>
+        </tr>
+        <tr>
+          <td>2</td><td>L02Plus</td><td>US</td><td><span class="asin-link">B0H2Z287HC</span></td>
+          <td>Moon</td><td><span class="tag linked">已绑定 · 联动每日数据</span></td>
+          <td>$149.99</td><td class="pos">$28.10 / 26.0%</td><td>06-08</td>
+          <td><span class="asin-link">打开</span></td>
+        </tr>
+        <tr>
+          <td>3</td><td>新品X1（立项中）</td><td>US</td><td><span class="muted">— 未绑定</span></td>
+          <td>产品部·Lal</td><td><span class="tag virtual">虚拟试算</span></td>
+          <td>$229.00</td><td class="pos">$52.80 / 32.1%</td><td>06-09</td>
+          <td><span class="asin-link" onclick="enterWork('virtual')">打开</span></td>
+        </tr>
+      </table>
+          </div>
+  </div>
+
+  <!-- ============ 视图2：试算工作台 ============ -->
+  <div class="main" id="viewWork" style="display:none">
+    <div class="crumb"><span class="asin-link" onclick="showView('list')">利润试算</span> / <b id="crumbName">L03Pro · US</b></div>
+
+    <!-- 产品头 + 绑定状态 -->
+    <div class="head-bar">
+      <div class="kv"><div class="k">型号（可编辑）</div><input type="text" id="modelInp" value="L03Pro" style="width:86px;background:rgba(255,255,255,.92);border:none;border-radius:4px;padding:4px 8px;font-weight:600" onchange="document.getElementById('crumbName').textContent=this.value+' · '+document.getElementById('siteSel').value"></div>
+      <div class="kv"><div class="k">站点</div>
+        <select id="siteSel" onchange="onSite()">
+          <option value="US" selected>US</option><option value="CA">CA</option><option value="UK">UK</option>
+          <option value="DE">DE</option><option value="FR">FR</option><option value="IT">IT</option>
+          <option value="ES">ES</option><option value="JP">JP</option>
+        </select></div>
+      <div class="kv"><div class="k">ASIN（可留空）</div>
+        <select id="asinSel" onchange="onAsinChange()">
+          <option value="">不绑定 · 仅试算</option>
+          <option value="B0G49VCMHJ" selected>B0G49VCMHJ</option>
+          <option value="B0GWDCFMXY">B0GWDCFMXY</option>
+        </select>
+      </div>
+      <div class="kv"><div class="k">创建人</div><div class="v">Uny</div></div>
+      <div class="link-state" id="linkState"></div>
+    </div>
+
+    <!-- 内部Tab -->
+    <div class="tabs">
+      <div class="tab active" id="tabBtn1" onclick="switchTab(1)">① 单台试算（定价利润 + 测评亏损）</div>
+      <div class="tab" id="tabBtn2" onclick="switchTab(2)">② 推广计划试算（1~3个月盈亏）</div>
+    </div>
+
+    <!-- ========== Tab1：单台试算（1.1+1.2合并） ========== -->
+    <div id="tab1">
+      <div class="t1-wrap">
+
+        <!-- 左：填写区 -->
+        <div class="t1-left">
+          <div class="card">
+            <div class="sec-title"><span class="bar"></span>填写区 <span class="tag fill">销售/产品部只填这里</span></div>
+
+            <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:4px"><span class="step-num" style="margin-top:3px">1</span><div style="flex:1">
+            <div class="pillrow"><span class="pl">产品类型</span>
+              <div class="pills" id="pProd">
+                <span class="on" onclick="setProd('new')">全新机</span><span onclick="setProd('check')">检测机</span>
+              </div></div>
+            <div class="pillrow"><span class="pl">店铺类型</span>
+              <div class="pills woot" id="pShop">
+                <span class="on" onclick="setShop('normal')">正常</span><span onclick="setShop('woot')">Woot</span>
+              </div></div>
+            </div></div>
+
+            <div class="fill-zone">
+              <div class="frow fill-cell"><label><span class="step-num">2</span><span id="costLab">产品成本<br>（全新机）</span></label><input type="number" id="iCost" value="400" oninput="calc()"><span class="unit">RMB</span></div>
+              <div class="frow fill-cell"><label><span class="step-num">3</span><span id="priceLab">预计折后价<br>（含税）</span></label><input type="number" id="iPrice" value="199.99" oninput="calc()"><span class="unit cur">$</span></div>
+              <div class="frow fill-cell" id="wootRow" style="display:none"><label style="font-weight:400;color:#7b5cd6"><span class="step-num" style="background:#7b5cd6">3b</span>Woot结算回款价/台 <b style="color:#d64545">必填</b></label><input type="number" id="iWootBack" oninput="calc()"><span class="unit cur">$</span></div>
+              <div class="frow fill-cell" id="tRow" style="margin-bottom:0"><label><span class="step-num">4</span>测评折后价</label><input type="number" id="iTPrice" value="159" oninput="calc()"><span class="unit cur">$</span></div>
+              <div class="woot-hint" id="wh1" style="display:none"></div>
+              
+              
+            </div>
+            
+            <button class="btn primary" style="width:100%;padding:10px 0;font-size:14px;font-weight:700" onclick="saveScheme()">⑥ 保存为方案<br><span style="font-weight:400;font-size:11px;opacity:.92">只填预计折后价→生成定价方案<br>只填测评折后价→生成测评方案</span></button>
+              <div id="saveWarn" class="save-warn" style="display:none"></div>
+            
+
+            <!-- 站点默认参数（折叠） -->
+            <div class="fold" id="defFold">
+              <div class="fold-head" onclick="this.parentNode.classList.toggle('open')">
+                <span><span class="step-num">5</span><span id="defTitle">其他费用默认参考值（需审核）</span></span><span class="arrow">▶</span>
+              </div>
+              <div class="fold-body">
+                <div class="def-group def-group-float"><div class="def-block-t">浮动项 · 可能随产品调整，请核对</div>
+                <div class="def-row"><span>佣金占比</span><span class="dv"><input type="number" id="dFee" value="8" oninput="calc()">%</span></div>
+                <div class="def-row"><span>配送费</span><span class="dv"><input type="number" id="dShip" value="6.5" oninput="calc()"><span class="cur">$</span></span></div>
+                <div class="def-row"><span>头程</span><span class="dv"><input type="number" id="dHead" value="13.5" oninput="calc()">RMB</span></div>
+                <div class="def-row"><span>仓储费占比</span><span class="dv"><input type="number" id="dStore" value="1" oninput="calc()">%</span></div>
+                <div class="def-row"><span>入库配置费</span><span class="dv"><input type="number" id="dInb" value="1" oninput="calc()"><span class="cur">$</span></span></div>
+                <div class="def-row"><span>退款占比-全新品</span><span class="dv"><input type="number" id="dRef" value="20" oninput="calc()">%</span></div>
+                <div class="def-row"><span>退款占比-检测机</span><span class="dv"><input type="number" id="dRefC" value="23" oninput="calc()">%</span></div>
+                <div class="def-row"><span>检测机成本</span><span class="dv"><input type="number" id="iCheckCost" value="200" oninput="calc()">RMB</span></div>
+                <div class="def-row"><span>其他费用占比</span><span class="dv"><input type="number" id="dOther" value="1" oninput="calc()">%</span></div>
+                <div class="def-row"><span>测评额外手续费</span><span class="dv"><input type="number" id="dTFee" value="0" oninput="calc()"><span class="cur">$</span></span></div>
+                <div class="def-row"><span>税点</span><span class="dv"><input type="number" id="dTax" value="0" oninput="calc()">%</span></div>
+                <div class="def-row"><span>汇率</span><span class="dv"><input type="number" id="dFx" value="7" oninput="calc()" step="0.1"></span></div>
+
+                <div class="def-row tacos-row"><span>广告费占比(TACOS)<span class="info-i" title="销售填0就行。产品部要算&quot;投广告后还剩多少利润&quot;时，才在这填广告占销售额的比例">ⓘ</span></span><span class="dv"><input type="number" id="dAd" value="0" oninput="calc()">%</span></div>
+                <div class="def-note-inline tacos-note">⚠ TACOS：销售端填 <b>0</b>；只有产品部测算"加广告后利润空间"时才填。</div>
+                </div>
+                <div class="def-group def-group-fixed"><div class="def-block-t">固定项 · 平台费率与规则，一般不改</div>
+                <div class="def-row"><span>Woot回款系数</span><span class="dv"><input type="number" id="dWootCoef" value="0.63" step="0.01" oninput="calc()"></span></div>
+                <div class="def-row"><span>coupon抽佣率</span><span class="dv"><input type="number" id="dCouponRate" value="2.5" step="0.1" oninput="calc()">%</span></div>
+                <div class="def-row"><span>秒杀抽佣率</span><span class="dv"><input type="number" id="dDealRate" value="1" step="0.1" oninput="calc()">%</span></div>
+                <div class="def-row"><span>秒杀每日固定费</span><span class="dv"><input type="number" id="dDealDayFee" value="70" oninput="calc()"><span class="cur">$</span></span></div>
+                <div class="def-row"><span>秒杀变动费上限</span><span class="dv"><input type="number" id="dDealCap" value="2000" oninput="calc()"><span class="cur">$</span></span></div>
+                <div class="def-row"><span>站外佣金率</span><span class="dv"><input type="number" id="dOffsiteRate" value="10" oninput="calc()">%</span></div>
+                <div class="def-row bm-row"><span>毛利率基准-TACOS前<span class="info-i" title="没扣广告费(TACOS)时，单台毛利率低于此值就标红提醒。销售看这条">ⓘ</span></span><span class="dv"><input type="number" id="dBmPre" value="30" oninput="calc()">%</span></div>
+                <div class="def-row bm-row"><span>毛利率基准-TACOS后<span class="info-i" title="扣掉广告费占比(TACOS)后，实际毛利率低于此值就标红提醒。产品部看这条">ⓘ</span></span><span class="dv"><input type="number" id="dBmPost" value="15" oninput="calc()">%</span></div>
+                <div class="def-note-inline">毛利率基准 = <b>赚得太少就标红提醒</b>的及格线（规则值，非成本）。<br>· <b>TACOS前</b>：没扣广告费(TACOS)时，单台毛利率低于此值就提醒——<b>销售看这条</b>。<br>· <b>TACOS后</b>：扣掉广告费占比(TACOS)后，实际毛利率低于此值就提醒——<b>产品部看这条</b>。<br>30/15 为暂定值，公司定稿后替换。</div>
+                </div>
+                <div class="def-src">在此修改只影响当前这条记录</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 右：结果区 -->
+        <div class="t1-right">
+          <div class="card">
+            <div class="sec-title green"><span class="bar"></span>计算结果（自动，不可填）</div>
+            <div class="cards">
+              <div class="kcard" id="profitCard"><div class="lab">单台毛利（当地币）</div><div class="num" id="rProfit">—</div><div class="sub" id="rProfitRmb">—</div></div>
+              <div class="kcard" id="rateCard"><div class="lab">毛利率</div><div class="num" id="rRate">—</div><div class="sub">= 毛利 ÷（成交额−退款）</div><div class="bm-tip" id="bmTip" style="display:none"></div></div>
+              <div class="kcard loss"><div class="lab">测评一台净亏</div><div class="num" id="rTLoss">—</div><div class="sub" id="rTLossRmb">—</div>
+                </div>
+            </div>
+            <div class="cost-grid" id="costGrid"></div>
+          </div>
+
+          <div class="card">
+            <div class="sec-title" style="margin-bottom:0"><span class="bar"></span>定价方案列表</div>
+            <table class="plan-list" id="schemeTbl">
+              <tr><th>折后价</th><th>单台毛利(当地币)</th><th>单台毛利(RMB)</th><th>毛利率</th><th>利润率对比</th><th></th></tr>
+            </table>
+                      </div>
+
+          <div class="card">
+            <div class="sec-title" style="margin-bottom:0"><span class="bar"></span>测评方案列表</div>
+            <table class="plan-list" id="tSchemeTbl"></table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== Tab2：推广计划试算（1.3重做） ========== -->
+    <div id="tab2" style="display:none">
+      
+
+      <div class="tpl-bar">
+        <label style="display:inline-flex;align-items:center;gap:4px"><span class="step-num">1</span>计划模板</label>
+        <select id="tplSel" onchange="onTpl()">
+          <option value="mix" selected>新品·混合款（投资型+盈利型共存·默认）</option>
+          <option value="vol">新品·冲量款（投资型为主·拉自然位/排名·定价偏低）</option>
+          <option value="profit">新品·利润款（盈利型为主·广告本身盈利·定价偏高）</option>
+          <option value="blank">空白（老品/清货/自定义，默认7天/行）</option>
+          <option value="copy">从已有计划复制…</option>
+        </select>
+        <span id="lpWrap"><label>正式推新日期（Day1·降价开推）</label>
+        <input type="text" id="lpDate" value="2026-07-01" style="width:110px" onchange="renderPlan()">
+        <label>Day1前·高价单天数</label><input type="number" id="hpDays" title="正式推新前先挂高价跑4~5天（攒划线价资格+刷单），这些天自动排在Day1之前" value="5" min="1" style="width:52px" onchange="onHpDays()"></span>
+        
+        <label>期初库存</label><input type="number" id="stockInp" value="750" style="width:70px" onchange="renderPlan()" title="水位表出数后自动引用总库存，出数前手填">
+        
+        
+      </div>
+      <div class="legend">
+        <span style="display:inline-flex;align-items:center;gap:4px"><span class="step-num" style="width:15px;height:15px;font-size:10px">2</span><i style="background:#f3a9c6;border:1px solid #e483a8;width:13px;height:13px"></i>需你填</span>
+        <span style="display:inline-flex;align-items:center;gap:4px"><span class="step-num" style="width:15px;height:15px;font-size:10px">3</span><i style="background:#f1d785;border:1px solid #d9b84e;width:13px;height:13px"></i>有默认值·可改</span>
+        <span><i style="background:#b3ddc8;border:1px solid #84c5a4;width:13px;height:13px"></i>自动算</span>
+      </div>
+      
+
+      <div class="cards" style="grid-template-columns:repeat(4,1fr);margin-bottom:10px">
+        <div class="kcard" id="cNet"><div class="lab" style="display:flex;align-items:center;gap:4px"><span class="step-num" style="width:15px;height:15px;font-size:10px">4</span>计划总净利</div><div class="num" id="cNetV">—</div><div class="sub" id="cNetR">—</div></div>
+        <div class="kcard" id="cBE"><div class="lab">预计回本日</div><div class="num" id="cBEV" style="font-size:17px">—</div><div class="sub">累计盈亏转正的那天</div></div>
+        <div class="kcard" id="cSO"><div class="lab">预计售罄日</div><div class="num" id="cSOV" style="font-size:17px">—</div><div class="sub" id="cSOR">—</div></div>
+        <div class="kcard"><div class="lab">总销量 / 总天数</div><div class="num" id="cQtyV" style="font-size:17px">—</div><div class="sub" id="cQtyR">含开推前铺垫期</div></div>
+      </div>
+      <div class="colctrl">
+        <span class="colctrl-label">显示更多列：</span>
+        <label class="chk"><input type="checkbox" id="lowfChk" onchange="toggleLowf()">低频列（coupon·秒杀·站外）</label>
+        <label class="chk"><input type="checkbox" id="stageChk" onchange="toggleLowf()">阶段总计列（整段合计）</label>
+        <label class="chk" title="单台采购/头程/佣金/配送/仓储/退款/其他，用于核对有无漏算"><input type="checkbox" id="detailChk" onchange="toggleLowf()">成本明细（单台各项开支）</label>
+      </div>
+      <div class="scrollx">
+        <table class="plan" id="planTbl">
+          <thead></thead>
+          <tbody id="planBody"></tbody>
+          <tfoot>
+            <tr class="sum" id="sumRow"></tr>
+          </tfoot>
+        </table>
+      </div>
+      <button class="btn small add-row" onclick="addRow()">＋ 增加阶段行</button>
+      <div class="fold" style="margin-top:8px">
+        <div class="fold-head" onclick="this.parentNode.classList.toggle('open')"><span>口径说明（点开查看）</span><span class="arrow">▶</span></div>
+        <div class="fold-body"><div class="note-list">
+          <div class="note-row"><span class="note-k">价格</span>利润按售卖折后价算（售卖折后价=到手价=售价−coupon−code，含税；售价=页面/购物车价）；off力度=（划线价−售卖折后价）÷划线价。</div>
+          <div class="note-row"><span class="note-k">单台利润</span>行内毛利、测评净亏均按 Tab① 同一条费用链逐行计算（剥税→佣金/配送/仓储/退款/其他）；退款只算正常单×0.93。</div>
+          <div class="note-row"><span class="note-k">测评净亏</span>测评单走完整费用链得回款利润，再减返款金额（测评价+手续费），口径同 Excel 1.2 的 AO 列。</div>
+          <div class="note-row"><span class="note-k">广告费</span>广告费=总单×占比÷CVR×CPC；占比分母=总单（含测评），与领星后台一致；高价单期收录广告占比为0，故广告费≈0。</div>
+          <div class="note-row"><span class="note-k">TACOS</span>广告费÷阶段收入（收入含测评回款）。</div>
+          <div class="note-row"><span class="note-k">促销</span>coupon费=到手价×2.5%×coupon单；秒杀=min(秒杀GMV×1%, $2000)+$70×秒杀天；站外=不含税价×10%×站外单。</div>
+          <div class="note-row"><span class="note-k">累计盈亏</span>报价积累期不计入（无单，借老链接售卖归老品）；转正行标「回本」，库存归零行标「售罄」。Excel 原表累计盈亏列(CM)自 Day1 起公式已断(#REF!)，面板为自动重建。</div>
+          <div class="note-row"><span class="note-k">汇总行</span>各项率为总额算总率；广告出单占比健康标准&lt;30%（整盘口径），超出标红——推新期偏高属正常。</div>
+          <div class="note-row note-foot">演示为简化口径与演示参数，正式版按 Excel 1.3 逐列由 Wayne 迁移；4 处简化（coupon单占比 / 秒杀·非秒杀双日均 / 检测机成本 / 测评抽佣明细）见交 Wayne 文档。</div>
+        </div></div>
+      </div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+<div class="demo-badge">设计Demo v74 · 板块分割改细灰竖线(2px边框·不占列宽·无白边)</div>
+
+<script>
+/* ====== 视图/Tab切换 ====== */
+function showView(v){ document.getElementById('viewList').style.display = v==='list'?'block':'none';
+  document.getElementById('viewWork').style.display = v==='work'?'block':'none'; }
+function enterWork(mode){
+  showView('work');
+  const sel=document.getElementById('asinSel');
+  if(mode==='virtual'||mode==='new'){ sel.value=''; document.getElementById('crumbName').textContent = mode==='new'?'新建试算':'新品X1 · US（虚拟）'; }
+  else { sel.value='B0G49VCMHJ'; document.getElementById('crumbName').textContent='L03Pro · US'; }
+  onAsinChange();
+}
+function switchTab(n){
+  document.getElementById('tab1').style.display=n===1?'block':'none';
+  document.getElementById('tab2').style.display=n===2?'block':'none';
+  document.getElementById('tabBtn1').classList.toggle('active',n===1);
+  document.getElementById('tabBtn2').classList.toggle('active',n===2);
+}
+function onAsinChange(){
+  const v=document.getElementById('asinSel').value, el=document.getElementById('linkState');
+  el.innerHTML = v
+    ? '🔗 已绑定 <b>'+v+'</b>：联动每日数据'
+    : '◌ 未绑定：仅试算，不联动每日数据';
+}
+
+/* ====== Tab1 计算（v3：产品类型×店铺类型四组合，口径对齐1.1/1.2） ====== */
+const $=id=>document.getElementById(id), n=id=>parseFloat($(id).value)||0;
+const SITES={US:'$',CA:'C$',UK:'£',DE:'€',FR:'€',IT:'€',ES:'€',JP:'¥'};
+let CUR='$', prodType='new', shopType='normal', last={};
+function onSite(){
+  const s=$('siteSel').value; CUR=SITES[s];
+  document.querySelectorAll('.cur').forEach(e=>e.textContent=CUR);
+  $('defTitle').textContent=`其他费用默认参考值（${s} · 需审核）`;
+  calc();
+}
+function setProd(v){ prodType=v;
+  document.querySelectorAll('#pProd span').forEach((s,i)=>s.classList.toggle('on',(i===0)===(v==='new')));
+  $('costLab').innerHTML = v==='new'?'产品成本<br>（全新机）':'产品成本<br>（检测机）';
+  $('iCost').value = v==='new'?500:n('iCheckCost')||200;
+  calc(); }
+function setShop(v){ shopType=v;
+  document.querySelectorAll('#pShop span').forEach((s,i)=>s.classList.toggle('on',(i===0)===(v==='normal')));
+  $('wootRow').style.display = v==='woot'?'flex':'none';
+  $('priceLab').innerHTML = v==='woot'?'Woot BD价格<br>（含税）':'预计折后价<br>（含税）';
+  $('tRow').style.display = v==='woot'?'none':'flex';
+  calc(); }
+let tTouched=false;
+$('iTPrice').addEventListener('input',()=>{tTouched=true});
+function calc(){
+  const fx=n('dFx')||7.2, price=n('iPrice'), tax=n('dTax')/100, woot=shopType==='woot';
+  const coef=n('dWootCoef')||0.63;
+  // 测评折后价默认 = 预计折后价 + 20（用户手改过则不再跟随）
+  // 测评价默认=售价+20，仅当售价>0且用户没手改过时自动带；售价为空时不动测评价（支持"只刷单不售卖"场景）
+  if(!tTouched && price>0){ $('iTPrice').value = (price+20).toFixed(2); }
+  const taxAmt=price/(1+tax)*tax;
+  // Woot：结算回款价为必填
+  const wbRaw=$('iWootBack').value, wb=parseFloat(wbRaw)||0;
+  let invalid=false;
+  if(woot){
+    $('wh1').style.display='block';
+    $('wh1').innerHTML='<span>参考值：BD价格 × '+coef+' = <b>'+(price*coef).toFixed(2)+'</b></span><a onclick="$(\'iWootBack\').value='+(price*coef).toFixed(2)+';calc()">点击填入</a>';
+    if(!wb){ $('iWootBack').classList.add('invalid'); invalid=true; } else $('iWootBack').classList.remove('invalid');
+  } else { $('wh1').style.display='none'; $('iWootBack').classList.remove('invalid'); }
+  const net = woot ? wb : price-taxAmt;
+  const feeRate = woot?0:n('dFee')/100;
+  const fee=net*feeRate;
+  const ship= woot?0:n('dShip');
+  const store= (woot?0:net*n('dStore')/100) + n('dInb');
+  const head=n('dHead')/fx, cost=n('iCost')/fx;
+  let refRate=(prodType==='new'?n('dRef'):n('dRefC'))/100;
+  if(woot) refRate=refRate/2;
+  const refund=net*refRate*0.93;                 // 口径=Excel: 月退款=成交额×退款占比×0.93
+  const other=net*n('dOther')/100;
+  const ad=net*n('dAd')/100;               // 口径=Excel: 其他费用=成交额×1%
+  const income=net-refund;                       // 口径=Excel: 月销售收入=成交额−退款（利润率分母）
+  const profit=income-cost-head-fee-ship-store-other-ad;
+  const rate=income?profit/income:0;
+  const showDash = invalid || !price;
+  $('rProfit').textContent= showDash?'—':CUR+profit.toFixed(2);
+  $('rProfitRmb').textContent= showDash?(invalid?'请先填Woot结算回款价':'—'):'≈ ¥'+(profit*fx).toFixed(2)+' RMB';
+  $('rRate').textContent= showDash?'—':(rate*100).toFixed(1)+'%';
+  // 测评
+  const tp=n('iTPrice'), tNet=tp/(1+tax);
+  let tLoss=0, tShow=false, tNote='', tBackV=0;
+  if(woot){
+    // Woot测评：返款=前台折后价(买家实付)，回款=Woot结算回款价，测评折后价不参与
+    tShow = price>0 && !invalid;
+    tLoss = tShow ? price - net + n('iCost')/fx + head : 0;
+    last.tp=price; last.tBackAmt=price; last.tRet=net;
+    tNote = tShow ? '≈ -¥'+(tLoss*fx).toFixed(2)+' RMB' : '请先填③和3b';
+  } else {
+    tBackV = tNet - tNet*n('dFee')/100 - n('dShip') - n('dTFee');
+    tShow = tp>0;
+    tLoss = tShow ? tp - tBackV + n('iCost')/fx + head : 0;
+    last.tp=tp; last.tBackAmt=tp; last.tRet=tBackV;
+    tNote = tShow ? '≈ -¥'+(tLoss*fx).toFixed(2)+' RMB' : '④填0=本方案不算测评';
+  }
+  $('rTLoss').textContent= tShow ? '-'+CUR+tLoss.toFixed(2) : '—';
+  $('rTLossRmb').textContent= tNote;
+
+  const z='<span class="zero-tag">Woot=0</span>';
+  const items=[[woot?'Woot回款价(成交价)':'成交售价(不含税)',net,''],
+    ['佣金',fee,woot?z:''],['配送费',ship,woot?z:''],['仓储+配置',store,woot?'<span class="zero-tag">仓储0</span>':''],
+    ['头程',head,''],['采购成本',cost,''],
+    ['退款',refund,woot?'<span class="zero-tag">占比减半</span>':''],['广告费',ad,''],['其他费用',other,''],['税费',taxAmt,'']];
+  $('costGrid').innerHTML=items.map(i=>`<div class="cgi"><div class="lab">${i[0]}${i[2]}</div><div class="num">${CUR}${i[1].toFixed(2)}</div></div>`).join('');
+  // 基准预警：TACOS=0对照前基准（销售场景），TACOS>0对照后基准（产品部场景）
+  const adR=n('dAd')/100, bm=(adR>0?n('dBmPost'):n('dBmPre'))/100;
+  const card=$('rateCard'), tip=$('bmTip');
+  $('profitCard').classList.toggle('warn', !showDash && profit<0);
+  if(!showDash && rate<bm){
+    card.classList.add('warn');
+    let html='低于基准 '+(bm*100).toFixed(0)+'%'+(adR>0?'（扣TACOS后）':'');
+    if(!woot){
+      // 反推达标售价：p=(固定成本)/((1−R)(1−0.93r)−费率和)
+      const fr=n('dFee')/100, sr=n('dStore')/100, or_=n('dOther')/100;
+      const C=n('iCost')/fx+head+n('dShip')+n('dInb');
+      const denom=(1-bm)*(1-0.93*refRate)-(fr+sr+or_+adR);
+      if(denom>0){
+        const pSug=(C/denom)*(1+tax);
+        html+='｜建议售价 '+CUR+pSug.toFixed(2)+' <a onclick="$(\'iPrice\').value='+pSug.toFixed(2)+';tTouched=false;calc()">点击填入</a>';
+      } else { html+='｜该基准下无可行售价，需降成本'; }
+    }
+    tip.innerHTML=html; tip.style.display='block';
+  } else { card.classList.remove('warn'); tip.style.display='none'; }
+  Object.assign(last,{profit,rate,price,tLoss,prodType,shopType,netPrice:net});
+  renderPlan();
+}
+/* 方案列表（带类型标签，对齐现有ERP样式） */
+let schemes=[{p:229,net:229,profit:69.57,rate:.391,pt:'new',st:'normal',cost:500},{p:194.39,net:117.66,profit:33.23,rate:.298,pt:'new',st:'woot',cost:500}];
+let tSchemes=[{tp:219,back:219,ret:173.06,loss:120.94,pt:'new',st:'normal',cost:500}];
+function showSaveWarn(html){ let el=document.getElementById('saveWarn'); if(el){ el.innerHTML=html; el.style.display='block'; } }
+function clearSaveWarn(){ const el=document.getElementById('saveWarn'); if(el) el.style.display='none'; }
+function saveScheme(){
+  const hasPrice = n('iPrice')>0;       // 售价填了才生成定价方案
+  const hasTest = last.tLoss>0;          // 测评价填了才生成测评方案
+  if(!hasPrice && !hasTest){ showSaveWarn('请至少填写"预计折后价"或"测评折后价"其中一个'); return; }
+  // 判重：折后价相同就拦（每日数据面板按售价唯一引用利润，不允许同价两条）；内联提示不用弹窗
+  const dupPrice = hasPrice && schemes.some(s=>Math.abs(s.p-last.price)<0.005);
+  const dupTest = hasTest && tSchemes.some(s=>Math.abs(s.tp-last.tp)<0.005);
+  if(dupPrice || dupTest){
+    const which = dupPrice ? ('已有折后价 '+CUR+last.price.toFixed(2)+' 的定价方案') : ('已有测评价 '+CUR+last.tp.toFixed(2)+' 的测评方案');
+    showSaveWarn('<b>'+which+'，售价不能重复。</b><br>同价位区分不同货，请改尾数：<br>· .99 = 全新机售卖<br>· .27 = 检测机<br>· .37 = 成本变动版');
+    return;
+  }
+  clearSaveWarn();
+  if(hasPrice){ schemes.push({p:last.price,net:last.netPrice,profit:last.profit,rate:last.rate,pt:prodType,st:shopType,cost:n('iCost')}); }
+  if(hasTest){ tSchemes.push({tp:last.tp,back:last.tBackAmt,ret:last.tRet,loss:last.tLoss,pt:prodType,st:shopType,cost:n('iCost')}); }
+  renderSchemes();
+}
+function delTScheme(i){ tSchemes.splice(i,1); renderSchemes(); }
+function delScheme(i){ schemes.splice(i,1); renderSchemes(); }
+function renderSchemes(){
+    $('schemeTbl').innerHTML='<tr><th>折后价</th><th>成交价/回款</th><th>类型</th><th>成本(RMB)</th><th>单台毛利(当地币)</th><th>单台毛利(RMB)</th><th>毛利率</th><th>利润率对比</th><th></th></tr>'+
+   schemes.map((s,i)=>`<tr><td>${CUR}${s.p.toFixed(2)}</td>
+   <td>${CUR}${(s.net!=null?s.net:s.p).toFixed(2)}</td>
+   <td><span class="tag ${s.pt==='new'?'linked':'virtual'}">${s.pt==='new'?'全新机':'检测机'}</span>${s.st==='woot'?' <span class="tag" style="background:#ede7fb;color:#7b5cd6">Woot</span>':''}</td>
+   <td class="muted">¥${s.cost!=null?s.cost:'—'}</td>
+   <td>${CUR}${s.profit.toFixed(2)}</td><td>¥${(s.profit*7.2).toFixed(0)}</td><td>${(s.rate*100).toFixed(1)}%</td>
+   <td><div class="pbar-flex"><div class="pbar-wrap" style="flex:1"><div class="pbar" style="width:${Math.min(Math.max(s.rate*100,0),100).toFixed(0)}%"></div><span class="pbar-pct" style="color:${s.rate<0?'#d64545':(s.rate*100<12?'#555':'#fff')}">${(s.rate*100).toFixed(1)}%</span></div><span class="pbar-amt" style="color:${s.profit<0?'#d64545':'#555'}">${s.profit<0?'亏损':'利润'} ${CUR}${s.profit.toFixed(2)}</span></div></td>
+   <td><span class="del" onclick="delScheme(${i})">删除</span></td></tr>`).join('');
+  $('tSchemeTbl').innerHTML='<tr><th>测评折后价</th><th>成交价/回款</th><th>类型</th><th>成本(RMB)</th><th>返款给买家</th><th>刷单净亏</th><th>亏损对比</th><th></th></tr>'+
+   (tSchemes.length? tSchemes.map((s,i)=>`<tr><td>${CUR}${s.tp.toFixed(2)}</td><td>${CUR}${s.ret.toFixed(2)}</td>
+   <td><span class="tag ${s.pt==='new'?'linked':'virtual'}">${s.pt==='new'?'全新机':'检测机'}</span>${s.st==='woot'?' <span class="tag" style="background:#ede7fb;color:#7b5cd6">Woot</span>':''}</td>
+   <td class="muted">¥${s.cost!=null?s.cost:'—'}</td>
+   <td>${CUR}${s.back.toFixed(2)}</td><td class="neg">-${CUR}${s.loss.toFixed(2)}</td>
+   <td><div class="pbar-flex"><div class="pbar-wrap" style="flex:1"><div class="pbar" style="width:${Math.min(s.loss/s.tp*100,100).toFixed(0)}%;background:#b02a2a"></div></div><span class="pbar-amt" style="color:#b02a2a">亏 ${CUR}${s.loss.toFixed(2)}</span></div></td>
+   <td><span class="del" onclick="delTScheme(${i})">删除</span></td></tr>`).join('')
+   : '<tr><td colspan="8" class="muted" style="text-align:center;padding:14px">暂无测评方案：④填测评折后价后点⑤保存即生成</td></tr>');
+}
+
+/* ====== Tab2 推广计划（v23：阶段模板对齐L02PlusV2实际计划） ====== */
+const MARKET={ invCpc:4, profCpc:2, invCvr:4, profCvr:2,
+  inv:{seed:0, lp:0, formal:35, daily_off:35, daily_noff:35, event:35},   // 投资型广告订单占比·按阶段默认(占位)
+  prof:{seed:0, lp:0, formal:25, daily_off:25, daily_noff:25, event:25},  // 盈利型广告订单占比·按阶段默认(占位)
+  couponRate:0.025, couponShare:0.9, dealRate:0.01, dealCap:2000, dealDayFee:70, offsiteRate:0.10};
+const TYPES={seed:'报价积累期(无单)', lp:'高价单期(测评为主)', formal:'正式推广期(显示LP)', daily_off:'日常期(有off无BD)', daily_noff:'日常期(无off无BD)', event:'活动/BD期'};
+function defInvCpc(t){ return MARKET.invCpc; }
+function defProfCpc(t){ return MARKET.profCpc; }
+function defInvCvr(t){ return MARKET.invCvr; }   // 投资型CVR默认(占位)·要求更高(拉自然位需要高转化)
+function defProfCvr(t){ return MARKET.profCvr; } // 盈利型CVR默认(占位)·可偏低
+function defInvRatio(t){ return MARKET.inv[t]; }
+function defProfRatio(t){ return MARKET.prof[t]; }
+function mkRow(t,days,price,daily,test,o){ return Object.assign({type:t,days:days,price:null,sprice:price,daily:daily,test:test,
+  invRatio:defInvRatio(t),invCpc:defInvCpc(t),invCvr:defInvCvr(t),profRatio:defProfRatio(t),profCpc:defProfCpc(t),profCvr:defProfCvr(t),subRank:null,coupon:0,dealDays:t==='event'?days:0,offsite:0,tprice:null,lprice:null,note:''},o||{}); }
+/* 三套定位模板：差异 = 各阶段【投资型占比 / 盈利型占比】的配比 + 定价（Edwin：变量主要在BD前/中/后占比；冲量=投资型为主拉自然位、利润=盈利型为主、混合=共存；Uny：冲量款定价偏低）。
+   ⚠ 下列占比/CPC/定价均为占位值——混合款=对L02PlusV2校准的现有计划拆分；冲量/利润款按方向铺好的占位，待Uny+Edwin锁数（Echo在ERP标完投资型/盈利型后回填真实基线）。单量曲线暂三款一致，可逐行手改。
+   每阶段写 [投资型占比, 盈利型占比]：i1=Day1 i2=Day2-7 i3=放量 ibd=BD1 ik=维稳 ibd2=BD轮替 */
+const POS={
+  mix:   {price:199.99, i1:[12,8],  i2:[20,15], i3:[35,30], ibd:[35,30], ik:[30,30], ibd2:[30,30]},  // 共存
+  vol:   {price:189.99, i1:[20,5],  i2:[35,10], i3:[60,15], ibd:[60,15], ik:[50,15], ibd2:[55,15]},  // 投资型为主
+  profit:{price:209.99, i1:[5,10],  i2:[8,17],  i3:[15,30], ibd:[15,30], ik:[10,30], ibd2:[10,35]},  // 盈利型为主
+};
+function newTplRows(kind){
+  kind=(kind&&POS[kind])?kind:'mix'; const p=POS[kind];
+  const hp=Math.max(parseInt(document.getElementById('hpDays')?document.getElementById('hpDays').value:5)||5,1);
+  const A=(s)=>({invRatio:s[0],profRatio:s[1]});   // 展开占比对
+  return [
+    mkRow('seed',6,398.99,0,0,{lprice:398.99,note:'高价开售不引流量'}),
+    mkRow('lp',Math.max(hp-1,1),398.99,3,3,{lprice:398.99,tprice:398.99,note:'刷单为主·低CPC收录'}),
+    mkRow('lp',1,284.99,7,7,{lprice:398.99,tprice:284.99,note:'一级LP+券·合变体'}),
+    mkRow('formal',1,p.price,12,8,Object.assign({lprice:398.99,tprice:398.99,note:'Day1 降价开推·二级LP+券'},A(p.i1))),
+    mkRow('formal',6,p.price,12,4,Object.assign({lprice:398.99,tprice:284.99,note:'Day2-7 二级LP+券'},A(p.i2))),
+    mkRow('formal',14,p.price,10,1,Object.assign({lprice:398.99,tprice:284.99,note:'放量爬坡'},A(p.i3))),
+    mkRow('event',14,p.price,15,0,Object.assign({lprice:398.99,note:'第一轮BD(14天)'},A(p.ibd))),
+    mkRow('formal',21,p.price,10,0,Object.assign({lprice:284.99,note:'LP维稳'},A(p.ik))),
+    mkRow('event',7,p.price,20,0,Object.assign({lprice:284.99,note:'BD轮替(仅跑7天)'},A(p.ibd2)))];
+}
+let rows=null;
+function genTpl(){
+  renderHead();
+  const v=document.getElementById('tplSel').value;
+  rows = v==='blank' ? [mkRow('formal',7,null,5,0)] : newTplRows(v);
+  renderPlan();
+}
+function getStock(){ const el=document.getElementById('stockInp'); return el?(parseFloat(el.value)||0):750; }
+function onTpl(){
+  const v=document.getElementById('tplSel').value;
+  document.getElementById('lpWrap').style.display = (v==='blank'||v==='copy')?'none':'inline';
+  if(v==='copy'){ alert('演示：从试算记录中选一条，整套推广计划复制为本计划底稿（策略不固定时，最近一次同类计划就是最好模板）'); document.getElementById('tplSel').value='mix'; onTpl(); return; }
+  genTpl();
+}
+function onHpDays(){ if(!rows){genTpl();return;}
+  const d=Math.max(parseInt(document.getElementById('hpDays').value)||5,1);
+  const lps=rows.filter(r=>r.type==='lp');
+  if(lps.length>=2){ lps[0].days=Math.max(d-1,1); lps[lps.length-1].days=1; }
+  else if(lps.length===1){ lps[0].days=d; }
+  renderPlan();
+}
+function toggleLowf(){ renderHead(); renderPlan(); }
+function upd(i,k,v){ rows[i][k]= (k==='note')? v : (k==='subRank'&&v==='')? null : (parseFloat(v)||0); renderPlan(); }
+function updType(i,v){ const r=rows[i]; r.type=v; r.invCpc=defInvCpc(v); r.profCpc=defProfCpc(v); r.invRatio=defInvRatio(v); r.profRatio=defProfRatio(v);
+  if(v==='daily_noff'){ r.lprice=null; }  // 无off期：划线价=售价，off=0
+  if(v==='event'&&!r.dealDays){ r.dealDays=r.days; document.getElementById('lowfChk').checked=true; toggleLowf(); }
+  renderPlan(); }
+function addRow(){ const lr=(rows&&rows[rows.length-1])||{daily:5};
+  rows.push(mkRow('formal',7,null,lr.daily,0)); renderPlan(); }
+function insRow(i){ const c=Object.assign({},rows[i]); rows.splice(i+1,0,c); renderPlan(); }
+function delRow(i){ rows.splice(i,1); renderPlan(); }
+function fmtD(d){ return (d.getUTCMonth()+1).toString().padStart(2,'0')+'-'+d.getUTCDate().toString().padStart(2,'0'); }
+function parseD(s){ const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(s); return m?new Date(Date.UTC(+m[1],+m[2]-1,+m[3])):new Date(Date.UTC(2026,6,1)); }
+function addDays(d,n){ const r=new Date(d); r.setUTCDate(r.getUTCDate()+n); return r; }
+/* 行级单台经济模型：与Tab①同一条费用链（正常店铺口径；Woot/检测机本期不进Tab②） */
+function unitEcon(price){
+  const fx=n('dFx')||7.2, tax=n('dTax')/100;
+  const net=price/(1+tax);
+  const fee=net*n('dFee')/100, ship=n('dShip'), store=net*n('dStore')/100+n('dInb');
+  const head=n('dHead')/fx, cost=n('iCost')/fx;
+  const refund=net*(n('dRef')/100)*0.93;            // 退款只算正常单（Excel BN）
+  const other=net*n('dOther')/100;
+  return {net:net, profit:(net-refund)-cost-head-fee-ship-store-other};
+}
+/* 行级测评净亏：测评价可逐段不同（Excel AC列每行独立） */
+function testLoss(tp){
+  if(!tp||tp<=0) return 0;
+  // 1.2口径：测评单走与正常单相同的完整费用链算回款利润，再减返款金额(测评价+额外手续费)
+  const fx=n('dFx')||7.2, tax=n('dTax')/100, tNet=tp/(1+tax);
+  const fee=tNet*n('dFee')/100, ship=n('dShip'), store=tNet*n('dStore')/100+n('dInb');
+  const head=n('dHead')/fx, cost=n('iCost')/fx;
+  // 测评退款占比通常为0；其他费用沿用正常占比
+  const other=tNet*n('dOther')/100;
+  const payback = tNet - fee - ship - store - cost - head - other;   // 回款利润(AN/AK口径)
+  const refundToBuyer = tp + n('dTFee');                              // 返款给买家(AM=测评价+手续费)
+  return refundToBuyer - payback;                                     // 净亏(正数)= -(AO)
+}
+
+let BD={};
+function showBreakdown(i){
+  const b=BD[i]; if(!b)return;
+  const cur=CUR;
+  const f=(v)=>(v<0?'-':'')+cur+Math.abs(v).toFixed(0);
+  const f2=(v)=>(v<0?'-':'')+cur+Math.abs(v).toFixed(2);
+  let html=`<div class="bd-mask" onclick="closeBD(event)"><div class="bd-box" onclick="event.stopPropagation()">
+    <div class="bd-head">阶段净利拆解 · ${TYPES[b.type]||''}（${b.days}天）<span class="bd-x" onclick="closeBD()">✕</span></div>
+    <div class="bd-body">`;
+  if(b.seedOff){ html+=`<p style="color:#888">报价积累期：本身无单（借老链接售卖，盈亏归老品），不计入累计盈亏。</p>`; }
+  else {
+    html+=`
+    <div class="bd-sec"><div class="bd-t">① 正常售卖（按售卖折后价 ${cur}${b.price.toFixed(2)}）</div>
+      <table class="bd-tbl">
+        <tr><td>单台净利</td><td class="bd-r">${f2(b.unitProfit)}</td></tr>
+        <tr><td>正常单数量（${b.daily}/天−${b.test}测评）×${b.days}天</td><td class="bd-r">${b.normQty} 台</td></tr>
+        <tr class="bd-sum"><td>正常售卖利润</td><td class="bd-r pos">${f(b.normTotal)}</td></tr>
+      </table></div>`;
+    if(b.tQty>0){
+      html+=`<div class="bd-sec"><div class="bd-t">② 刷单测评（按测评价 ${cur}${b.tprice.toFixed(2)}，独立计算）</div>
+        <table class="bd-tbl">
+          <tr><td>单台刷单净亏</td><td class="bd-r">${f2(-b.tLossPer)}</td></tr>
+          <tr><td>测评单数量（${b.test}/天）×${b.days}天</td><td class="bd-r">${b.tQty} 台</td></tr>
+          <tr class="bd-sum"><td>测评亏损合计</td><td class="bd-r neg">${f(-b.tlTotal)}</td></tr>
+        </table></div>`;
+    }
+    if(b.adSpend>0){
+      html+=`<div class="bd-sec"><div class="bd-t">③ 广告花费（投资型 + 盈利型）</div>
+        <table class="bd-tbl">`;
+      if(b.invSpend>0) html+=`<tr><td>投资型单（总单×${b.invRatio}%＝${b.invOrders.toFixed(1)}单）÷CVR${b.invCvr}%×CPC${cur}${b.invCpc}</td><td class="bd-r neg">${f(-b.invSpend)}</td></tr>`;
+      if(b.profSpend>0) html+=`<tr><td>盈利型单（总单×${b.profRatio}%＝${b.profOrders.toFixed(1)}单）÷CVR${b.profCvr}%×CPC${cur}${b.profCpc}</td><td class="bd-r neg">${f(-b.profSpend)}</td></tr>`;
+      html+=`<tr class="bd-sum"><td>广告花费合计</td><td class="bd-r neg">${f(-b.adSpend)}</td></tr></table></div>`;
+    }
+    if(b.promo>0){
+      html+=`<div class="bd-sec"><div class="bd-t">④ 促销/站外费</div>
+        <table class="bd-tbl"><tr class="bd-sum"><td>coupon+秒杀+站外</td><td class="bd-r neg">${f(-b.promo)}</td></tr></table></div>`;
+    }
+    html+=`<div class="bd-total"><span>阶段净利 = ①正常利润 ${b.tQty>0?'− ②测评':''}${b.adSpend>0?' − ③广告':''}${b.promo>0?' − ④促销':''}</span>
+      <span class="${b.net<0?'neg':'pos'}" style="font-size:18px;font-weight:700">${f(b.net)}</span></div>`;
+  }
+  html+=`</div></div></div>`;
+  const div=document.createElement('div'); div.id='bdLayer'; div.innerHTML=html; document.body.appendChild(div);
+}
+function closeBD(e){ if(e&&e.target&&!e.target.classList.contains('bd-mask')&&!e.target.classList.contains('bd-x'))return; const l=document.getElementById('bdLayer'); if(l)l.remove(); }
+
+/* === v31 列定义（驱动表头、可见性、校验列位置） === */
+const GROUPS={price:{label:'价格',cls:'gh-price',open:true},order:{label:'订单结构',cls:'gh-order',open:true},ad:{label:'广告',cls:'gh-ad',open:true}};
+function toggleGroup(g){ GROUPS[g].open=!GROUPS[g].open; renderHead(); renderPlan(); syncLowf(); }
+function colOn(g){ return !GROUPS[g]|| GROUPS[g].open; }
+// 列清单：key, 表头, 分组(base/price/order/ad/lowf/res/op), 是否折叠时隐藏(fold), 是否低频列
+const COLS=[
+ {k:'type',h:'阶段类型',g:'base'},
+ {k:'note',h:'备注/策略',g:'base'},
+ {k:'days',h:'销售天数|填1逐天 / 填7·30按段',g:'base'},
+ {k:'start',h:'起始日期',g:'base'},
+ {k:'end',h:'结束日期',g:'base'},
+ {k:'lprice',h:'划线价',g:'price',fold:true},
+ {k:'sprice',h:'售价',g:'price',fold:true},
+ {k:'price',h:'售卖折后价|含税·利润按此算',g:'price',always:true},
+ {k:'tprice',h:'测评折后价|含税·算测评亏损',g:'price',always:true},
+ {k:'off',h:'off力度',g:'price',always:true},
+ {k:'subRank',h:'目标小类排名',g:'order',always:true},
+ {k:'daily',h:'日均总单',g:'order',always:true},
+ {k:'test',h:'日均测评',g:'order',fold:true},
+ {k:'adOrd',h:'日均广告单',g:'order'},
+ {k:'adOrdSum',h:'阶段广告单',g:'order',stagecol:true},
+ {k:'organic',h:'日均自然单',g:'order'},
+ {k:'organicSum',h:'阶段自然单',g:'order',stagecol:true},
+ {k:'invRatio',h:'投资型广告占比|拉自然位',g:'ad',fold:true},
+ {k:'invCpc',h:'投资型CPC',g:'ad',fold:true},
+ {k:'invCvr',h:'投资型CVR|要求更高',g:'ad',fold:true},
+ {k:'invCpa',h:'投资型CPA|每单成本',g:'ad',always:true},
+ {k:'invDaily',h:'投资型单日预算',g:'ad',always:true},
+ {k:'profRatio',h:'盈利型广告占比|本身要赚',g:'ad',fold:true},
+ {k:'profCpc',h:'盈利型CPC',g:'ad',fold:true},
+ {k:'profCvr',h:'盈利型CVR',g:'ad',fold:true},
+ {k:'profCpa',h:'盈利型CPA|应<毛利',g:'ad',always:true},
+ {k:'profDaily',h:'盈利型单日预算',g:'ad',always:true},
+ {k:'coupon',h:'coupon金额',g:'lowf',lowf:true},
+ {k:'dealDays',h:'秒杀天数',g:'lowf',lowf:true},
+ {k:'offsite',h:'日均站外单',g:'lowf',lowf:true},
+ {k:'offsiteSum',h:'阶段站外单',g:'lowf',lowf:true},
+ {k:'adSpendDaily',h:'日均广告花费',g:'res'},
+ {k:'adSpend',h:'阶段广告花费',g:'res',stagecol:true},
+ 
+ {k:'rev',h:'阶段收入',g:'res'},
+  {k:'promo',h:'阶段促销/站外费',g:'res',lowf:true},
+ {k:'tl',h:'阶段测评亏损',g:'res'},
+ {k:'net',h:'阶段净利',g:'res'},
+ {k:'tacos',h:'TACOS',g:'res'},
+ {k:'cum',h:'累计盈亏',g:'res'},
+ {k:'stock',h:'剩余库存',g:'res'},
+ {k:'d_purchase',h:'采购|单台',g:'detail',detail:true},
+ {k:'d_head',h:'头程|单台',g:'detail',detail:true},
+ {k:'d_comm',h:'佣金|单台',g:'detail',detail:true},
+ {k:'d_deliv',h:'配送|单台',g:'detail',detail:true},
+ {k:'d_store',h:'仓储+入库|单台',g:'detail',detail:true},
+ {k:'d_refund',h:'退款|单台',g:'detail',detail:true},
+ {k:'d_other',h:'其他|单台',g:'detail',detail:true},
+ {k:'op',h:'⊕插行|✕删行',g:'op'},
+];
+function colVisible(c){
+  if(c.lowf && !(document.getElementById('lowfChk')&&document.getElementById('lowfChk').checked)) return false;
+  if(c.stagecol && !(document.getElementById('stageChk')&&document.getElementById('stageChk').checked)) return false;
+  if(c.detail && !(document.getElementById('detailChk')&&document.getElementById('detailChk').checked)) return false;
+  if(c.fold && c.g && GROUPS[c.g] && !GROUPS[c.g].open && !c.always) return false;
+  return true;
+}
+// 广告组方框：根据当前可见列，算出投资型框左边、投资型/盈利型分隔、盈利型框右边
+// 各板块边界都加同一条极淡竖线（含广告组起始、广告内投资型/盈利型之间）
+function groupStartKeys(){
+  const gs={}; ['price','order','ad','lowf','res','detail'].forEach(g=>{
+    const first=COLS.find(c=>c.g===g&&colVisible(c)); if(first) gs[first.k]=true;
+  });
+  const firstProf=COLS.find(c=>c.g==='ad'&&c.k.indexOf('prof')===0&&colVisible(c));
+  if(firstProf) gs[firstProf.k]=true;   // 投资型/盈利型之间也用同一条淡线
+  return gs;
+}
+function injCls(td,extra){ if(!extra||!extra.trim())return td; extra=extra.trim();
+  return /^<td\s+class="/.test(td) ? td.replace(/^<td\s+class="/,'<td class="'+extra+' ') : td.replace(/^<td/,'<td class="'+extra+'"'); }
+function renderHead(){
+  const thead=document.querySelector('#planTbl thead'); if(!thead) return;
+  // 分组行：板块之间留白沟槽，广告拆成 投资型广告 / 盈利型广告 两块
+  const cnt=g=>COLS.filter(c=>c.g===g && colVisible(c)).length;
+  const invN=COLS.filter(c=>c.g==='ad'&&c.k.indexOf('inv')===0&&colVisible(c)).length;
+  const profN=COLS.filter(c=>c.g==='ad'&&c.k.indexOf('prof')===0&&colVisible(c)).length;
+  const tog=g=>GROUPS[g]?`<span class="gh-toggle" onclick="toggleGroup('${g}')">${GROUPS[g].open?'收起▴':'展开▾'}</span>`:'';
+  let gh='<tr class="grouphead">';
+  const seg=(label,cs,cls,t)=>{ if(cs>0) gh+=`<th colspan="${cs}" class="gh ${cls}">${label}${t||''}</th>`; };
+  seg('基础',cnt('base'),'gh-base','');
+  seg('价格',cnt('price'),'gh-price gsl','');
+  seg('订单结构',cnt('order'),'gh-order gsl','');
+  const adN=invN+profN;   // 广告=投资型+盈利型(一个大标题)；内部投资/盈利的细线画在列头+正文，不切断广告大标题
+  seg('广告',adN,'gh-ad gsl',tog('ad'));
+  seg('促销/站外',cnt('lowf'),'gh-lowf gsl','');
+  seg('结果',cnt('res'),'gh-res gsl','');
+  seg('成本明细(单台)',cnt('detail'),'gh-detail gsl','');
+  seg('',cnt('op'),'','');
+  gh+='</tr>';
+  // 列头行：各板块起始列前插入同款沟槽
+  let hh='<tr>';
+  const GS=groupStartKeys();
+  COLS.filter(colVisible).forEach(c=>{
+    const parts=c.h.split('|');
+    const sub=parts[1]?`<br><span style="font-weight:400">${parts[1]}</span>`:'';
+    const cls=(c.g==='base'&&(c.k==='type'||c.k==='note')?'fillh l':(['days','daily','test','subRank','price','tprice'].includes(c.k)?'fillh':(['lprice','sprice','invRatio','invCpc','invCvr','profRatio','profCpc','profCvr'].includes(c.k)?'defh':'')))+(c.lowf?' lowf':'')+(GS[c.k]?' gsl':'');
+    hh+=`<th class="${cls}">${parts[0]}${sub}</th>`;
+  });
+  hh+='</tr>';
+  thead.innerHTML=gh+hh;
+}
+function syncLowf(){ /* 低频列显隐改由colVisible统一控制，这里只重渲染 */ renderHead(); renderPlan(); }
+
+function renderPlan(){
+  const body=document.getElementById('planBody'); if(!body) return; if(!rows) rows=newTplRows();
+  const fx=n('dFx')||7.2, tax=n('dTax')/100;
+  const lpStr=document.getElementById('lpDate')?document.getElementById('lpDate').value:'2026-07-01';
+  let lp=parseD(lpStr);
+  // 推新日前置段：开头连续的 报价积累期/高价单期 整体排在Day1之前（对齐Excel：I6=I7-1倒推）
+  let preDays=0, preCount=0;
+  for(const r of rows){ if(r.type==='seed'||r.type==='lp'){ preDays+=r.days; preCount++; } else break; }
+  let cursorPre=addDays(lp,-preDays);
+  let cursor=new Date(lp);  // UTC基准
+  const STOCK=getStock();
+  let cum=0, stock=STOCK, beHit=false, soHit=false;
+  let T={days:0,qty:0,adO:0,invO:0,profO:0,rev:0,ad:0,adI:0,adP:0,promo:0,tl:0,net:0,beD:'',soD:''};
+  let html='';
+  const GSrows=groupStartKeys();
+  rows.forEach((r,i)=>{
+    let start,end;
+    if(i<preCount){ start=new Date(cursorPre); end=addDays(cursorPre,r.days-1); cursorPre=addDays(end,1); }
+    else { start=new Date(cursor); end=addDays(cursor,r.days-1); cursor=addDays(end,1); }
+    const spr = r.sprice!=null?r.sprice:(r.price!=null?r.price:(last.price||199)); // 售价=页面价（设置价格折扣后的购物车价），默认引①
+    const price = r.price!=null?r.price:(spr - (r.coupon||0));  // 到手价=售价−coupon/code，默认自动算，手改后不跟随
+    const isDef = r.price==null;
+    const lpr = r.lprice!=null?r.lprice:(r.type==='daily_noff'?spr:spr*2);               // 划线价默认演示=2倍售价，正式版引划线价规则
+    const offT = lpr>0?(lpr-price)/lpr:0;                      // 到手off（LP/BD红标显示力度）
+    const offS = lpr>0?(lpr-spr)/lpr:0;                        // 购物车off
+    const tp = r.tprice!=null?r.tprice:0;  // 测评价手填，不自动引用(Tab①可能有多个测评方案)
+    const tpDef = r.tprice==null;
+    const u=unitEcon(price), tLoss=testLoss(tp);
+    // 单台成本各项金额(查漏用)
+    const _net=price/(1+n('dTax')/100);
+    const cd={ purchase:n('iCost')/(n('dFx')||7.2), head:n('dHead')/(n('dFx')||7.2), comm:_net*n('dFee')/100,
+      deliv:n('dShip'), store:_net*n('dStore')/100+n('dInb'), refund:_net*(n('dRef')/100)*0.93, other:_net*n('dOther')/100 };
+    const testBad = r.test>r.daily;
+    const test = testBad? r.daily : r.test;
+    const qty=r.days*r.daily, tQty=r.days*test, offQty=r.days*r.offsite;
+    const normQty=Math.max(qty-tQty,0);
+    const adOn=(r.type!=='seed'&&r.type!=='lp');
+    const invOrders=qty*(r.invRatio||0)/100, profOrders=qty*(r.profRatio||0)/100;
+    const adOrders=invOrders+profOrders;                 // 阶段广告单=投资型单+盈利型单
+    const adDaily=r.daily*((r.invRatio||0)+(r.profRatio||0))/100;   // 日均广告单(显示用)
+    const invSpend=(adOn&&r.invCvr>0)? invOrders/(r.invCvr/100)*(r.invCpc||0) : 0;   // 投资型花费=投资型单÷投资型CVR×投资型CPC
+    const profSpend=(adOn&&r.profCvr>0)? profOrders/(r.profCvr/100)*(r.profCpc||0) : 0;// 盈利型花费=盈利型单÷盈利型CVR×盈利型CPC
+    const adSpend=invSpend+profSpend;
+    const invDaily=invSpend/Math.max(r.days,1), profDaily=profSpend/Math.max(r.days,1);  // 单日广告预算额度（按类型）
+    const invCpa=(r.invCvr>0)? (r.invCpc||0)/(r.invCvr/100) : 0;    // 投资型CPA=投资型CPC÷投资型CVR（每单广告成本）
+    const profCpa=(r.profCvr>0)? (r.profCpc||0)/(r.profCvr/100) : 0;// 盈利型CPA；盈利型应<单台毛利才算真盈利
+    const rev=normQty*u.net + tQty*(tp/(1+tax));         // 含测评回款（Excel AV）
+    const dealDays=Math.min(r.dealDays||0,r.days), dealQty=dealDays*r.daily;
+    const _couponRate=(n('dCouponRate')||2.5)/100, _dealRate=(n('dDealRate')||1)/100, _dealCap=n('dDealCap')||2000, _dealDayFee=n('dDealDayFee')||70, _offRate=(n('dOffsiteRate')||10)/100;
+    const couponFee = r.coupon>0 ? price*_couponRate*MARKET.couponShare*Math.max(qty-dealQty,0) : 0;
+    const dealFee = dealDays>0 ? Math.min(dealQty*price*_dealRate,_dealCap)+_dealDayFee*dealDays : 0;
+    const offFee = offQty>0 ? u.net*_offRate*offQty : 0;
+    const promo=couponFee+dealFee+offFee;
+    const tl=tQty*tLoss;
+    const net=normQty*u.profit - adSpend - promo - tl;
+    const seedOff = r.type==='seed';                     // 报价积累期固定不计入（无单；借老链接归老品）
+    BD[i]={days:r.days,price:price,daily:r.daily,test:test,tprice:tp,normQty:normQty,tQty:tQty,
+      unitProfit:u.profit,unitNet:u.net,normTotal:normQty*u.profit,
+      tLossPer:tQty>0?tl/tQty:0,tlTotal:tl,adSpend:adSpend,promo:promo,
+      adOrders:adOrders,net:net,type:r.type,seedOff:seedOff,
+      invOrders:invOrders,profOrders:profOrders,invSpend:invSpend,profSpend:profSpend,invDaily:invDaily,profDaily:profDaily,invCpc:r.invCpc,profCpc:r.profCpc,invCvr:r.invCvr,profCvr:r.profCvr,invCpa:invCpa,profCpa:profCpa,invRatio:r.invRatio,profRatio:r.profRatio};
+
+    if(!seedOff){ cum+=net; T.days+=r.days;T.qty+=qty;T.adO+=adOrders;T.invO+=invOrders;T.profO+=profOrders;T.rev+=rev;T.ad+=adSpend;T.adI+=invSpend;T.adP+=profSpend;T.promo+=promo;T.tl+=tl;T.net+=net; }
+    stock-=qty;
+    const tacos=rev?adSpend/rev:0, tShare=qty?tQty/qty:0;
+    const organic=r.daily - test - r.offsite - adDaily;   // 日均自然单=日均总单−日均测评−日均站外−日均广告单(全日均口径)
+    const orgBad=organic<-0.01;  // 日均自然单<0=参数矛盾
+    const be=!beHit&&!seedOff&&cum>=0&&net>0; if(be){beHit=true;T.beD=fmtD(start);}
+    const so=!soHit&&stock<=0; if(so){soHit=true;T.soD=fmtD(end);}
+    const offT0=lpr>0?(lpr-price)/lpr:0, offS0=lpr>0?(lpr-spr)/lpr:0;
+    const cell={
+      type:`<td class="fill l"><select onchange="updType(${i},this.value)" style="width:150px;background:#fdf4f8;border:1px solid #ead7e0;border-radius:4px">${Object.keys(TYPES).map(k=>`<option value="${k}" ${k===r.type?'selected':''}>${TYPES[k]}</option>`).join('')}</select>${seedOff?'<div class="stage-note">不计入盈亏</div>':''}</td>`,
+      note:`<td class="fill l"><input type="text" value="${r.note||''}" style="width:104px;text-align:left" onchange="upd(${i},'note',this.value)"></td>`,
+      days:`<td class="fill"><input type="number" value="${r.days}" onchange="upd(${i},'days',this.value)"></td>`,
+      start:`<td>${fmtD(start)}${i===preCount?'<span class="be-tag" style="background:var(--blue)">Day1·降价开推</span>':(i<preCount?'<span class="stage-note" style="font-size:9px">开推前</span>':'')}${be?'<span class="be-tag">回本</span>':''}</td>`,
+      end:`<td class="muted">${fmtD(end)}</td>`,
+      lprice:`<td class="def"><input type="number" value="${lpr.toFixed(2)}" onchange="upd(${i},'lprice',this.value)" title="划线价（List Price）"></td>`,
+      sprice:`<td class="def"><input type="number" value="${spr.toFixed(2)}" onchange="upd(${i},'sprice',this.value)" title="页面售价（设置价格折扣后的购物车价格），默认引①"></td>`,
+      price:`<td class="fill"><input type="number" value="${price.toFixed(2)}" onchange="upd(${i},'price',this.value)" title="售卖折后价（含税）=售价−coupon/code后的实付价（即到手价），利润按此价计算"></td>`,
+      off:`<td title="购物车off ${(offS0*100).toFixed(0)}%">${(offT0*100).toFixed(0)}%</td>`,
+      daily:`<td class="fill"><input type="number" value="${r.daily}" onchange="upd(${i},'daily',this.value)"></td>`,
+      test:`<td class="fill"><input type="number" class="${testBad?'warnv':''}" ${testBad?'title="测评不能大于日均单量"':''} value="${r.test}" onchange="upd(${i},'test',this.value)"></td>`,
+      subRank:`<td class="fill"><input type="number" value="${r.subRank!=null?r.subRank:''}" placeholder="—" style="width:62px" onchange="upd(${i},'subRank',this.value)" title="该阶段目标小类排名，对照日均总单校对销量与排名是否匹配（市场体量数据出来后可联动校准）"></td>`,
+      adOrd:`<td class="muted">${(r.type==='seed'||r.type==='lp')?'0':Math.round(adDaily)}</td>`,
+      adOrdSum:`<td class="muted">${(r.type==='seed'||r.type==='lp')?'0':Math.round(adDaily*r.days)}</td>`,
+      organicSum:`<td class="${orgBad?'neg':'muted'}">${qty?Math.round(organic*r.days):'—'}</td>`,
+      offsiteSum:`<td class="lowf muted">${offQty?Math.round(offQty):'—'}</td>`,
+      organic:`<td class="${orgBad?'neg':'muted'}" ${orgBad?'title="日均测评+日均广告单+日均站外已超过日均总单，参数矛盾，请调低占比或测评数"':''}>${qty?Math.round(organic)+(orgBad?'⚠':''):'—'}</td>`,
+      tprice:`<td class="fill"><input type="number" value="${tp?tp.toFixed(2):''}" onchange="upd(${i},'tprice',this.value)" title="测评折后价（含税），算阶段测评亏损用·手填（Tab①可能试算多个测评价，不自动引用）"></td>`,
+      invRatio:`<td class="def cinv cinv-start"><input type="number" value="${r.invRatio}" onchange="upd(${i},'invRatio',this.value)" ${r.type==='seed'||r.type==='lp'?'disabled':''}>%</td>`,
+      invCpc:`<td class="def cinv"><input type="number" value="${r.invCpc}" step="0.1" onchange="upd(${i},'invCpc',this.value)" ${r.type==='seed'?'disabled':''}></td>`,
+      invCvr:`<td class="def cinv" style="position:relative"><input type="number" value="${r.invCvr}" step="0.5" onchange="upd(${i},'invCvr',this.value)" style="padding-right:14px"><span style="position:absolute;right:6px;top:50%;transform:translateY(-50%);color:#999;font-size:11px;pointer-events:none">%</span></td>`,
+      invCpa:`<td class="muted cinv" title="投资型每单广告成本=投资型CPC÷投资型CVR。投资型是投资，CPA高于毛利属正常">${invCpa?CUR+invCpa.toFixed(1):'—'}</td>`,
+      invDaily:`<td class="cinv" style="color:#8a5a00;font-weight:600" title="投资型广告·每天该投的预算额度=日均总单×投资型占比÷投资型CVR×投资型CPC">${invDaily?CUR+Math.round(invDaily):'—'}</td>`,
+      profRatio:`<td class="def cprof cprof-start"><input type="number" value="${r.profRatio}" onchange="upd(${i},'profRatio',this.value)" ${r.type==='seed'||r.type==='lp'?'disabled':''}>%</td>`,
+      profCpc:`<td class="def cprof"><input type="number" value="${r.profCpc}" step="0.1" onchange="upd(${i},'profCpc',this.value)" ${r.type==='seed'?'disabled':''}></td>`,
+      profCvr:`<td class="def cprof" style="position:relative"><input type="number" value="${r.profCvr}" step="0.5" onchange="upd(${i},'profCvr',this.value)" style="padding-right:14px"><span style="position:absolute;right:6px;top:50%;transform:translateY(-50%);color:#999;font-size:11px;pointer-events:none">%</span></td>`,
+      profCpa:`<td class="cprof ${profCpa>0&&profCpa>=u.profit?'neg':'muted'}" title="盈利型每单广告成本=盈利型CPC÷盈利型CVR。应低于单台毛利${CUR}${u.profit.toFixed(1)}才算真盈利${profCpa>=u.profit?'，当前已超毛利→这条其实在亏':''}">${profCpa?CUR+profCpa.toFixed(1)+(profCpa>=u.profit?'⚠':''):'—'}</td>`,
+      profDaily:`<td class="cprof" style="color:#8a5a00;font-weight:600" title="盈利型广告·每天该投的预算额度=日均总单×盈利型占比÷盈利型CVR×盈利型CPC">${profDaily?CUR+Math.round(profDaily):'—'}</td>`,
+      coupon:`<td class="fill lowf"><input type="number" value="${r.coupon}" onchange="upd(${i},'coupon',this.value)"></td>`,
+      dealDays:`<td class="fill lowf"><input type="number" value="${r.dealDays}" onchange="upd(${i},'dealDays',this.value)"></td>`,
+      offsite:`<td class="fill lowf"><input type="number" value="${r.offsite}" onchange="upd(${i},'offsite',this.value)"></td>`,
+      qty:`<td>${qty}</td>`,
+      tShare:`<td class="${tShare>0.5?'neg':'muted'}">${qty?(tShare*100).toFixed(0)+'%':'—'}</td>`,
+      rev:`<td>${rev.toFixed(0)}</td>`,
+      adSpendDaily:`<td class="neg">${adSpend?'-'+Math.round(adSpend/Math.max(r.days,1)):'—'}</td>`,
+      adSpend:`<td class="neg">${adSpend?'-'+adSpend.toFixed(0):'—'}</td>`,
+      promo:`<td class="lowf neg">${promo?'-'+promo.toFixed(0):'—'}</td>`,
+      tl:`<td class="neg">${tl?'-'+tl.toFixed(0):'—'}</td>`,
+      net:`<td class="${net<0?'neg':'pos'}" style="cursor:pointer;text-decoration:underline dotted" onclick="showBreakdown(${i})" title="点击看这一行净利怎么算的">${net.toFixed(0)}</td>`,
+      tacos:`<td>${rev?(tacos*100).toFixed(1)+'%':'—'}</td>`,
+      cum:`<td class="${seedOff?'muted':(cum<0?'neg':'pos')} ${be?'break-even':''}">${seedOff?'—':cum.toFixed(0)}</td>`,
+      stock:`<td class="${stock<=0?'neg':''}">${stock}${so?'<span class="so-tag">售罄</span>':''}</td>`,
+      d_purchase:`<td class="muted" style="background:#fafbfc">-${cd.purchase.toFixed(1)}</td>`,
+      d_head:`<td class="muted" style="background:#fafbfc">-${cd.head.toFixed(1)}</td>`,
+      d_comm:`<td class="muted" style="background:#fafbfc">-${cd.comm.toFixed(1)}</td>`,
+      d_deliv:`<td class="muted" style="background:#fafbfc">-${cd.deliv.toFixed(1)}</td>`,
+      d_store:`<td class="muted" style="background:#fafbfc">-${cd.store.toFixed(1)}</td>`,
+      d_refund:`<td class="muted" style="background:#fafbfc">-${cd.refund.toFixed(1)}</td>`,
+      d_other:`<td class="muted" style="background:#fafbfc">-${cd.other.toFixed(1)}</td>`,
+      op:`<td style="white-space:nowrap"><span class="del" style="color:var(--green-deep);margin-right:6px" onclick="insRow(${i})" title="在下方插入一行（复制本行参数，逐天填写用）">⊕</span><span class="del" onclick="delRow(${i})" title="删除本行">✕</span></td>`,
+    };
+    html+=`<tr class="${seedOff?'seed-off':''}">`+COLS.filter(colVisible).map(c=>injCls(cell[c.k], GSrows[c.k]?'gsl':'')).join('')+`</tr>`;
+  });
+  body.innerHTML=html;
+  // 汇总卡
+  const neg=T.net<0;
+  document.getElementById('cNet').className='kcard'+(neg?' loss':'');
+  document.getElementById('cNetV').textContent=(neg?'-':'')+CUR+Math.abs(T.net).toFixed(0);
+  document.getElementById('cNetR').textContent='≈ ¥'+(T.net*fx).toFixed(0)+' RMB · '+T.days+'天 · 净利率 '+(T.rev?(T.net/T.rev*100):0).toFixed(1)+'%';
+  document.getElementById('cBE').className='kcard'+(T.beD?'':' loss');
+  document.getElementById('cBEV').textContent=T.beD||'计划内未回本';
+  document.getElementById('cSO').className='kcard'+(T.soD?' warn':'');
+  document.getElementById('cSOV').textContent=T.soD||'库存足够';
+  document.getElementById('cSOR').textContent=T.soD?'库存在计划内售罄':'期初库存 '+STOCK+' 台';
+  document.getElementById('cQtyV').textContent=T.qty+' 台 / '+T.days+' 天';
+  const adShare=T.qty?T.adO/T.qty:0, adWarn=adShare>0.3;
+  const sumCell={
+    type:'<td class="l">汇总</td>',note:'<td></td>',days:`<td>${T.days}天</td>`,start:'<td>—</td>',end:'<td>—</td>',
+    lprice:'<td>—</td>',sprice:'<td>—</td>',price:'<td>—</td>',off:'<td>—</td>',
+    daily:'<td>—</td>',test:'<td>—</td>',
+    adOrd:`<td class="${adWarn?'neg':''}" title="${adWarn?'整体广告出单占比超出健康线(<30%)，推新期偏高正常，关注收尾回落':'整体广告出单占比，健康标准<30%'}">${(adShare*100).toFixed(0)}%${adWarn?'⚠':''}</td>`,
+    organic:'<td>—</td>',tprice:'<td>—</td>',subRank:'<td>—</td>',
+    invRatio:`<td class="cinv cinv-start" title="总投资型单占比=Σ投资型单/Σ总单">${(T.qty?T.invO/T.qty*100:0).toFixed(0)}%</td>`,invCpc:'<td class="cinv">—</td>',invCvr:'<td class="cinv">—</td>',
+    invCpa:`<td class="muted cinv" title="整盘投资型CPA=Σ投资型花费/Σ投资型单">${T.invO?CUR+(T.adI/T.invO).toFixed(1):'—'}</td>`,
+    invDaily:`<td class="cinv" style="color:#8a5a00;font-weight:600">${CUR}${T.days?Math.round(T.adI/T.days):0}</td>`,
+    profRatio:`<td class="cprof cprof-start" title="总盈利型单占比=Σ盈利型单/Σ总单">${(T.qty?T.profO/T.qty*100:0).toFixed(0)}%</td>`,profCpc:'<td class="cprof">—</td>',profCvr:'<td class="cprof">—</td>',
+    profCpa:`<td class="muted cprof" title="整盘盈利型CPA=Σ盈利型花费/Σ盈利型单">${T.profO?CUR+(T.adP/T.profO).toFixed(1):'—'}</td>`,
+    profDaily:`<td class="cprof" style="color:#8a5a00;font-weight:600">${CUR}${T.days?Math.round(T.adP/T.days):0}</td>`,
+    coupon:'<td class="lowf"></td>',dealDays:'<td class="lowf"></td>',offsite:'<td class="lowf"></td>',
+    qty:`<td>${T.qty}</td>`,tShare:'<td>—</td>',rev:`<td>${T.rev.toFixed(0)}</td>`,adSpendDaily:`<td class="neg">-${T.days?Math.round(T.ad/T.days):0}<br><span style="font-weight:400;font-size:10px;color:#888">总CPA ${CUR}${(T.adO?T.ad/T.adO:0).toFixed(1)}</span></td>`,
+    adSpend:`<td class="neg">-${T.ad.toFixed(0)}</td>`,
+    adOrdSum:`<td class="muted">${Math.round(T.adO)}</td>`,
+    organicSum:'<td>—</td>',
+    offsiteSum:'<td class="lowf"></td>',
+    promo:`<td class="lowf neg">-${T.promo.toFixed(0)}</td>`,tl:`<td class="neg">-${T.tl.toFixed(0)}</td>`,
+    net:`<td class="${T.net<0?'neg':'pos'}">${T.net.toFixed(0)}</td>`,tacos:`<td>${(T.rev?T.ad/T.rev*100:0).toFixed(1)}%</td>`,
+    cum:`<td class="${T.net<0?'neg':'pos'}">${T.net.toFixed(0)}<br><span style="font-weight:400;font-size:10.5px">≈¥${(T.net*fx).toFixed(0)}</span></td>`,
+    stock:`<td>${(STOCK-rows.reduce((s,r)=>s+r.days*r.daily,0)).toFixed(0)}</td>`,op:'<td></td>',
+    d_purchase:'<td style="background:#fafbfc">—</td>',d_head:'<td style="background:#fafbfc">—</td>',
+    d_comm:'<td style="background:#fafbfc">—</td>',d_deliv:'<td style="background:#fafbfc">—</td>',
+    d_store:'<td style="background:#fafbfc">—</td>',d_refund:'<td style="background:#fafbfc">—</td>',
+    d_other:'<td style="background:#fafbfc">—</td>',
+  };
+  document.getElementById('sumRow').innerHTML=COLS.filter(colVisible).map(c=>injCls(sumCell[c.k], GSrows[c.k]?'gsl':'')).join('')
+}
+
+renderHead(); calc(); renderSchemes(); onAsinChange();
+</script>
+</body>
+</html>

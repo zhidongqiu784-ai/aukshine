@@ -1,0 +1,906 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NocoBase JS Block 多功能表格 Demo</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --panel-soft: #f9fafb;
+      --text: #172033;
+      --muted: #667085;
+      --line: #d9dee8;
+      --line-soft: #ebedf2;
+      --primary: #2563eb;
+      --primary-weak: #e8f0ff;
+      --success: #138a5b;
+      --warning: #b54708;
+      --danger: #c2412d;
+      --shadow: 0 10px 30px rgba(16, 24, 40, .08);
+      font-family: Inter, "Segoe UI", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    .app {
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    .workspace {
+      max-width: 1320px;
+      margin: 0 auto;
+      background: var(--panel);
+      border: 1px solid var(--line-soft);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .titlebar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--line-soft);
+      background: var(--panel);
+    }
+
+    .title-block {
+      min-width: 220px;
+    }
+
+    .title-block h1 {
+      margin: 0;
+      font-size: 20px;
+      line-height: 1.35;
+      letter-spacing: 0;
+    }
+
+    .title-block p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: auto minmax(240px, 1fr) auto;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 20px;
+      background: var(--panel-soft);
+      border-bottom: 1px solid var(--line-soft);
+    }
+
+    .toolbar-group,
+    .view-tabs,
+    .right-tools,
+    .batchbar,
+    .actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .view-tabs {
+      justify-content: center;
+      min-width: 0;
+      overflow-x: auto;
+      scrollbar-width: thin;
+    }
+
+    .btn,
+    .icon-btn,
+    .tab {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--text);
+      border-radius: 6px;
+      min-height: 34px;
+      transition: background .15s ease, border-color .15s ease, color .15s ease;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 0 12px;
+      white-space: nowrap;
+    }
+
+    .icon-btn {
+      width: 34px;
+      display: grid;
+      place-items: center;
+    }
+
+    .btn:hover,
+    .icon-btn:hover,
+    .tab:hover {
+      border-color: #b8c1d2;
+      background: #f7f9fc;
+    }
+
+    .btn.primary {
+      border-color: var(--primary);
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .btn.primary:hover {
+      background: #1d4ed8;
+    }
+
+    .btn.danger {
+      color: var(--danger);
+      border-color: #f0c9c1;
+    }
+
+    .tab {
+      padding: 0 13px;
+      white-space: nowrap;
+    }
+
+    .tab.active {
+      border-color: var(--primary);
+      background: var(--primary-weak);
+      color: #1649b7;
+      font-weight: 600;
+    }
+
+    .search {
+      position: relative;
+      width: 240px;
+      max-width: 100%;
+    }
+
+    .search input,
+    .field input,
+    .field select,
+    .field textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--text);
+      outline: none;
+    }
+
+    .search input {
+      height: 34px;
+      padding: 0 34px 0 12px;
+    }
+
+    .search span {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted);
+    }
+
+    .batchbar {
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 20px;
+      background: #fff8e9;
+      border-bottom: 1px solid #f6d99f;
+      color: #7a4b00;
+    }
+
+    .batchbar[hidden] {
+      display: none;
+    }
+
+    .content {
+      padding: 20px;
+    }
+
+    .table-shell {
+      border: 1px solid var(--line-soft);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      font-size: 14px;
+    }
+
+    thead {
+      background: #f8fafc;
+    }
+
+    th,
+    td {
+      height: 44px;
+      padding: 0 12px;
+      border-bottom: 1px solid var(--line-soft);
+      text-align: left;
+      vertical-align: middle;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    th {
+      color: #465166;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    tbody tr:hover {
+      background: #fbfcff;
+    }
+
+    .check-col {
+      width: 46px;
+    }
+
+    .amount-col {
+      width: 110px;
+    }
+
+    .status-col {
+      width: 110px;
+    }
+
+    .date-col {
+      width: 128px;
+    }
+
+    .action-col {
+      width: 130px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 64px;
+      height: 24px;
+      border-radius: 999px;
+      padding: 0 9px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .pill.open {
+      background: #e8f0ff;
+      color: #1649b7;
+    }
+
+    .pill.follow {
+      background: #fff2db;
+      color: var(--warning);
+    }
+
+    .pill.done {
+      background: #e8f7ef;
+      color: var(--success);
+    }
+
+    .empty {
+      padding: 46px 20px;
+      text-align: center;
+      color: var(--muted);
+    }
+
+    .form-grid,
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .form-panel,
+    .stat-card {
+      border: 1px solid var(--line-soft);
+      border-radius: 8px;
+      background: #fff;
+      padding: 16px;
+    }
+
+    .form-panel {
+      grid-column: span 2;
+    }
+
+    .field {
+      margin-bottom: 14px;
+    }
+
+    .field label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #465166;
+    }
+
+    .field input,
+    .field select {
+      height: 36px;
+      padding: 0 10px;
+    }
+
+    .field textarea {
+      min-height: 104px;
+      padding: 10px;
+      resize: vertical;
+    }
+
+    .stat-card strong {
+      display: block;
+      font-size: 26px;
+      margin-bottom: 4px;
+    }
+
+    .stat-card span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      background: rgba(15, 23, 42, .38);
+      z-index: 20;
+    }
+
+    .modal-backdrop.open {
+      display: flex;
+    }
+
+    .modal {
+      width: min(520px, 100%);
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 24px 60px rgba(15, 23, 42, .22);
+      overflow: hidden;
+    }
+
+    .modal-head,
+    .modal-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line-soft);
+    }
+
+    .modal-foot {
+      justify-content: flex-end;
+      border-top: 1px solid var(--line-soft);
+      border-bottom: 0;
+    }
+
+    .modal-head h2 {
+      margin: 0;
+      font-size: 17px;
+      letter-spacing: 0;
+    }
+
+    .modal-body {
+      padding: 18px;
+    }
+
+    .column-list {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .column-option {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px;
+      border: 1px solid var(--line-soft);
+      border-radius: 6px;
+      background: #fff;
+    }
+
+    .notice {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    @media (max-width: 920px) {
+      .app {
+        padding: 12px;
+      }
+
+      .titlebar,
+      .toolbar {
+        grid-template-columns: 1fr;
+        align-items: stretch;
+      }
+
+      .titlebar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .toolbar-group,
+      .right-tools {
+        justify-content: space-between;
+      }
+
+      .view-tabs {
+        justify-content: flex-start;
+      }
+
+      .search {
+        flex: 1;
+        width: auto;
+      }
+
+      .table-shell {
+        overflow-x: auto;
+      }
+
+      table {
+        min-width: 880px;
+      }
+
+      .form-grid,
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .form-panel {
+        grid-column: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <main class="workspace">
+      <section class="titlebar">
+        <div class="title-block">
+          <h1>客户跟进工作台</h1>
+          <p>JS Block 多视图表格交互模板</p>
+        </div>
+        <div class="actions">
+          <button class="btn" id="refreshBtn" type="button">刷新</button>
+          <button class="btn primary" id="addRecordBtn" type="button">新增记录</button>
+        </div>
+      </section>
+
+      <section class="toolbar">
+        <div class="toolbar-group">
+          <button class="btn primary" id="addViewBtn" type="button">新增视图</button>
+          <button class="btn" id="filterBtn" type="button">筛选</button>
+        </div>
+        <div class="view-tabs" id="viewTabs" aria-label="视图切换"></div>
+        <div class="right-tools">
+          <label class="search">
+            <input id="searchInput" type="search" placeholder="搜索客户、负责人、阶段">
+            <span>⌕</span>
+          </label>
+          <button class="btn" id="columnBtn" type="button">列设置</button>
+          <button class="icon-btn" id="moreBtn" type="button" aria-label="更多">⋯</button>
+        </div>
+      </section>
+
+      <section class="batchbar" id="batchBar" hidden>
+        <span id="batchText">已选 0 项</span>
+        <div class="actions">
+          <button class="btn" id="batchDoneBtn" type="button">标记完成</button>
+          <button class="btn danger" id="batchDeleteBtn" type="button">批量删除</button>
+        </div>
+      </section>
+
+      <section class="content" id="content"></section>
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="viewModal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="viewModalTitle">
+      <div class="modal-head">
+        <h2 id="viewModalTitle">新增视图</h2>
+        <button class="icon-btn" data-close-modal="viewModal" type="button" aria-label="关闭">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label for="viewNameInput">视图名称</label>
+          <input id="viewNameInput" type="text" placeholder="例如：本周重点客户">
+        </div>
+        <div class="field">
+          <label for="viewTypeSelect">视图类型</label>
+          <select id="viewTypeSelect">
+            <option value="table">表格</option>
+            <option value="form">表单</option>
+            <option value="stats">统计</option>
+          </select>
+        </div>
+        <p class="notice">创建后会立即切换到新视图。实际接入 NocoBase 时，可在这里调用接口保存视图配置。</p>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" data-close-modal="viewModal" type="button">取消</button>
+        <button class="btn primary" id="createViewBtn" type="button">创建视图</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="columnModal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="columnModalTitle">
+      <div class="modal-head">
+        <h2 id="columnModalTitle">列设置</h2>
+        <button class="icon-btn" data-close-modal="columnModal" type="button" aria-label="关闭">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="column-list" id="columnList"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn primary" data-close-modal="columnModal" type="button">完成</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const state = {
+      currentViewId: "table-main",
+      query: "",
+      selectedIds: new Set(),
+      views: [
+        { id: "table-main", name: "全部客户", type: "table" },
+        { id: "form-main", name: "表单录入", type: "form" },
+        { id: "stats-main", name: "跟进统计", type: "stats" }
+      ],
+      columns: [
+        { key: "customer", label: "客户名称", visible: true },
+        { key: "stage", label: "阶段", visible: true },
+        { key: "owner", label: "负责人", visible: true },
+        { key: "amount", label: "预计金额", visible: true },
+        { key: "status", label: "状态", visible: true },
+        { key: "nextDate", label: "下次跟进", visible: true }
+      ],
+      rows: [
+        { id: 1, customer: "远辰贸易", stage: "需求确认", owner: "运营一组", amount: "¥48,000", status: "跟进中", nextDate: "2026-06-25" },
+        { id: 2, customer: "北川供应链", stage: "方案报价", owner: "运营二组", amount: "¥92,000", status: "待处理", nextDate: "2026-06-27" },
+        { id: 3, customer: "澜星科技", stage: "合同审核", owner: "销售支持", amount: "¥126,000", status: "已完成", nextDate: "2026-07-01" },
+        { id: 4, customer: "华庭家居", stage: "样品沟通", owner: "运营一组", amount: "¥36,000", status: "跟进中", nextDate: "2026-06-29" },
+        { id: 5, customer: "柏森电商", stage: "复盘维护", owner: "客户成功", amount: "¥64,000", status: "已完成", nextDate: "2026-07-05" }
+      ]
+    };
+
+    const dom = {
+      content: document.getElementById("content"),
+      viewTabs: document.getElementById("viewTabs"),
+      batchBar: document.getElementById("batchBar"),
+      batchText: document.getElementById("batchText"),
+      searchInput: document.getElementById("searchInput"),
+      viewModal: document.getElementById("viewModal"),
+      columnModal: document.getElementById("columnModal"),
+      viewNameInput: document.getElementById("viewNameInput"),
+      viewTypeSelect: document.getElementById("viewTypeSelect"),
+      columnList: document.getElementById("columnList")
+    };
+
+    function getCurrentView() {
+      return state.views.find((view) => view.id === state.currentViewId) || state.views[0];
+    }
+
+    function getVisibleColumns() {
+      return state.columns.filter((column) => column.visible);
+    }
+
+    function getFilteredRows() {
+      const query = state.query.trim().toLowerCase();
+      if (!query) return state.rows;
+      return state.rows.filter((row) => {
+        return Object.values(row).some((value) => String(value).toLowerCase().includes(query));
+      });
+    }
+
+    function statusClass(status) {
+      if (status === "已完成") return "done";
+      if (status === "待处理") return "follow";
+      return "open";
+    }
+
+    function render() {
+      renderTabs();
+      renderBatchBar();
+      renderContent();
+    }
+
+    function renderTabs() {
+      dom.viewTabs.innerHTML = state.views.map((view) => {
+        const active = view.id === state.currentViewId ? " active" : "";
+        return '<button class="tab' + active + '" type="button" data-view-id="' + view.id + '">' + view.name + '</button>';
+      }).join("");
+    }
+
+    function renderBatchBar() {
+      const count = state.selectedIds.size;
+      dom.batchBar.hidden = count === 0;
+      dom.batchText.textContent = "已选 " + count + " 项";
+    }
+
+    function renderContent() {
+      const currentView = getCurrentView();
+      if (currentView.type === "form") {
+        renderFormView();
+        return;
+      }
+      if (currentView.type === "stats") {
+        renderStatsView();
+        return;
+      }
+      renderTableView();
+    }
+
+    function renderTableView() {
+      const rows = getFilteredRows();
+      const columns = getVisibleColumns();
+      if (!rows.length) {
+        dom.content.innerHTML = '<div class="table-shell"><div class="empty">暂无匹配数据</div></div>';
+        return;
+      }
+
+      const headCells = columns.map((column) => '<th>' + column.label + '</th>').join("");
+      const bodyRows = rows.map((row) => {
+        const checked = state.selectedIds.has(row.id) ? " checked" : "";
+        const cells = columns.map((column) => {
+          if (column.key === "status") {
+            return '<td><span class="pill ' + statusClass(row.status) + '">' + row.status + '</span></td>';
+          }
+          return '<td title="' + row[column.key] + '">' + row[column.key] + '</td>';
+        }).join("");
+
+        return [
+          '<tr>',
+          '<td class="check-col"><input type="checkbox" data-row-check="' + row.id + '"' + checked + '></td>',
+          cells,
+          '<td class="action-col">',
+          '<button class="btn" type="button" data-row-edit="' + row.id + '">编辑</button>',
+          '</td>',
+          '</tr>'
+        ].join("");
+      }).join("");
+
+      dom.content.innerHTML = [
+        '<div class="table-shell">',
+        '<table>',
+        '<thead><tr>',
+        '<th class="check-col"><input type="checkbox" id="checkAll"></th>',
+        headCells,
+        '<th class="action-col">操作</th>',
+        '</tr></thead>',
+        '<tbody>',
+        bodyRows,
+        '</tbody>',
+        '</table>',
+        '</div>'
+      ].join("");
+
+      const checkAll = document.getElementById("checkAll");
+      checkAll.checked = rows.every((row) => state.selectedIds.has(row.id));
+      checkAll.addEventListener("change", () => {
+        rows.forEach((row) => {
+          if (checkAll.checked) state.selectedIds.add(row.id);
+          else state.selectedIds.delete(row.id);
+        });
+        render();
+      });
+    }
+
+    function renderFormView() {
+      dom.content.innerHTML = [
+        '<div class="form-grid">',
+        '<section class="form-panel">',
+        '<div class="field"><label>客户名称</label><input type="text" placeholder="输入客户名称"></div>',
+        '<div class="field"><label>客户阶段</label><select><option>需求确认</option><option>方案报价</option><option>合同审核</option><option>复盘维护</option></select></div>',
+        '<div class="field"><label>负责人</label><input type="text" placeholder="输入负责人"></div>',
+        '<div class="field"><label>跟进说明</label><textarea placeholder="记录本次沟通重点"></textarea></div>',
+        '<button class="btn primary" type="button">提交记录</button>',
+        '</section>',
+        '<aside class="stat-card">',
+        '<strong>表单视图</strong>',
+        '<span>适合新增、编辑、审批类流程。复杂字段可放入右侧抽屉或分步骤弹窗。</span>',
+        '</aside>',
+        '</div>'
+      ].join("");
+    }
+
+    function renderStatsView() {
+      const rows = getFilteredRows();
+      const doneCount = rows.filter((row) => row.status === "已完成").length;
+      const pendingCount = rows.filter((row) => row.status === "待处理").length;
+      const openCount = rows.filter((row) => row.status === "跟进中").length;
+
+      dom.content.innerHTML = [
+        '<div class="stats-grid">',
+        '<section class="stat-card"><strong>' + rows.length + '</strong><span>当前数据量</span></section>',
+        '<section class="stat-card"><strong>' + openCount + '</strong><span>跟进中</span></section>',
+        '<section class="stat-card"><strong>' + pendingCount + '</strong><span>待处理</span></section>',
+        '<section class="stat-card"><strong>' + doneCount + '</strong><span>已完成</span></section>',
+        '</div>'
+      ].join("");
+    }
+
+    function renderColumnOptions() {
+      dom.columnList.innerHTML = state.columns.map((column) => {
+        const checked = column.visible ? " checked" : "";
+        return [
+          '<label class="column-option">',
+          '<input type="checkbox" data-column-key="' + column.key + '"' + checked + '>',
+          '<span>' + column.label + '</span>',
+          '</label>'
+        ].join("");
+      }).join("");
+    }
+
+    function openModal(id) {
+      document.getElementById(id).classList.add("open");
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.remove("open");
+    }
+
+    function createView() {
+      const name = dom.viewNameInput.value.trim();
+      const type = dom.viewTypeSelect.value;
+      if (!name) {
+        dom.viewNameInput.focus();
+        return;
+      }
+
+      const id = type + "-" + Date.now();
+      state.views.push({ id, name, type });
+      state.currentViewId = id;
+      state.selectedIds.clear();
+      dom.viewNameInput.value = "";
+      closeModal("viewModal");
+      render();
+    }
+
+    function addRecord() {
+      const nextId = Math.max(...state.rows.map((row) => row.id)) + 1;
+      state.rows.unshift({
+        id: nextId,
+        customer: "新增客户 " + nextId,
+        stage: "需求确认",
+        owner: "待分配",
+        amount: "¥0",
+        status: "待处理",
+        nextDate: "2026-06-30"
+      });
+      state.currentViewId = "table-main";
+      render();
+    }
+
+    document.getElementById("addViewBtn").addEventListener("click", () => {
+      openModal("viewModal");
+      setTimeout(() => dom.viewNameInput.focus(), 0);
+    });
+
+    document.getElementById("columnBtn").addEventListener("click", () => {
+      renderColumnOptions();
+      openModal("columnModal");
+    });
+
+    document.getElementById("createViewBtn").addEventListener("click", createView);
+    document.getElementById("addRecordBtn").addEventListener("click", addRecord);
+    document.getElementById("refreshBtn").addEventListener("click", render);
+
+    document.getElementById("filterBtn").addEventListener("click", () => {
+      state.query = "跟进中";
+      dom.searchInput.value = state.query;
+      state.selectedIds.clear();
+      render();
+    });
+
+    document.getElementById("moreBtn").addEventListener("click", () => {
+      alert("更多操作通常放：导入、导出、复制视图、删除视图、帮助说明。");
+    });
+
+    document.getElementById("batchDoneBtn").addEventListener("click", () => {
+      state.rows.forEach((row) => {
+        if (state.selectedIds.has(row.id)) row.status = "已完成";
+      });
+      state.selectedIds.clear();
+      render();
+    });
+
+    document.getElementById("batchDeleteBtn").addEventListener("click", () => {
+      state.rows = state.rows.filter((row) => !state.selectedIds.has(row.id));
+      state.selectedIds.clear();
+      render();
+    });
+
+    dom.searchInput.addEventListener("input", (event) => {
+      state.query = event.target.value;
+      state.selectedIds.clear();
+      render();
+    });
+
+    dom.viewTabs.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-view-id]");
+      if (!button) return;
+      state.currentViewId = button.dataset.viewId;
+      state.selectedIds.clear();
+      render();
+    });
+
+    dom.content.addEventListener("change", (event) => {
+      const input = event.target.closest("[data-row-check]");
+      if (!input) return;
+      const id = Number(input.dataset.rowCheck);
+      if (input.checked) state.selectedIds.add(id);
+      else state.selectedIds.delete(id);
+      render();
+    });
+
+    dom.content.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-row-edit]");
+      if (!button) return;
+      const row = state.rows.find((item) => item.id === Number(button.dataset.rowEdit));
+      if (row) alert("打开编辑弹窗：" + row.customer);
+    });
+
+    dom.columnList.addEventListener("change", (event) => {
+      const input = event.target.closest("[data-column-key]");
+      if (!input) return;
+      const column = state.columns.find((item) => item.key === input.dataset.columnKey);
+      if (column) column.visible = input.checked;
+      render();
+      renderColumnOptions();
+    });
+
+    document.addEventListener("click", (event) => {
+      const closeButton = event.target.closest("[data-close-modal]");
+      if (closeButton) closeModal(closeButton.dataset.closeModal);
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        closeModal("viewModal");
+        closeModal("columnModal");
+      }
+      if (event.key === "Enter" && dom.viewModal.classList.contains("open")) {
+        createView();
+      }
+    });
+
+    render();
+  </script>
+</body>
+</html>

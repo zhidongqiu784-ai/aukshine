@@ -1,29 +1,37 @@
 async function run() {
   const React = ctx.libs.React;
   const { useCallback, useEffect, useMemo, useRef, useState } = React;
-  const { Button, ConfigProvider, Modal, Pagination, Select, Tag } = ctx.libs.antd;
+  const { Button, ConfigProvider, Modal, Pagination, Tag, Tooltip } = ctx.libs.antd;
 
   const currentUserId = typeof ctx.getVar === 'function' ? await ctx.getVar('ctx.user.id') : null;
   const currentUserLevel = typeof ctx.getVar === 'function' ? Number(await ctx.getVar('ctx.user.level')) || 0 : 0;
   const IS_ADMIN = currentUserLevel >= 3;
   const BLOCK_UID = ctx.model?.uid || 'water_level_sales_table';
+  const BLOCK_NAME = '水位表表格';
+  const BLOCK_NAME_SETTING_KEY = `${BLOCK_UID}__block_name`;
   const FONT_SIZE = 13;
+  const TABLE_FONT_SIZE = 14;
   const TOTAL_SHOP_NAME = '合计';
   const INVENTORY_WORKFLOW_KEY = 'rnrq9biwydo';
+  const TRANSIT_WORKFLOW_KEY = 'wqf4rth9ui1';
   const PAGE_SIZE_OPTIONS = ['10', '20', '50', '100'];
   const EXPORT_PAGE_SIZE = 1000;
-  const PRESET_COLORS = [
-    { label: '基础', value: '#9DF29F' },
-    { label: '必填', value: '#EB6793' },
-    { label: '选填', value: '#F2BABA' },
-    { label: '重要指标', value: '#C5DFB4' },
-    { label: '日公式1', value: '#5DBEAC' },
-    { label: '日公式2', value: '#B0D4CC' },
-    { label: '日公式3', value: '#1C5C50' },
-    { label: '周公式1', value: '#00205C' },
-    { label: '周公式2', value: '#035E9B' },
-    { label: '周公式3', value: '#044D72' },
-  ];
+  const TABLE_SCROLL_MAX_HEIGHT = 830;
+  const TABLE_HEADER_PADDING = IS_ADMIN ? '5px 18px 5px 7px' : '5px 7px';
+  const TABLE_CELL_PADDING = '3px 7px';
+  const TOOLBAR_BUTTON_STYLE = {
+    height: 28,
+    padding: '0 10px',
+    borderRadius: 6,
+    border: '1px solid #d7e2f0',
+    background: '#f8fbff',
+    color: '#334155',
+    fontSize: 12,
+    fontWeight: 600,
+    lineHeight: '26px',
+    boxShadow: '0 1px 2px rgba(15,23,42,0.05)',
+    whiteSpace: 'nowrap',
+  };
   const DEFAULT_HEADER_COLOR = '#fafafa';
   const IMPORTANT_COLUMN_BG = '#fffbe6';
   const PUSH_PROP_OPTIONS = [
@@ -62,6 +70,12 @@ async function run() {
     sale_inventory: '销售预估库存',
     sales: '实际销量',
     base_sales: '基准销量',
+  };
+
+  const HEADER_TOOLTIPS = {
+    inventory: '数据来源0点库存表：各店铺的FBA可售+待调仓的合计',
+    days_for_sale: '库存/加权基准销量（向下取整）',
+    estimate_days_for_sales: '销售预估库存/加权基准销量（向下取整）',
   };
 
   const TYPE_COLORS = {
@@ -117,36 +131,36 @@ async function run() {
   }
 
   const FUTURE_COLUMNS = [
-    { field: 'shop', width: 78 },
-    { field: 'date', width: 118 },
-    { field: 'type', width: 112 },
-    { field: 'weighted_sales', width: 106, align: 'right' },
-    { field: 'coefficient', width: 86, align: 'right' },
-    { field: 'maybe_sales', width: 86, align: 'right' },
-    { field: 'inventory', width: 76, align: 'right' },
-    { field: 'add', width: 70, align: 'right' },
-    { field: 'sale_maybe_sales', width: 110, align: 'right' },
-    { field: 'on_the_way', width: 76, align: 'right' },
-    { field: 'sales_store', width: 92 },
-    { field: 'quantity_receive', width: 82, align: 'right' },
-    { field: 'overseas_warehouse_test_product', width: 130 },
-    { field: 'overseas_warehouse_new_product', width: 130 },
-    { field: 'days_for_sale', width: 106, align: 'right' },
-    { field: 'estimate_days_for_sales', width: 138, align: 'right' },
-    { field: 'sale_inventory', width: 104, align: 'right' },
+    { field: 'shop', width: 98 },
+    { field: 'date', width: 131 },
+    { field: 'type', width: 114 },
+    { field: 'coefficient', width: 68, align: 'right' },
+    { field: 'weighted_sales', width: 77, align: 'right' },
+    { field: 'maybe_sales', width: 85, align: 'right', headerColor: '#F2BABA' },
+    { field: 'inventory', width: 80, align: 'right', headerColor: '#F2BABA' },
+    { field: 'sale_maybe_sales', width: 112, align: 'right', headerColor: '#EB6793' },
+    { field: 'sale_inventory', width: 114, align: 'right', headerColor: '#EB6793' },
+    { field: 'sales_store', width: 85, headerColor: '#5DBEAC' },
+    { field: 'add', width: 58, align: 'right' },
+    { field: 'on_the_way', width: 57, align: 'right' },
+    { field: 'days_for_sale', width: 98, align: 'right' },
+    { field: 'estimate_days_for_sales', width: 126, align: 'right' },
+    { field: 'quantity_receive', width: 73, align: 'right' },
+    { field: 'overseas_warehouse_test_product', width: 97, title: '海外检测品' },
+    { field: 'overseas_warehouse_new_product', width: 100, title: '海外全新品' },
   ];
 
   const PAST_COLUMNS = [
-    { field: 'shop', width: 78 },
-    { field: 'date', width: 118 },
-    { field: 'sales', width: 78, align: 'right' },
-    { field: 'maybe_sales', width: 86, align: 'right' },
-    { field: 'sale_maybe_sales', width: 110, align: 'right' },
-    { field: 'type', width: 112 },
-    { field: 'weighted_sales', width: 106, align: 'right' },
-    { field: 'coefficient', width: 86, align: 'right' },
-    { field: 'inventory', width: 76, align: 'right' },
-    { field: 'base_sales', width: 86, align: 'right' },
+    { field: 'shop', width: 75 },
+    { field: 'date', width: 121 },
+    { field: 'sales', width: 80, align: 'right' },
+    { field: 'maybe_sales', width: 80, align: 'right' },
+    { field: 'sale_maybe_sales', width: 95, align: 'right' },
+    { field: 'type', width: 76 },
+    { field: 'coefficient', width: 80, align: 'right' },
+    { field: 'inventory', width: 58, align: 'right' },
+    { field: 'weighted_sales', width: 86, align: 'right' },
+    { field: 'base_sales', width: 67, align: 'right' },
   ];
 
   const EXPORT_LOGISTICS_FIELDS = [
@@ -173,6 +187,42 @@ async function run() {
     return result;
   }
 
+  function isShopKey(key) {
+    return key === 'shop' || /^shop\d+$/.test(key);
+  }
+
+  function rememberStableUrlParams(params) {
+    const stableParams = {};
+    Object.keys(params || {}).forEach((key) => {
+      const value = params[key];
+      if (!isShopKey(key) && value != null && value !== '') {
+        stableParams[key] = value;
+      }
+    });
+    if (Object.keys(stableParams).length > 0) {
+      globalThis.__NOCOBASE_URL_PARAMS__ = stableParams;
+    }
+    if (params?.shop) {
+      globalThis.__NOCOBASE_SHOP_PARAM__ = params.shop;
+    }
+  }
+
+  function getRouterLikeSearch(routerLike) {
+    return (
+      routerLike?.state?.location?.search
+      || routerLike?.location?.search
+      || ''
+    );
+  }
+
+  function getRouterLikePathname(routerLike) {
+    return (
+      routerLike?.state?.location?.pathname
+      || routerLike?.location?.pathname
+      || '/'
+    );
+  }
+
   function getRouterSearch() {
     return (
       ctx.router?.state?.location?.search
@@ -192,7 +242,14 @@ async function run() {
   }
 
   function readUrlParams() {
-    return { ...(ctx.urlSearchParams || {}), ...parseSearch(getRouterSearch()) };
+    const params = {
+      ...(ctx.urlSearchParams || {}),
+      ...(ctx.app?.router?.location?.query || {}),
+      ...parseSearch(ctx.app?.router?.location?.search || ''),
+      ...parseSearch(getRouterSearch()),
+    };
+    rememberStableUrlParams(params);
+    return params;
   }
 
   function buildSearch(params) {
@@ -204,6 +261,7 @@ async function run() {
   }
 
   function replaceUrlParams(params) {
+    rememberStableUrlParams(params);
     const search = buildSearch(params);
     const pathname = getRouterPathname();
     const routers = [ctx.router, ctx.app?.router?.router].filter(Boolean);
@@ -212,6 +270,31 @@ async function run() {
         router.navigate({ pathname, search, hash: '' }, { replace: true });
       }
     });
+  }
+
+  function restoreMissingUrlParams() {
+    const savedParams = globalThis.__NOCOBASE_URL_PARAMS__ || {};
+    const savedShop = globalThis.__NOCOBASE_SHOP_PARAM__ || '';
+    if (Object.keys(savedParams).length === 0 && !savedShop) return false;
+
+    const router = ctx.app?.router?.router || ctx.router;
+    if (!router || typeof router.navigate !== 'function') return false;
+
+    const currentParams = {
+      ...(ctx.app?.router?.location?.query || {}),
+      ...parseSearch(getRouterLikeSearch(router)),
+    };
+    const hasMissingStableParam = Object.keys(savedParams).some((key) => currentParams[key] !== savedParams[key]);
+    const hasMissingShop = savedShop && currentParams.shop !== savedShop;
+    if (!hasMissingStableParam && !hasMissingShop) return false;
+
+    const nextParams = { ...currentParams, ...savedParams };
+    if (savedShop) nextParams.shop = savedShop;
+    router.navigate(
+      { pathname: getRouterLikePathname(router), search: buildSearch(nextParams), hash: '' },
+      { replace: true },
+    );
+    return true;
   }
 
   function todayString() {
@@ -227,6 +310,40 @@ async function run() {
     if (!value) return '';
     const text = String(value);
     return text.length >= 10 ? text.slice(0, 10) : text;
+  }
+
+  function formatWeekday(value, fallbackDate) {
+    const weekText = String(value || '').trim();
+    if (/^周[一二三四五六日]$/.test(weekText)) return weekText;
+
+    const englishWeekMap = {
+      sunday: '\u5468\u65e5',
+      monday: '\u5468\u4e00',
+      tuesday: '\u5468\u4e8c',
+      wednesday: '\u5468\u4e09',
+      thursday: '\u5468\u56db',
+      friday: '\u5468\u4e94',
+      saturday: '\u5468\u516d',
+    };
+    const mappedWeek = englishWeekMap[weekText.toLowerCase()];
+    if (mappedWeek) return mappedWeek;
+
+    const dateText = formatDateYMD(weekText) || formatDateYMD(fallbackDate);
+    if (!dateText) return weekText;
+
+    const parsed = new Date(dateText);
+    if (Number.isNaN(parsed.getTime())) return weekText;
+
+    const weekDays = [
+      '\u5468\u65e5',
+      '\u5468\u4e00',
+      '\u5468\u4e8c',
+      '\u5468\u4e09',
+      '\u5468\u56db',
+      '\u5468\u4e94',
+      '\u5468\u516d',
+    ];
+    return weekDays[parsed.getDay()];
   }
 
   function formatDateKey(value) {
@@ -378,192 +495,6 @@ async function run() {
     return Math.max(bounds.min, Math.min(bounds.max, width));
   }
 
-  const useFloatPos = (btnRef, open) => {
-    const [pos, setPos] = useState({ top: 0, left: 0 });
-    useEffect(() => {
-      if (!open || !btnRef.current) return;
-      const rect = btnRef.current.getBoundingClientRect();
-      setPos({ top: rect.bottom + 6, left: rect.left });
-    }, [btnRef, open]);
-    return pos;
-  };
-
-  const PushPanel = ({ mode, columns, onClose, anchorPos }) => {
-    const [userList, setUserList] = useState([]);
-    const [loadingUsers, setLoadingUsers] = useState(true);
-    const [selectedUsers, setSelectedUsers] = useState([]);
-    const [selectedProps, setSelectedProps] = useState(['hidden', 'width', 'title', 'headerColor', 'important']);
-    const [pushing, setPushing] = useState(false);
-
-    useEffect(() => {
-      let alive = true;
-      (async () => {
-        setLoadingUsers(true);
-        try {
-          const res = await apiRequest({ url: 'users:list', method: 'get', params: { pageSize: 200, 'filter[level][$ne]': 3 } });
-          const list = Array.isArray(res?.data?.data) ? res.data.data : [];
-          if (alive) setUserList(list.filter((user) => String(user.id) !== String(currentUserId)));
-        } catch {
-          ctx.message?.error?.('加载用户列表失败');
-        } finally {
-          if (alive) setLoadingUsers(false);
-        }
-      })();
-      return () => { alive = false; };
-    }, []);
-
-    const buildPayload = useCallback((cols) => cols.map((col) => {
-      const item = { key: col.key || col.field, field: col.field };
-      if (selectedProps.includes('hidden')) item.hidden = col.hidden === true;
-      if (selectedProps.includes('width')) item.width = Number(col.width) || 100;
-      if (selectedProps.includes('title')) item.title = col.title || '';
-      if (selectedProps.includes('headerColor')) item.headerColor = col.headerColor || null;
-      if (selectedProps.includes('important')) item.important = col.important === true;
-      return item;
-    }), [selectedProps]);
-
-    const handlePush = useCallback(async () => {
-      if (!selectedUsers.length) { ctx.message?.warning?.('请先选择目标用户'); return; }
-      if (!selectedProps.length) { ctx.message?.warning?.('请至少选择一个推送属性'); return; }
-      setPushing(true);
-      try {
-        const storageKey = getColumnStorageKey(mode);
-        const payload = buildPayload(columns);
-        const results = await Promise.allSettled(selectedUsers.map(async (uid) => {
-          const userRes = await apiRequest({ url: 'users:get', method: 'get', params: { filterByTk: uid } });
-          const existingSetting = userRes?.data?.data?.setting || {};
-          const existingCols = existingSetting[storageKey];
-          let mergedPayload = payload;
-          if (Array.isArray(existingCols) && existingCols.length > 0) {
-            const existingMap = Object.fromEntries(existingCols.map((col) => [col.key || col.field, col]));
-            mergedPayload = payload.map((item) => {
-              const merged = { ...(existingMap[item.key] || {}) };
-              selectedProps.forEach((prop) => {
-                if (item[prop] !== undefined) merged[prop] = item[prop];
-              });
-              merged.key = item.key;
-              merged.field = item.field;
-              return merged;
-            });
-          }
-          await apiRequest({
-            url: 'users:update',
-            method: 'post',
-            params: { filterByTk: uid },
-            data: { setting: { ...existingSetting, [storageKey]: mergedPayload } },
-          });
-        }));
-        const failCount = results.filter((item) => item.status === 'rejected').length;
-        if (!failCount) {
-          ctx.message?.success?.(`推送成功，已推送给 ${selectedUsers.length} 位用户`);
-          onClose();
-        } else {
-          ctx.message?.warning?.(`部分推送失败：${failCount}/${selectedUsers.length} 位用户失败`);
-        }
-      } catch (error) {
-        ctx.message?.error?.(`推送失败：${error?.message || '未知错误'}`);
-      } finally {
-        setPushing(false);
-      }
-    }, [buildPayload, columns, mode, onClose, selectedProps, selectedUsers]);
-
-    const userOptions = userList.map((user) => ({
-      label: user.nickname || user.username || `用户${user.id}`,
-      value: user.id,
-    }));
-
-    return React.createElement('div', {
-      style: {
-        position: 'fixed',
-        top: `${anchorPos.top}px`,
-        left: `${anchorPos.left}px`,
-        zIndex: 2000,
-        width: 380,
-        padding: 16,
-        border: '1px solid #e0e0e0',
-        borderRadius: 8,
-        background: '#fff',
-        boxShadow: '0 6px 20px rgba(0,0,0,0.18)',
-        fontSize: FONT_SIZE,
-      },
-      onClick: (event) => event.stopPropagation(),
-    },
-      React.createElement('div', {
-        style: {
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: 14,
-          paddingBottom: 10,
-          borderBottom: '1px solid #f0f0f0',
-          fontWeight: 700,
-        },
-      },
-        React.createElement('span', null, '📤 推送列配置给其他用户'),
-        React.createElement('span', { onClick: onClose, style: { cursor: 'pointer', color: '#999', fontSize: 18 } }, '×'),
-      ),
-      React.createElement('div', { style: { marginBottom: 14 } },
-        React.createElement('div', { style: { marginBottom: 6, fontWeight: 600 } }, '选择目标用户'),
-        loadingUsers
-          ? React.createElement('div', { style: { textAlign: 'center', padding: 8, color: '#999' } }, '加载用户中...')
-          : React.createElement(Select, {
-            mode: 'multiple',
-            allowClear: true,
-            style: { width: '100%' },
-            placeholder: '请选择要推送的用户',
-            value: selectedUsers,
-            onChange: setSelectedUsers,
-            options: userOptions,
-            maxTagCount: 'responsive',
-            showSearch: true,
-            optionFilterProp: 'label',
-            getPopupContainer: (trigger) => trigger.parentElement || trigger,
-          }),
-      ),
-      React.createElement('div', { style: { marginBottom: 16 } },
-        React.createElement('div', { style: { marginBottom: 8, fontWeight: 600 } }, '选择推送的属性'),
-        React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
-          PUSH_PROP_OPTIONS.map((opt) => React.createElement('label', {
-            key: opt.value,
-            style: { display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' },
-          },
-            React.createElement('input', {
-              type: 'checkbox',
-              checked: selectedProps.includes(opt.value),
-              onChange: (event) => {
-                if (event.target.checked) setSelectedProps((prev) => [...prev, opt.value]);
-                else setSelectedProps((prev) => prev.filter((value) => value !== opt.value));
-              },
-              style: { cursor: 'pointer', width: 14, height: 14 },
-            }),
-            opt.label,
-          )),
-        ),
-      ),
-      React.createElement('div', { style: { display: 'flex', gap: 8, justifyContent: 'flex-end' } },
-        React.createElement('button', {
-          onClick: onClose,
-          disabled: pushing,
-          style: { padding: '6px 16px', background: '#fff', color: '#666', border: '1px solid #d9d9d9', borderRadius: 4, cursor: pushing ? 'not-allowed' : 'pointer', fontSize: FONT_SIZE },
-        }, '取消'),
-        React.createElement('button', {
-          onClick: handlePush,
-          disabled: pushing || !selectedUsers.length || !selectedProps.length,
-          style: {
-            padding: '6px 16px',
-            color: '#fff',
-            border: 'none',
-            borderRadius: 4,
-            fontSize: FONT_SIZE,
-            fontWeight: 600,
-            background: (pushing || !selectedUsers.length || !selectedProps.length) ? '#b5d8ff' : '#1890ff',
-            cursor: (pushing || !selectedUsers.length || !selectedProps.length) ? 'not-allowed' : 'pointer',
-          },
-        }, pushing ? '推送中...' : '📤 确认推送'),
-      ),
-    );
-  };
-
   function pickRows(response) {
     const data = response?.data;
     if (Array.isArray(data?.data)) return data.data;
@@ -572,15 +503,40 @@ async function run() {
   }
 
   function pickTotal(response, fallback) {
-    const meta = response?.data?.meta || response?.meta || {};
-    return Number(meta.count || meta.total || fallback || 0);
+    const meta = response?.data?.meta || response?.meta || response?.data?.data?.meta || {};
+    const candidates = [
+      meta.count,
+      meta.total,
+      meta.totalCount,
+      response?.data?.count,
+      response?.data?.total,
+      response?.count,
+      response?.total,
+    ];
+    for (const value of candidates) {
+      const numberValue = Number(value);
+      if (Number.isFinite(numberValue)) return numberValue;
+    }
+    const fallbackValue = Number(fallback);
+    return Number.isFinite(fallbackValue) ? fallbackValue : 0;
   }
 
   function pickReportedTotal(response) {
-    const meta = response?.data?.meta || response?.meta || {};
-    const value = meta.count ?? meta.total;
-    const numberValue = Number(value);
-    return Number.isFinite(numberValue) ? numberValue : null;
+    const meta = response?.data?.meta || response?.meta || response?.data?.data?.meta || {};
+    const candidates = [
+      meta.count,
+      meta.total,
+      meta.totalCount,
+      response?.data?.count,
+      response?.data?.total,
+      response?.count,
+      response?.total,
+    ];
+    for (const value of candidates) {
+      const numberValue = Number(value);
+      if (Number.isFinite(numberValue)) return numberValue;
+    }
+    return null;
   }
 
   function getResponseError(response) {
@@ -619,10 +575,6 @@ async function run() {
     return JSON.stringify({ $and: items });
   }
 
-  function getColumnStorageKey(mode) {
-    return `${BLOCK_UID}_${mode}_columns`;
-  }
-
   function normalizeColumnDefs(columnDefs) {
     return columnDefs.map((col) => ({
       key: col.key || col.field,
@@ -639,129 +591,50 @@ async function run() {
     return col.title || FIELD_TITLES[col.field] || col.field;
   }
 
-  function buildColumnPayload(cols) {
-    return cols.map((col) => ({
-      key: col.key || col.field,
-      field: col.field,
-      title: col.title || '',
-      width: Number(col.width) || 100,
-      hidden: col.hidden === true,
-      headerColor: col.headerColor || null,
-      important: col.important === true,
-    }));
+  function getColumnTooltip(col) {
+    return HEADER_TOOLTIPS[col.field] || '';
   }
 
-  async function saveColumnSettings(mode, cols) {
-    if (!currentUserId || !IS_ADMIN) return false;
-    try {
-      const userRes = await apiRequest({ url: 'users:get', method: 'get', params: { filterByTk: currentUserId } });
-      const existingSetting = userRes?.data?.data?.setting || {};
-      await apiRequest({
-        url: 'users:update',
-        method: 'post',
-        params: { filterByTk: currentUserId },
-        data: { setting: { ...existingSetting, [getColumnStorageKey(mode)]: buildColumnPayload(cols) } },
-      });
-      return true;
-    } catch (error) {
-      console.warn('[WaterLevel] save column settings failed:', error?.message);
-      ctx.message?.error?.('列设置保存失败');
-      return false;
-    }
-  }
-
-  async function loadColumnSettings(mode, columnDefs) {
-    const defaults = normalizeColumnDefs(columnDefs);
-    if (!currentUserId) return { columns: defaults, hasSaved: false };
-    try {
-      const userRes = await apiRequest({ url: 'users:get', method: 'get', params: { filterByTk: currentUserId } });
-      const saved = userRes?.data?.data?.setting?.[getColumnStorageKey(mode)];
-      if (!Array.isArray(saved) || !saved.length) return { columns: defaults, hasSaved: false };
-
-      const defaultMap = Object.fromEntries(defaults.map((col) => [col.key, col]));
-      const savedMap = Object.fromEntries(saved.map((item) => [item?.key || item?.field, item]));
-      const result = [];
-      saved.forEach((item) => {
-        const key = item?.key || item?.field;
-        if (!key || !defaultMap[key]) return;
-        result.push({
-          ...defaultMap[key],
-          title: item.title || defaultMap[key].title || FIELD_TITLES[defaultMap[key].field] || defaultMap[key].field,
-          width: Math.max(48, Number(item.width) || defaultMap[key].width || 100),
-          hidden: item.hidden === true,
-          headerColor: item.headerColor || null,
-          important: item.important === true,
-        });
-      });
-      defaults.forEach((col) => {
-        if (!savedMap[col.key]) result.push(col);
-      });
-      return { columns: result, hasSaved: true };
-    } catch (error) {
-      console.warn('[WaterLevel] load column settings failed:', error?.message);
-      return { columns: defaults, hasSaved: false };
-    }
-  }
-
-  function makeColumns(columnDefs, columnActions = {}) {
-    return columnDefs.map((col) => ({
-      key: col.key || col.field,
-      dataIndex: col.field,
-      title: React.createElement('div', {
-        draggable: !columnActions.isResizing,
-        onDragStart: (event) => columnActions.onDragStart?.(event, col.key || col.field),
-        onDragOver: columnActions.onDragOver,
-        onDrop: (event) => columnActions.onDrop?.(event, col.key || col.field),
-        style: {
-          position: 'relative',
-          display: 'flex',
-          alignItems: 'center',
-          width: '100%',
-          height: '100%',
-          minWidth: 0,
-          paddingRight: 8,
-          cursor: columnActions.isResizing ? 'col-resize' : 'move',
-          userSelect: 'none',
-        },
+  function renderColumnTitle(col) {
+    const tooltipText = getColumnTooltip(col);
+    const titleNode = React.createElement('span', {
+      style: {
+        minWidth: 0,
+        overflow: 'hidden',
+        whiteSpace: 'normal',
+        overflowWrap: 'anywhere',
+        wordBreak: 'break-word',
       },
+    }, getColumnTitle(col));
+
+    if (!tooltipText || !Tooltip) return titleNode;
+    return React.createElement(React.Fragment, null,
+      titleNode,
+      React.createElement(Tooltip, { title: tooltipText, placement: 'top' },
         React.createElement('span', {
-          style: {
-            flex: 1,
-            minWidth: 0,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          },
-          title: getColumnTitle(col),
-        }, getColumnTitle(col)),
-        React.createElement('div', {
-          onMouseDown: (event) => columnActions.onResizeStart?.(event, col.key || col.field),
           onClick: (event) => event.stopPropagation(),
-          draggable: false,
+          onDoubleClick: (event) => event.stopPropagation(),
+          onMouseDown: (event) => event.stopPropagation(),
           style: {
-            position: 'absolute',
-            right: -8,
-            top: -8,
-            bottom: -8,
-            width: 10,
-            cursor: 'col-resize',
-            zIndex: 3,
+            flex: '0 0 auto',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 13,
+            height: 13,
+            marginLeft: 3,
+            border: '1px solid currentColor',
+            borderRadius: '50%',
+            color: '#6b7280',
+            fontSize: 10,
+            fontWeight: 700,
+            lineHeight: '12px',
+            cursor: 'help',
+            transform: 'translateY(-0.5px)',
           },
-        }),
+        }, '?'),
       ),
-      width: col.width || 100,
-      align: col.align || 'left',
-      ellipsis: true,
-      onHeaderCell: () => ({
-        style: {
-          width: col.width || 100,
-          minWidth: col.width || 100,
-          maxWidth: col.width || 100,
-          padding: '6px 8px',
-        },
-      }),
-      render: (value) => renderValue(col.field, value),
-    }));
+    );
   }
 
   async function requestDailySales(mode, params, page, pageSize, fields) {
@@ -853,7 +726,11 @@ async function run() {
     const header = fields.map((field) => FIELD_TITLES[field] || field);
     const lines = [
       header.map(toCsvCell).join(','),
-      ...rows.map((row) => fields.map((field) => toCsvCell(field === 'date' ? formatDateYMD(row[field]) : row[field])).join(',')),
+      ...rows.map((row) => fields.map((field) => {
+        if (field === 'date') return toCsvCell(formatDateYMD(row[field]));
+        if (field === 'week') return toCsvCell(formatWeekday(row[field], row.date));
+        return toCsvCell(row[field]);
+      }).join(',')),
     ];
     const blob = new Blob([`\uFEFF${lines.join('\n')}`], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -938,7 +815,31 @@ async function run() {
   }
 
   function parseCsvLine(line, delimiter) {
-    return line.split(delimiter).map(cleanCell);
+    const values = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let index = 0; index < line.length; index += 1) {
+      const char = line[index];
+      const nextChar = line[index + 1];
+
+      if (char === '"') {
+        if (inQuotes && nextChar === '"') {
+          current += '"';
+          index += 1;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === delimiter && !inQuotes) {
+        values.push(cleanCell(current));
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+
+    values.push(cleanCell(current));
+    return values;
   }
 
   async function runWithConcurrency(tasks, concurrency) {
@@ -1004,11 +905,20 @@ async function run() {
     const updatesHeji = [];
     const updatesSalesStore = [];
     const mainStoreMap = {};
+    const skippedStats = {
+      columnMismatch: 0,
+      missingSaleMaybeSales: 0,
+      missingSalesStore: 0,
+      missingKeyFields: 0,
+    };
     notifyTask('sales-import-main', 'CSV 导入执行中', '正在读取 CSV 并准备更新数据...');
 
     for (let index = 1; index < lines.length; index += 1) {
       const values = parseCsvLine(lines[index], delimiter);
-      if (values.length !== headers.length) continue;
+      if (values.length !== headers.length) {
+        skippedStats.columnMismatch += 1;
+        continue;
+      }
       const row = {};
       headers.forEach((header, valueIndex) => {
         row[header] = values[valueIndex];
@@ -1016,25 +926,46 @@ async function run() {
 
       const saleMaybeSalesRaw = String(row['销售预估销量'] || '').trim();
       const salesStoreRaw = String(row['销售店铺'] || '').trim();
-      if (!saleMaybeSalesRaw || !salesStoreRaw) continue;
-
+      const countryRaw = String(row['国家'] || '').trim();
+      const asinRaw = String(row['ASIN'] || '').trim();
       const dateKey = formatDateKey(row['日期']);
+      if (!saleMaybeSalesRaw) {
+        skippedStats.missingSaleMaybeSales += 1;
+        continue;
+      }
+      if (!salesStoreRaw) {
+        skippedStats.missingSalesStore += 1;
+        continue;
+      }
+      if (!countryRaw || !asinRaw || !dateKey) {
+        skippedStats.missingKeyFields += 1;
+        continue;
+      }
+
       const saleValue = parseInt(saleMaybeSalesRaw, 10) || 0;
-      const comboKey = `${row['国家']}_${row['ASIN']}_${dateKey}`;
+      const comboKey = `${countryRaw}_${asinRaw}_${dateKey}`;
       if (!mainStoreMap[comboKey]) mainStoreMap[comboKey] = salesStoreRaw;
 
       updatesHeji.push({
-        shop_country_asin_date: `${TOTAL_SHOP_NAME}_${row['国家']}_${row['ASIN']}_${dateKey}`,
+        shop_country_asin_date: `${TOTAL_SHOP_NAME}_${countryRaw}_${asinRaw}_${dateKey}`,
         sales_store: salesStoreRaw,
         sale_maybe_sales: saleValue,
       });
       updatesSalesStore.push({
-        shop_country_asin_date: `${salesStoreRaw}_${row['国家']}_${row['ASIN']}_${dateKey}`,
+        shop_country_asin_date: `${salesStoreRaw}_${countryRaw}_${asinRaw}_${dateKey}`,
         sale_maybe_sales: saleValue,
       });
     }
 
-    if (!updatesHeji.length) throw new Error('没有找到有效数据行');
+    if (!updatesHeji.length) {
+      const reasons = [
+        skippedStats.columnMismatch ? `列数不匹配 ${skippedStats.columnMismatch} 行` : '',
+        skippedStats.missingSaleMaybeSales ? `缺少销售预估销量 ${skippedStats.missingSaleMaybeSales} 行` : '',
+        skippedStats.missingSalesStore ? `缺少销售店铺 ${skippedStats.missingSalesStore} 行` : '',
+        skippedStats.missingKeyFields ? `缺少国家/ASIN/日期 ${skippedStats.missingKeyFields} 行` : '',
+      ].filter(Boolean);
+      throw new Error(`没有找到有效数据行${reasons.length ? `：${reasons.join('；')}` : ''}`);
+    }
     notifyTask(
       'sales-import-main',
       'CSV 导入执行中',
@@ -1172,7 +1103,35 @@ async function run() {
     }
   }
 
-  const SalesTable = ({ title, mode, columns, pageSizeDefault, params, refreshKey, toolbar }) => {
+  async function triggerTransitWorkflow(params, onDone) {
+    if (!params.asin || !params.country) {
+      ctx.message?.warning?.('请先选择 ASIN 和国家后再更新在途');
+      return;
+    }
+
+    const contextValues = {
+      asin: params.asin || '',
+      country: params.country || '',
+    };
+
+    notifyTask('transit-update', '更新在途执行中', '已开始触发在途更新，请稍候...');
+
+    const response = await apiRequest({
+      url: 'workflows:trigger',
+      method: 'post',
+      params: { triggerWorkflows: TRANSIT_WORKFLOW_KEY },
+      data: { values: contextValues },
+    });
+
+    const errorMessage = getResponseError(response);
+    if (errorMessage) throw new Error(errorMessage);
+
+    notifyTask('transit-update', '更新在途已触发', '后台 workflow 已开始执行，稍后请刷新查看结果。', 4.5);
+    ctx.message?.success?.('已触发在途更新');
+    if (typeof onDone === 'function') onDone();
+  }
+
+  const SalesTable = ({ title, mode, columns, pageSizeDefault, params, refreshKey, toolbar, headerExtra }) => {
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(false);
     const [page, setPage] = useState(1);
@@ -1180,35 +1139,16 @@ async function run() {
     const [total, setTotal] = useState(0);
     const [columnDefs, setColumnDefs] = useState(() => normalizeColumnDefs(columns));
     const [isResizing, setIsResizing] = useState(false);
-    const [editingHeader, setEditingHeader] = useState(null);
-    const [showPanel, setShowPanel] = useState(false);
-    const [showPush, setShowPush] = useState(false);
     const requestSeqRef = useRef(0);
-    const panelBtnRef = useRef(null);
-    const pushBtnRef = useRef(null);
-    const panelPos = useFloatPos(panelBtnRef, showPanel);
-    const pushPos = useFloatPos(pushBtnRef, showPush);
-    const dragColKeyRef = useRef(null);
     const resizeRef = useRef(null);
     const manuallyResizedRef = useRef(new Set());
-    const saveTimerRef = useRef(null);
 
-    const queueSaveColumns = useCallback((nextColumns) => {
-      if (!IS_ADMIN) return;
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = setTimeout(() => {
-        saveTimerRef.current = null;
-        saveColumnSettings(mode, nextColumns);
-      }, 250);
-    }, [mode]);
-
-    const updateColumns = useCallback((updater, shouldSave = true) => {
+    const updateColumns = useCallback((updater) => {
       setColumnDefs((prev) => {
         const next = typeof updater === 'function' ? updater(prev) : updater;
-        if (shouldSave) queueSaveColumns(next);
         return next;
       });
-    }, [queueSaveColumns]);
+    }, []);
 
     const autoFitColumns = useCallback((cols, sampleRows) => cols.map((col) => {
       if (manuallyResizedRef.current.has(col.key)) return col;
@@ -1231,8 +1171,10 @@ async function run() {
       ctx.message?.success?.(`${title}列宽已自动调整`);
     }, [autoFitColumns, rows, title, updateColumns]);
 
-    const loadData = useCallback(async (nextPage = page, nextPageSize = pageSize) => {
+    const loadData = useCallback(async (nextPage, nextPageSize) => {
       const seq = ++requestSeqRef.current;
+      const activePage = Number(nextPage) || 1;
+      const activePageSize = Number(nextPageSize) || Number(pageSizeDefault) || 20;
       if (!params.asin || !params.country) {
         setRows([]);
         setTotal(0);
@@ -1241,11 +1183,28 @@ async function run() {
 
       setLoading(true);
       try {
-        const response = await requestDailySales(mode, params, nextPage, nextPageSize);
+        const response = await requestDailySales(mode, params, activePage, activePageSize);
         if (seq !== requestSeqRef.current) return;
         const nextRows = pickRows(response);
-        setRows(nextRows);
-        setTotal(pickTotal(response, nextRows.length));
+        const reportedTotal = pickReportedTotal(response);
+        const reportedTotalLooksReliable = reportedTotal != null && (
+          nextRows.length < activePageSize || reportedTotal > activePage * activePageSize
+        );
+        if (reportedTotalLooksReliable) {
+          setRows(nextRows);
+          setTotal(reportedTotal);
+          return;
+        }
+
+        const allRows = await requestAllDailySales(mode, params);
+        if (seq !== requestSeqRef.current) return;
+        const totalRows = allRows.length;
+        const maxPage = Math.max(1, Math.ceil(totalRows / activePageSize));
+        const safePage = Math.min(activePage, maxPage);
+        if (safePage !== activePage) setPage(safePage);
+        const start = (safePage - 1) * activePageSize;
+        setRows(allRows.slice(start, start + activePageSize));
+        setTotal(totalRows);
       } catch (error) {
         if (seq !== requestSeqRef.current) return;
         ctx.message?.error?.(`${title}加载失败: ${error?.message || ''}`);
@@ -1254,7 +1213,7 @@ async function run() {
       } finally {
         if (seq === requestSeqRef.current) setLoading(false);
       }
-    }, [mode, page, pageSize, params.asin, params.country, params.shop, title]);
+    }, [mode, pageSizeDefault, params.asin, params.country, params.shop, title]);
 
     useEffect(() => {
       setPage(1);
@@ -1262,65 +1221,9 @@ async function run() {
     }, [loadData, pageSize, refreshKey]);
 
     useEffect(() => {
-      let alive = true;
       manuallyResizedRef.current.clear();
-      loadColumnSettings(mode, columns).then(({ columns: nextColumns, hasSaved }) => {
-        if (!alive) return;
-        if (hasSaved) {
-          manuallyResizedRef.current = new Set(nextColumns.map((col) => col.key));
-          setColumnDefs(nextColumns);
-        } else {
-          setColumnDefs(autoFitColumns(nextColumns, rows));
-        }
-      });
-      return () => {
-        alive = false;
-        if (saveTimerRef.current) {
-          clearTimeout(saveTimerRef.current);
-          saveTimerRef.current = null;
-        }
-      };
-    }, [autoFitColumns, columns, mode]);
-
-    useEffect(() => {
-      setColumnDefs((prev) => autoFitColumns(prev, rows));
-    }, [autoFitColumns, rows]);
-
-    const onDragStart = useCallback((event, key) => {
-      if (!IS_ADMIN || isResizing) {
-        event.preventDefault();
-        return;
-      }
-      dragColKeyRef.current = key;
-      if (event.dataTransfer) {
-        event.dataTransfer.effectAllowed = 'move';
-        event.dataTransfer.setData('text/plain', key);
-      }
-    }, [isResizing]);
-
-    const onDragOver = useCallback((event) => {
-      if (!IS_ADMIN) return;
-      event.preventDefault();
-      if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
-    }, []);
-
-    const onDrop = useCallback((event, targetKey) => {
-      event.preventDefault();
-      if (!IS_ADMIN) return;
-      const fromKey = dragColKeyRef.current || event.dataTransfer?.getData('text/plain');
-      dragColKeyRef.current = null;
-      if (!fromKey || fromKey === targetKey) return;
-
-      updateColumns((prev) => {
-        const next = [...prev];
-        const fromIndex = next.findIndex((col) => col.key === fromKey);
-        const targetIndex = next.findIndex((col) => col.key === targetKey);
-        if (fromIndex < 0 || targetIndex < 0) return prev;
-        const [moved] = next.splice(fromIndex, 1);
-        next.splice(targetIndex, 0, moved);
-        return next;
-      });
-    }, [updateColumns]);
+      setColumnDefs(normalizeColumnDefs(columns));
+    }, [columns, mode]);
 
     const onResizeStart = useCallback((event, key) => {
       event.preventDefault();
@@ -1342,242 +1245,20 @@ async function run() {
       const nextWidth = Math.max(48, Math.round(startWidth + event.clientX - startX));
       updateColumns((prev) => prev.map((col) => (
         col.key === key ? { ...col, width: nextWidth } : col
-      )), false);
+      )));
     }, [updateColumns]);
 
     const onResizeEnd = useCallback(() => {
       if (resizeRef.current) {
         resizeRef.current = null;
-        setColumnDefs((prev) => {
-          queueSaveColumns(prev);
-          return prev;
-        });
       }
       setIsResizing(false);
-    }, [queueSaveColumns]);
-
-    const startEditHeader = useCallback((event, col) => {
-      event.preventDefault();
-      event.stopPropagation();
-      if (!IS_ADMIN) return;
-      setEditingHeader({ key: col.key, value: getColumnTitle(col) });
-    }, []);
-
-    const commitHeaderTitle = useCallback(() => {
-      if (!editingHeader) return;
-      const nextTitle = String(editingHeader.value || '').trim();
-      updateColumns((prev) => prev.map((col) => (
-        col.key === editingHeader.key
-          ? { ...col, title: nextTitle || FIELD_TITLES[col.field] || col.field }
-          : col
-      )));
-      setEditingHeader(null);
-    }, [editingHeader, updateColumns]);
-
-    const cancelHeaderEdit = useCallback(() => {
-      setEditingHeader(null);
     }, []);
 
     const visibleColumnDefs = useMemo(() => {
       const visible = columnDefs.filter((col) => col.hidden !== true);
       return visible.length ? visible : columnDefs;
     }, [columnDefs]);
-
-    const toggleColumnVisible = useCallback((key) => {
-      if (!IS_ADMIN) return;
-      updateColumns((prev) => {
-        const visibleCount = prev.filter((col) => col.hidden !== true).length;
-        return prev.map((col) => {
-          if (col.key !== key) return col;
-          if (col.hidden !== true && visibleCount <= 1) {
-            ctx.message?.warning?.('至少保留一列显示');
-            return col;
-          }
-          return { ...col, hidden: col.hidden !== true };
-        });
-      });
-    }, [updateColumns]);
-
-    const showAllColumns = useCallback(() => {
-      if (!IS_ADMIN) return;
-      updateColumns((prev) => prev.map((col) => ({ ...col, hidden: false })));
-    }, [updateColumns]);
-
-    const resetColumns = useCallback(() => {
-      if (!IS_ADMIN) return;
-      manuallyResizedRef.current.clear();
-      updateColumns(autoFitColumns(normalizeColumnDefs(columns), rows));
-      setEditingHeader(null);
-      ctx.message?.success?.(`${title}列配置已重置`);
-    }, [autoFitColumns, columns, rows, title, updateColumns]);
-
-    const togglePanel = useCallback((event) => {
-      event?.preventDefault?.();
-      event?.stopPropagation?.();
-      setShowPanel((value) => !value);
-      setShowPush(false);
-    }, []);
-
-    const togglePush = useCallback((event) => {
-      event?.preventDefault?.();
-      event?.stopPropagation?.();
-      setShowPush((value) => !value);
-      setShowPanel(false);
-    }, []);
-
-    const setHeaderColor = useCallback((key, color) => {
-      if (!IS_ADMIN) return;
-      updateColumns((prev) => prev.map((col) => (
-        col.key === key ? { ...col, headerColor: color } : col
-      )));
-    }, [updateColumns]);
-
-    const clearHeaderColor = useCallback((key) => {
-      if (!IS_ADMIN) return;
-      updateColumns((prev) => prev.map((col) => (
-        col.key === key ? { ...col, headerColor: null } : col
-      )));
-    }, [updateColumns]);
-
-    const toggleImportantColumn = useCallback((key) => {
-      if (!IS_ADMIN) return;
-      updateColumns((prev) => prev.map((col) => (
-        col.key === key ? { ...col, important: col.important !== true } : col
-      )));
-    }, [updateColumns]);
-
-    const panelEl = IS_ADMIN && showPanel
-      ? React.createElement(React.Fragment, null,
-        React.createElement('div', {
-          onClick: () => setShowPanel(false),
-          style: { position: 'fixed', inset: 0, zIndex: 1999, background: 'transparent' },
-        }),
-        React.createElement('div', {
-          onClick: (event) => event.stopPropagation(),
-          style: {
-            position: 'fixed',
-            top: `${panelPos.top}px`,
-            left: `${panelPos.left}px`,
-            zIndex: 2000,
-            width: 600,
-            maxWidth: 'calc(100vw - 24px)',
-            maxHeight: 620,
-            overflowY: 'auto',
-            padding: 12,
-            border: '1px solid #e0e0e0',
-            borderRadius: 8,
-            background: '#fff',
-            boxShadow: '0 6px 20px rgba(0,0,0,0.15)',
-          },
-        },
-          React.createElement('div', {
-            style: {
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              gap: 8,
-              marginBottom: 8,
-              paddingBottom: 8,
-              borderBottom: '1px solid #f0f0f0',
-            },
-          },
-            React.createElement('span', { style: { fontWeight: 700, color: '#555' } }, `${title} 列设置`),
-            React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
-              React.createElement('span', { style: { color: '#aaa', fontSize: 12 } }, '★ 重点 | ☑ 显示 | 🎨 颜色'),
-              React.createElement(Button, { size: 'small', onClick: applyAutoWidths }, '自动列宽'),
-              React.createElement(Button, { size: 'small', onClick: showAllColumns }, '全显示'),
-              React.createElement(Button, { size: 'small', onClick: resetColumns }, '重置列'),
-            ),
-          ),
-          columnDefs.map((col) => {
-            const headerColor = getColumnHeaderColor(col);
-            const isCustomColor = !!col.headerColor;
-            return React.createElement('div', {
-              key: col.key,
-              style: {
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '4px 0 4px 8px',
-                borderBottom: '1px solid #fafafa',
-              },
-            },
-              React.createElement('input', {
-                type: 'checkbox',
-                checked: col.hidden !== true,
-                onChange: () => toggleColumnVisible(col.key),
-                style: { flexShrink: 0, cursor: 'pointer' },
-              }),
-              React.createElement('span', {
-                title: getColumnTitle(col),
-                style: {
-                  flex: 1,
-                  minWidth: 0,
-                  color: col.hidden ? '#bbb' : '#333',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                  userSelect: 'none',
-                },
-              }, getColumnTitle(col)),
-              React.createElement('div', { style: { display: 'flex', gap: 3, alignItems: 'center', flexShrink: 0 } },
-                PRESET_COLORS.map((pc) => React.createElement('div', {
-                  key: pc.value,
-                  title: pc.label,
-                  onClick: () => setHeaderColor(col.key, pc.value),
-                  style: {
-                    width: 14,
-                    height: 14,
-                    borderRadius: 2,
-                    cursor: 'pointer',
-                    background: pc.value,
-                    border: headerColor === pc.value ? '2px solid #333' : '2px solid transparent',
-                    boxSizing: 'border-box',
-                  },
-                })),
-                isCustomColor
-                  ? React.createElement('div', {
-                    title: '重置为默认色',
-                    onClick: () => clearHeaderColor(col.key),
-                    style: {
-                      width: 14,
-                      height: 14,
-                      borderRadius: 2,
-                      cursor: 'pointer',
-                      background: col.important ? '#fff1b8' : DEFAULT_HEADER_COLOR,
-                      border: '2px dashed #333',
-                      boxSizing: 'border-box',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 9,
-                      color: '#666',
-                      fontWeight: 700,
-                      lineHeight: 1,
-                    },
-                  }, '↺')
-                  : null,
-              ),
-            );
-          }),
-        ),
-      )
-      : null;
-
-    const pushPanelEl = IS_ADMIN && showPush
-      ? React.createElement(React.Fragment, null,
-        React.createElement('div', {
-          onClick: () => setShowPush(false),
-          style: { position: 'fixed', inset: 0, zIndex: 1999, background: 'transparent' },
-        }),
-        React.createElement(PushPanel, {
-          mode,
-          columns: columnDefs,
-          onClose: () => setShowPush(false),
-          anchorPos: pushPos,
-        }),
-      )
-      : null;
 
     const scrollX = useMemo(() => visibleColumnDefs.reduce((sum, col) => sum + (col.width || 100), 0), [visibleColumnDefs]);
     const rowKeyOf = useCallback((row, index) => (
@@ -1599,76 +1280,42 @@ async function run() {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          gap: 8,
-          marginBottom: 8,
+          gap: 10,
+          minHeight: 38,
+          marginBottom: 6,
         },
       },
         React.createElement('div', { style: { fontWeight: 600, fontSize: 14, whiteSpace: 'nowrap' } }, title),
+        headerExtra
+          ? React.createElement('div', {
+            style: {
+              flex: 1,
+              minWidth: 0,
+            },
+          }, headerExtra)
+          : null,
         React.createElement('div', {
           style: {
             display: 'flex',
-            gap: 6,
+            gap: 5,
             alignItems: 'center',
             justifyContent: 'flex-end',
             flexWrap: 'wrap',
+            padding: 3,
+            border: '1px solid #e3eaf3',
+            borderRadius: 8,
+            background: '#f6f9fc',
           },
         },
           toolbar ? toolbar({ rows, reload: () => loadData(page, pageSize) }) : null,
-          IS_ADMIN
-            ? React.createElement('button', {
-              type: 'button',
-              ref: panelBtnRef,
-              onMouseDown: togglePanel,
-              onClick: (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-              },
-              style: {
-                padding: '2px 8px',
-                height: 24,
-                border: showPanel ? '1px solid #1677ff' : '1px solid #d9d9d9',
-                borderRadius: 4,
-                background: showPanel ? '#e6f7ff' : '#fff',
-                color: '#333',
-                fontSize: 12,
-                lineHeight: '20px',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-              },
-            }, '👁️ 列设置')
-            : null,
-          IS_ADMIN
-            ? React.createElement('button', {
-              type: 'button',
-              ref: pushBtnRef,
-              onMouseDown: togglePush,
-              onClick: (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-              },
-              style: {
-                padding: '2px 8px',
-                height: 24,
-                border: showPush ? '1px solid #fa8c16' : '1px solid #d9d9d9',
-                borderRadius: 4,
-                background: showPush ? '#fff7e6' : '#fff',
-                color: showPush ? '#fa8c16' : '#333',
-                fontSize: 12,
-                lineHeight: '20px',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-              },
-            }, '📤 推送配置')
-            : null,
           React.createElement(Button, {
             size: 'small',
             onClick: () => loadData(page, pageSize),
             disabled: loading,
+            style: TOOLBAR_BUTTON_STYLE,
           }, '刷新'),
         ),
       ),
-      panelEl,
-      pushPanelEl,
       React.createElement('div', {
         style: {
           position: 'relative',
@@ -1682,7 +1329,7 @@ async function run() {
           style: {
             overflowX: 'auto',
             overflowY: 'auto',
-            maxHeight: mode === 'future' ? 560 : 560,
+            maxHeight: TABLE_SCROLL_MAX_HEIGHT,
             transform: 'translateZ(0)',
           },
         },
@@ -1706,78 +1353,43 @@ async function run() {
               React.createElement('tr', null,
                 visibleColumnDefs.map((col) => React.createElement('th', {
                   key: col.key,
-                  draggable: IS_ADMIN && !isResizing && editingHeader?.key !== col.key,
-                  onDragStart: (event) => onDragStart(event, col.key),
-                  onDragOver,
-                  onDrop: (event) => onDrop(event, col.key),
-                  onDoubleClick: (event) => startEditHeader(event, col),
                   style: {
                     position: 'sticky',
                     top: 0,
                     zIndex: 2,
                     width: col.width || 100,
-                    padding: IS_ADMIN ? '7px 18px 7px 8px' : '7px 8px',
+                    padding: TABLE_HEADER_PADDING,
                     borderRight: '1px solid #f0f0f0',
                     borderBottom: col.important ? '2px solid #faad14' : '1px solid #e8e8e8',
                     background: getColumnHeaderColor(col),
                     color: getTextColorForBg(getColumnHeaderColor(col)),
                     fontWeight: 600,
-                    fontSize: FONT_SIZE,
+                    fontSize: TABLE_FONT_SIZE,
                     textAlign: col.align || 'left',
-                    whiteSpace: 'nowrap',
+                    whiteSpace: 'normal',
                     overflow: 'hidden',
-                    textOverflow: 'ellipsis',
+                    overflowWrap: 'anywhere',
+                    wordBreak: 'break-word',
                     boxSizing: 'border-box',
-                    cursor: IS_ADMIN ? (isResizing ? 'col-resize' : 'move') : 'default',
+                    cursor: isResizing ? 'col-resize' : 'default',
                     userSelect: 'none',
                   },
-                  title: getColumnTitle(col),
+                  title: getColumnTooltip(col) || getColumnTitle(col),
                 },
-                  editingHeader?.key === col.key
-                    ? React.createElement('input', {
-                      autoFocus: true,
-                      value: editingHeader.value,
-                      onChange: (event) => setEditingHeader({ key: col.key, value: event.target.value }),
-                      onBlur: commitHeaderTitle,
-                      onKeyDown: (event) => {
-                        if (event.key === 'Enter') commitHeaderTitle();
-                        if (event.key === 'Escape') cancelHeaderEdit();
-                      },
-                      onClick: (event) => event.stopPropagation(),
-                      onMouseDown: (event) => event.stopPropagation(),
-                      draggable: false,
-                      style: {
-                        width: '100%',
-                        height: 22,
-                        border: '1px solid #1677ff',
-                        borderRadius: 3,
-                        padding: '0 4px',
-                        fontSize: FONT_SIZE,
-                        outline: 'none',
-                        boxSizing: 'border-box',
-                      },
-                    })
-                    : React.createElement('span', {
-                      style: {
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 4,
-                        maxWidth: '100%',
-                        minWidth: 0,
-                      },
+                  React.createElement('span', {
+                    style: {
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      maxWidth: '100%',
+                      minWidth: 0,
                     },
-                      col.important
-                        ? React.createElement('span', { style: { color: '#fa8c16', flexShrink: 0 } }, '★')
-                        : null,
-                      React.createElement('span', {
-                        style: {
-                          minWidth: 0,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        },
-                      }, getColumnTitle(col)),
-                    ),
+                  },
+                    col.important
+                      ? React.createElement('span', { style: { color: '#fa8c16', flexShrink: 0 } }, '!')
+                      : null,
+                    renderColumnTitle(col),
+                  ),
                   IS_ADMIN
                     ? React.createElement('div', {
                       onMouseDown: (event) => onResizeStart(event, col.key),
@@ -1832,13 +1444,13 @@ async function run() {
                   key: col.key,
                   style: {
                     width: col.width || 100,
-                    padding: '6px 8px',
+                    padding: TABLE_CELL_PADDING,
                     borderRight: '1px solid #f0f0f0',
                     borderBottom: '1px solid #f0f0f0',
                     background: col.important ? IMPORTANT_COLUMN_BG : undefined,
                     color: '#333',
                     fontWeight: col.important ? 600 : 400,
-                    fontSize: FONT_SIZE,
+                    fontSize: TABLE_FONT_SIZE,
                     textAlign: col.align || 'left',
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',
@@ -1871,7 +1483,7 @@ async function run() {
           display: 'flex',
           justifyContent: 'flex-end',
           alignItems: 'center',
-          paddingTop: 10,
+          paddingTop: 4,
         },
       },
         React.createElement(Pagination, {
@@ -1911,43 +1523,52 @@ async function run() {
     const shopList = [TOTAL_SHOP_NAME, ...shops.filter((shop) => shop !== TOTAL_SHOP_NAME)];
     const currentShop = params.shop || TOTAL_SHOP_NAME;
 
-    return React.createElement('section', {
+    return React.createElement('div', {
       style: {
-        background: '#fff',
-        border: '1px solid #f0f0f0',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        minWidth: 0,
+        padding: '7px 8px',
+        border: '1px solid #93c5fd',
         borderRadius: 8,
-        marginBottom: 12,
-        padding: 12,
+        background: '#eef6ff',
+        boxShadow: '0 1px 4px rgba(37,99,235,0.12), inset 0 0 0 1px rgba(255,255,255,0.85)',
       },
     },
       React.createElement('div', {
         style: {
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 8,
-          marginBottom: 10,
+          gap: 7,
+          flexShrink: 0,
         },
       },
-        React.createElement('div', {
+        React.createElement('span', { style: { fontWeight: 800, fontSize: 14, color: '#0f172a', whiteSpace: 'nowrap' } }, '店铺切换'),
+        React.createElement('span', {
           style: {
-            display: 'flex',
-            alignItems: 'baseline',
-            gap: 8,
+            padding: '1px 6px',
+            borderRadius: 999,
+            background: '#dbeafe',
+            color: '#1d4ed8',
+            fontSize: 13,
+            fontWeight: 700,
+            whiteSpace: 'nowrap',
           },
-        },
-          React.createElement('span', { style: { fontWeight: 700, fontSize: 14 } }, '店铺切换'),
-          React.createElement('span', { style: { color: '#999', fontSize: 12 } }, `${shopList.length} 个店铺`),
-        ),
-        React.createElement(Button, { size: 'small', onClick: onRefresh }, '全部刷新'),
+        }, `${shopList.length}个`),
       ),
       React.createElement('div', {
         style: {
           display: 'flex',
           gap: 6,
+          flex: 1,
+          minWidth: 0,
           overflowX: 'auto',
           overflowY: 'hidden',
-          padding: '2px 0 3px',
+          padding: '4px 5px',
+          background: '#dbeafe',
+          border: '1px solid #bfdbfe',
+          borderRadius: 7,
           scrollbarWidth: 'thin',
           WebkitOverflowScrolling: 'touch',
         },
@@ -1956,25 +1577,40 @@ async function run() {
           const active = shop === currentShop;
           return React.createElement('button', {
             key: shop,
+            type: 'button',
             onClick: () => onChange(shop),
             style: {
               flex: '0 0 auto',
-              minWidth: 54,
-              padding: '5px 12px',
+              minWidth: 72,
+              minHeight: 32,
+              padding: '5px 16px',
               borderRadius: 6,
-              border: active ? '1px solid #1677ff' : '1px solid #e5e7eb',
-              background: active ? '#eaf3ff' : '#fff',
-              color: active ? '#0958d9' : '#4b5563',
+              border: active ? '1px solid #1677ff' : '1px solid #c7d8ee',
+              background: active ? '#1677ff' : '#fff',
+              color: active ? '#fff' : '#334155',
               fontWeight: active ? 700 : 500,
-              fontSize: 13,
-              lineHeight: 1.35,
+              fontSize: 14,
+              lineHeight: '20px',
               cursor: 'pointer',
-              boxShadow: active ? '0 1px 3px rgba(22,119,255,0.18)' : 'none',
+              boxShadow: active ? '0 3px 9px rgba(22,119,255,0.28)' : '0 1px 3px rgba(15,23,42,0.08)',
               whiteSpace: 'nowrap',
+              transition: 'background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, color 0.16s ease',
             },
           }, shop);
         }),
       ),
+      React.createElement(Button, {
+        size: 'small',
+        onClick: onRefresh,
+        loading,
+        style: {
+          ...TOOLBAR_BUTTON_STYLE,
+          flexShrink: 0,
+          borderColor: '#bfdbfe',
+          background: '#eff6ff',
+          color: '#1d4ed8',
+        },
+      }, '全部刷新'),
     );
   };
 
@@ -1983,8 +1619,9 @@ async function run() {
       background: '#fff',
       border: '1px solid #f0f0f0',
       borderRadius: 8,
-      padding: 12,
-      marginBottom: 12,
+      padding: 6,
+      marginBottom: 6,
+      minHeight: 72,
     },
   },
     React.createElement('div', {
@@ -1992,17 +1629,31 @@ async function run() {
         display: 'flex',
         alignItems: 'center',
         gap: 12,
-        marginBottom: rows.length || loading ? 10 : 0,
+        marginBottom: rows.length ? 4 : 0,
       },
     },
       React.createElement('div', null,
         React.createElement('div', { style: { fontWeight: 700, fontSize: 14 } }, '销售系数'),
         React.createElement('div', { style: { color: '#999', fontSize: 12, marginTop: 2 } },
-          loading ? '正在读取 sales_coefficient' : rows.length ? '' : '当前 ASIN / 国家暂无配置',
+          rows.length ? '' : loading ? '正在读取 sales_coefficient' : '当前 ASIN / 国家暂无配置',
         ),
       ),
+      loading && rows.length
+        ? React.createElement('span', {
+          style: {
+            marginLeft: 'auto',
+            flexShrink: 0,
+            padding: '1px 6px',
+            borderRadius: 4,
+            background: '#eff6ff',
+            color: '#1d4ed8',
+            fontSize: 12,
+            lineHeight: '18px',
+          },
+        }, '刷新中')
+        : null,
     ),
-    loading || !rows.length
+    !rows.length
       ? null
       : React.createElement('div', {
         style: {
@@ -2027,7 +1678,7 @@ async function run() {
               gap: 8,
               minWidth: 128,
               maxWidth: 220,
-              padding: '7px 10px',
+              padding: '3px 8px',
               border: `1px solid ${style.border}`,
               borderRadius: 6,
               background: style.bg,
@@ -2069,15 +1720,26 @@ async function run() {
     const reloadAll = useCallback(() => setRefreshKey((value) => value + 1), []);
 
     const updateParams = useCallback((nextParams, shouldNavigate = false) => {
+      rememberStableUrlParams(nextParams);
       setParams(nextParams);
       if (shouldNavigate) replaceUrlParams(nextParams);
       setRefreshKey((value) => value + 1);
     }, []);
 
     useEffect(() => {
-      const router = ctx.router || ctx.app?.router?.router;
-      if (!router || typeof router.subscribe !== 'function') return undefined;
-      return router.subscribe(() => updateParams(readUrlParams(), false));
+      const routers = [ctx.router, ctx.app?.router?.router].filter(Boolean);
+      const unlisteners = routers
+        .filter((router) => typeof router.subscribe === 'function')
+        .map((router) => router.subscribe(() => {
+          const restored = restoreMissingUrlParams();
+          if (!restored) updateParams(readUrlParams(), false);
+        }));
+      restoreMissingUrlParams();
+      return () => {
+        unlisteners.forEach((unlisten) => {
+          if (typeof unlisten === 'function') unlisten();
+        });
+      };
     }, [updateParams]);
 
     useEffect(() => {
@@ -2131,6 +1793,7 @@ async function run() {
     const futureToolbar = () => React.createElement(React.Fragment, null,
       React.createElement(Button, {
         size: 'small',
+        style: TOOLBAR_BUTTON_STYLE,
         onClick: () => exportRows(params, 'logistics').catch((error) => {
           notifyTask('export-logistics', '导出失败 - 物流', error?.message || String(error), 8);
           ctx.message?.error?.(`导出失败: ${error?.message || error}`);
@@ -2138,6 +1801,7 @@ async function run() {
       }, '导出-物流'),
       React.createElement(Button, {
         size: 'small',
+        style: TOOLBAR_BUTTON_STYLE,
         onClick: () => exportRows(params, 'sales').catch((error) => {
           notifyTask('export-sales', '导出失败 - 销售', error?.message || String(error), 8);
           ctx.message?.error?.(`导出失败: ${error?.message || error}`);
@@ -2146,33 +1810,46 @@ async function run() {
       currentShop === TOTAL_SHOP_NAME
         ? React.createElement(Button, {
           size: 'small',
+          style: TOOLBAR_BUTTON_STYLE,
           onClick: () => chooseImportFile(() => refreshAndTriggerInventory(params, reloadAll)),
         }, '导入')
         : null,
       React.createElement(Button, {
         size: 'small',
+        style: {
+          ...TOOLBAR_BUTTON_STYLE,
+          borderColor: '#bfdbfe',
+          background: '#eff6ff',
+          color: '#1d4ed8',
+        },
         onClick: () => triggerInventoryWorkflow(params, reloadAll).catch((error) => {
           notifyTask('inventory-update', '预估库存更新失败', error?.message || String(error), 8);
           ctx.message?.error?.(`预估库存更新失败: ${error?.message || ''}`);
         }),
       }, '预估库存更新'),
+      React.createElement(Button, {
+        size: 'small',
+        style: {
+          ...TOOLBAR_BUTTON_STYLE,
+          borderColor: '#bbf7d0',
+          background: '#f0fdf4',
+          color: '#15803d',
+        },
+        onClick: () => triggerTransitWorkflow(params, reloadAll).catch((error) => {
+          notifyTask('transit-update', '更新在途失败', error?.message || String(error), 8);
+          ctx.message?.error?.(`更新在途失败: ${error?.message || ''}`);
+        }),
+      }, '更新在途'),
     );
 
     return React.createElement('div', {
       style: {
-        padding: 16,
+        padding: 8,
         fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
         fontSize: FONT_SIZE,
         background: '#fafafa',
       },
     },
-      React.createElement(ShopSwitcher, {
-        params: { ...params, shop: currentShop },
-        shops,
-        loading: shopLoading,
-        onChange: (shop) => updateParams({ ...params, shop }, true),
-        onRefresh: reloadAll,
-      }),
       !missingRequired
         ? React.createElement(CoefficientPanel, {
           rows: coefficientRows,
@@ -2194,7 +1871,7 @@ async function run() {
           style: {
             display: 'grid',
             gridTemplateColumns: 'minmax(0, 1.15fr) minmax(0, 0.85fr)',
-            gap: 16,
+            gap: 8,
             alignItems: 'start',
           },
         },
@@ -2206,6 +1883,13 @@ async function run() {
             params: { ...params, shop: currentShop },
             refreshKey,
             toolbar: futureToolbar,
+            headerExtra: React.createElement(ShopSwitcher, {
+              params: { ...params, shop: currentShop },
+              shops,
+              loading: shopLoading,
+              onChange: (shop) => updateParams({ ...params, shop }, true),
+              onRefresh: reloadAll,
+            }),
           }),
           React.createElement(SalesTable, {
             title: '过去销量',

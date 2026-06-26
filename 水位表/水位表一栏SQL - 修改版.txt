@@ -1,0 +1,268 @@
+WITH
+-- ====================================================================
+-- 0. 提取目标基础集合：作为所有子查询的过滤基准，极大减少全表扫描
+-- ====================================================================
+base_target AS (
+    SELECT 
+        asin, country, model, weighted_sales, maybe_sales, date, type, coefficient,
+        overseas_warehouse_test_product, overseas_warehouse_new_product,
+        quantity_receive, days_on_sale
+    FROM daily_sales
+    WHERE date = CURRENT_DATE
+      AND shop = '合计'
+),
+base_keys AS (
+    SELECT asin, country FROM base_target
+),
+
+-- ====================================================================
+-- 第一部分：在途库存 (On The Way) 计算逻辑
+-- ====================================================================
+otw_base AS (
+    SELECT
+        dn.shop,
+        dn.country,
+        dn.asin,
+        COALESCE(
+                NULLIF(TRIM(dn.estimated_arrival_date), ''),
+                dn.expected_storage_time
+        ) AS expected_storage_time,
+        SUM(
+                CASE
+                    WHEN COALESCE(dn.on_the_way, 0) > 0 THEN dn.on_the_way
+                    ELSE 0
+                    END
+        ) AS real_on_the_way
+    FROM delivery_note AS dn
+             -- ✅ 优化：提前过滤，只计算目标 ASIN 和国家
+             INNER JOIN base_keys bk ON dn.asin = bk.asin AND dn.country = bk.country
+    WHERE (dn.state != '已索赔' OR dn.state IS NULL)
+      AND COALESCE(
+                  NULLIF(TRIM(dn.estimated_arrival_date), ''),
+                  dn.expected_storage_time
+          ) >= CURRENT_DATE
+    GROUP BY
+        dn.shop,
+        dn.country,
+        dn.asin,
+        COALESCE(
+                NULLIF(TRIM(dn.estimated_arrival_date), ''),
+                dn.expected_storage_time
+        )
+),
+
+otw_agg AS (
+    SELECT
+        country,
+        asin,
+        GREATEST(
+                SUM(real_on_the_way),
+                0
+        ) AS real_on_the_way
+    FROM otw_base
+    GROUP BY country, asin
+),
+
+-- ====================================================================
+-- 第二部分：店铺明细 (Shop Pivot)
+-- ====================================================================
+shop_data AS (
+    SELECT
+        final_list.asin,
+        final_list.country,
+        final_list.shop as shop_raw,
+        CASE
+            WHEN final_list.shop = '合计' THEN '合计'
+            WHEN sp.type IS NOT NULL THEN CONCAT(final_list.shop, '-', sp.type)
+            ELSE final_list.shop
+            END as shop_display,
+        final_list.sales,
+        ROW_NUMBER() OVER (
+            PARTITION BY final_list.asin, final_list.country
+            ORDER BY
+                CASE WHEN final_list.shop = '合计' THEN 0 ELSE 1 END,
+                final_list.sales DESC,
+                final_list.shop ASC
+            ) as rn
+    FROM (
+             -- ✅ 优化：直接使用 base_keys 驱动，避免 EXISTS 子查询
+             SELECT bk.asin, bk.country, '合计' AS shop, ds.sales
+             FROM base_keys bk
+                      JOIN daily_sales ds ON bk.asin = ds.asin AND bk.country = ds.country
+             WHERE ds.date = CURRENT_DATE AND ds.shop = '合计'
+
+             UNION ALL
+
+             SELECT
+                 cs.asin,
+                 cs.country,
+                 cs.shop,
+                 MAX(COALESCE(ds.sales, 0)) as sales
+             FROM inventory_base cs
+                      INNER JOIN base_keys bk ON cs.asin = bk.asin AND cs.country = bk.country
+                      LEFT JOIN daily_sales ds
+                                ON cs.asin = ds.asin
+                                    AND cs.country = ds.country
+                                    AND cs.shop = ds.shop
+                                    AND ds.date = CURRENT_DATE
+             WHERE cs.date = CURRENT_DATE
+             GROUP BY cs.asin, cs.country, cs.shop
+
+             UNION ALL
+
+             SELECT
+                 bk.asin,
+                 bk.country,
+                 'woot' AS shop,
+                 MAX(COALESCE(ds_woot.sales, 0)) AS sales
+             FROM base_keys bk
+                      INNER JOIN (SELECT DISTINCT asin, country FROM woot_statistics) ws
+                                 ON bk.asin = ws.asin AND bk.country = ws.country
+                      LEFT JOIN daily_sales ds_woot
+                                ON ds_woot.asin = bk.asin
+                                    AND ds_woot.country = bk.country
+                                    AND ds_woot.shop = 'woot'
+                                    AND ds_woot.date = CURRENT_DATE
+             GROUP BY bk.asin, bk.country
+         ) final_list
+             LEFT JOIN shop sp
+                       ON sp.country = final_list.country
+                           AND sp.short_name = final_list.shop
+),
+shop_pivot AS (
+    SELECT
+        asin,
+        country,
+        MAX(CASE WHEN rn = 1 THEN shop_raw END) as shop1,
+        MAX(CASE WHEN rn = 2 THEN shop_raw END) as shop2,
+        MAX(CASE WHEN rn = 3 THEN shop_raw END) as shop3,
+        MAX(CASE WHEN rn = 4 THEN shop_raw END) as shop4,
+        MAX(CASE WHEN rn = 5 THEN shop_raw END) as shop5,
+        MAX(CASE WHEN rn = 6 THEN shop_raw END) as shop6,
+        MAX(CASE WHEN rn = 7 THEN shop_raw END) as shop7,
+        MAX(CASE WHEN rn = 8 THEN shop_raw END) as shop8,
+        MAX(CASE WHEN rn = 2 THEN shop_display END) as shop_display2,
+        MAX(CASE WHEN rn = 3 THEN shop_display END) as shop_display3,
+        MAX(CASE WHEN rn = 4 THEN shop_display END) as shop_display4,
+        MAX(CASE WHEN rn = 5 THEN shop_display END) as shop_display5,
+        MAX(CASE WHEN rn = 6 THEN shop_display END) as shop_display6,
+        MAX(CASE WHEN rn = 7 THEN shop_display END) as shop_display7,
+        MAX(CASE WHEN rn = 8 THEN shop_display END) as shop_display8
+    FROM shop_data
+    WHERE rn <= 20
+    GROUP BY asin, country
+),
+
+-- ====================================================================
+-- 第三部分：实时库存与断货日期
+-- ====================================================================
+inv_calc AS (
+    SELECT
+        ib.asin,
+        ib.country,
+        SUM(COALESCE(ib.afn_fulfillable_quantity, 0) + COALESCE(ib.reserved_fc_transfers, 0)) as real_inventory
+    FROM inventory_base ib
+             INNER JOIN base_keys bk ON ib.asin = bk.asin AND ib.country = bk.country
+    WHERE ib.date = CURRENT_DATE
+    GROUP BY ib.asin, ib.country
+),
+stockout_lookup AS (
+    SELECT
+        ds.asin,
+        ds.country,
+        MIN(ds.date) as first_stockout_date
+    FROM daily_sales ds
+             INNER JOIN base_keys bk ON ds.asin = bk.asin AND ds.country = bk.country
+    WHERE ds.shop = '合计'
+      AND ds.date >= CURRENT_DATE
+      AND ds.inventory < 0
+    GROUP BY ds.asin, ds.country
+)
+
+-- ====================================================================
+-- 第五部分：主查询
+-- ====================================================================
+SELECT
+    ds.asin,
+    ds.country,
+    ds.model,
+    COALESCE(inv.real_inventory, 0) as inventory,
+    ds.weighted_sales,
+    ds.maybe_sales,
+    CASE
+        WHEN sl.first_stockout_date IS NULL THEN '大于180天'
+        ELSE DATEDIFF(sl.first_stockout_date, ds.date)
+        END as days_for_sale,
+    sl.first_stockout_date as expected_stockout_date,
+    COALESCE(otw.real_on_the_way, 0) as on_the_way,
+    ds.type,
+    ds.coefficient,
+    ds.overseas_warehouse_test_product,
+    ds.overseas_warehouse_new_product,
+    ds.quantity_receive,
+    ds.days_on_sale,
+
+    CASE
+        WHEN ds.days_on_sale IS NULL THEN NULL
+        WHEN ds.days_on_sale < 90 THEN '新品期'
+        WHEN ds.days_on_sale >= 90 AND ds.days_on_sale < 365 THEN '成长期'
+        WHEN ds.days_on_sale >= 365 THEN '成熟期'
+        ELSE NULL
+        END AS product_label,
+
+    ROUND(
+            (
+                COALESCE(otw.real_on_the_way, 0)
+                    + COALESCE(inv.real_inventory, 0)
+                    + COALESCE(ds.quantity_receive, 0)
+                    + COALESCE(ds.overseas_warehouse_test_product, 0)
+                    + COALESCE(ds.overseas_warehouse_new_product, 0)
+                ) / NULLIF(ds.weighted_sales, 0) / 30,
+            2
+    ) as inv_sales_ratio,
+
+    sp.shop1,
+    sp.shop2, sp.shop_display2,
+    sp.shop3, sp.shop_display3,
+    sp.shop4, sp.shop_display4,
+    sp.shop5, sp.shop_display5,
+    sp.shop6, sp.shop_display6,
+    sp.shop7, sp.shop_display7,
+    sp.shop8, sp.shop_display8,
+    CONCAT(ds.asin, '_', ds.country) as asin_country,
+    a.sale_owner as sale_owner,
+    u.manager as manager,
+
+    u.level   as sale_level,
+    mgr.level as manager_level,
+
+    CASE
+        WHEN ((COALESCE(otw.real_on_the_way, 0) + COALESCE(inv.real_inventory, 0) + COALESCE(ds.quantity_receive, 0) + COALESCE(ds.overseas_warehouse_test_product, 0) + COALESCE(ds.overseas_warehouse_new_product, 0)) / NULLIF(ds.weighted_sales, 0) / 30) < 3.5 THEN '短缺'
+        WHEN ((COALESCE(otw.real_on_the_way, 0) + COALESCE(inv.real_inventory, 0) + COALESCE(ds.quantity_receive, 0) + COALESCE(ds.overseas_warehouse_test_product, 0) + COALESCE(ds.overseas_warehouse_new_product, 0)) / NULLIF(ds.weighted_sales, 0) / 30) BETWEEN 3.5 AND 5 THEN '正常'
+        WHEN ((COALESCE(otw.real_on_the_way, 0) + COALESCE(inv.real_inventory, 0) + COALESCE(ds.quantity_receive, 0) + COALESCE(ds.overseas_warehouse_test_product, 0) + COALESCE(ds.overseas_warehouse_new_product, 0)) / NULLIF(ds.weighted_sales, 0) / 30) >= 5 THEN '滞销'
+        ELSE NULL
+        END as status,
+
+    1 as count_field,
+
+    (COALESCE(otw.real_on_the_way, 0) + COALESCE(inv.real_inventory, 0) + COALESCE(ds.quantity_receive, 0) + COALESCE(ds.overseas_warehouse_new_product, 0) + COALESCE(ds.overseas_warehouse_test_product, 0)) as total_instock,
+
+    ROUND(
+            SUM(COALESCE(otw.real_on_the_way, 0) + COALESCE(inv.real_inventory, 0) + COALESCE(ds.quantity_receive, 0) + COALESCE(ds.overseas_warehouse_new_product, 0) + COALESCE(ds.overseas_warehouse_test_product, 0)) OVER (PARTITION BY a.sale_owner)
+                / NULLIF(SUM(ds.weighted_sales) OVER (PARTITION BY a.sale_owner), 0)
+                / 30,
+            2
+    ) as sales_total_inv_ratio
+
+-- ✅ 优化：直接使用过滤好的 base_target 作为驱动表，无需再次扫描 daily_sales
+FROM base_target ds
+         JOIN model m ON ds.model = m.model
+         LEFT JOIN shop_pivot sp ON ds.asin = sp.asin AND ds.country = sp.country
+         LEFT JOIN otw_agg otw ON ds.asin = otw.asin AND ds.country = otw.country
+         LEFT JOIN inv_calc inv ON ds.asin = inv.asin AND ds.country = inv.country
+         LEFT JOIN stockout_lookup sl ON ds.asin = sl.asin AND ds.country = sl.country
+         LEFT JOIN asin a ON CONCAT(ds.asin, '_', ds.country) = a.`unique`
+         LEFT JOIN users u ON a.sale_owner = u.username
+         LEFT JOIN users mgr ON mgr.username = u.manager
+WHERE COALESCE(a.maintenance_level, '') <> '变体'
+  AND a.status IN ('新品', '普通', '重点');

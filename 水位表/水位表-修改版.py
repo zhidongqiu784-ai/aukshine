@@ -15,6 +15,20 @@ from contextlib import contextmanager
 import mysql.connector
 import time
 
+_xbot_print = print
+
+
+def print(message="", *args, **kwargs):
+    """让影刀日志每条都是单行，避免前导换行导致列表里显示 ... 需要双击展开。"""
+    if args:
+        message = " ".join([str(message)] + [str(arg) for arg in args])
+    lines = str(message).splitlines()
+    while lines and lines[0].strip() == "":
+        lines.pop(0)
+    for line in lines:
+        if line.strip():
+            _xbot_print(line, **kwargs)
+
 # ================= 配置 =================
 DB_CONF = {
     "host": glv.get("A_host"),
@@ -125,12 +139,14 @@ def create_work_valid_combinations(conn, cursor, table_name):
         SELECT DISTINCT
             cs.shop,
             cs.country,
-            cs.asin
+            cs.asin,
+            NULLIF(a.model, '') AS asin_model
         FROM current_stock cs
         INNER JOIN asin a
             ON cs.country = a.country
            AND cs.asin = a.asin
         WHERE a.status IN ('新品', '重点', '普通')
+          AND COALESCE(a.maintenance_level, '') != '变体'
           AND cs.shop IS NOT NULL
           AND cs.shop != ''
           AND cs.shop != '合计'
@@ -218,46 +234,41 @@ def generate_sales_forecast():
             print("\n[3/9] 获取基础数据 (base_data)...")
             latest_model_query = f"""
                 SELECT
-                    x.shop,
-                    x.country,
-                    x.asin,
-                    SUBSTRING_INDEX(
-                        GROUP_CONCAT(x.model ORDER BY x.order_date DESC SEPARATOR '|||'),
-                        '|||',
-                        1
+                    tvc.shop,
+                    tvc.country,
+                    tvc.asin,
+                    (
+                        SELECT sk.model
+                        FROM shop s
+                        STRAIGHT_JOIN order_list ol
+                          ON ol.shop = s.name
+                         AND ol.country_code = tvc.country
+                         AND ol.asin = tvc.asin
+                        STRAIGHT_JOIN sku sk
+                          ON sk.sku = ol.sku
+                        WHERE s.short_name = tvc.shop
+                          AND ol.order_date >= '{ORDER_START_DATE}'
+                          AND ol.order_date <= CURDATE()
+                          AND ol.status != 'Canceled'
+                          AND ol.country_code IS NOT NULL AND ol.country_code != ''
+                          AND ol.asin IS NOT NULL AND ol.asin != ''
+                          AND ol.sku IS NOT NULL AND ol.sku != ''
+                          AND sk.model IS NOT NULL AND sk.model != ''
+                        ORDER BY ol.order_date DESC
+                        LIMIT 1
                     ) AS model
-                FROM (
-                    SELECT
-                        tvc.shop,
-                        tvc.country,
-                        tvc.asin,
-                        ol.order_date,
-                        sk.model
-                    FROM {work_table} tvc
-                    STRAIGHT_JOIN shop s
-                      ON s.short_name = tvc.shop
-                    STRAIGHT_JOIN order_list ol
-                      ON ol.shop = s.name
-                     AND ol.country_code = tvc.country
-                     AND ol.asin = tvc.asin
-                    STRAIGHT_JOIN sku sk
-                      ON sk.sku = ol.sku
-                    WHERE ol.order_date >= '{ORDER_START_DATE}'
-                      AND ol.order_date <= CURDATE()
-                      AND ol.status != 'Canceled'
-                      AND ol.country_code IS NOT NULL AND ol.country_code != ''
-                      AND ol.asin IS NOT NULL AND ol.asin != ''
-                      AND ol.sku IS NOT NULL AND ol.sku != ''
-                      AND sk.model IS NOT NULL AND sk.model != ''
-                ) x
-                GROUP BY x.shop, x.country, x.asin
+                FROM {work_table} tvc
+                WHERE tvc.asin_model IS NULL
             """
-            latest_models = read_sql_logged(latest_model_query, conn, "latest_models")
+            latest_models = read_sql_logged(latest_model_query, conn, "latest_models_missing_asin_model")
+            latest_models = latest_models[latest_models['model'].notna()].copy()
             base_data = valid_combinations.merge(
                 latest_models,
                 on=['shop', 'country', 'asin'],
                 how='left'
             )
+            base_data['model'] = base_data['asin_model'].combine_first(base_data['model'])
+            base_data = base_data.drop(columns=['asin_model'])
 
             print(f"base_data 记录数: {len(base_data):,}")
             print_df_preview(base_data, "base_data", 20)
@@ -286,10 +297,13 @@ def generate_sales_forecast():
                     tvc.asin,
                     DATE(ol.order_date) AS sale_date,
                     COUNT(*) AS total_sales,
-                    SUBSTRING_INDEX(
-                        GROUP_CONCAT(sk.model ORDER BY ol.order_date DESC SEPARATOR '|||'),
-                        '|||',
-                        1
+                    COALESCE(
+                        MAX(tvc.asin_model),
+                        SUBSTRING_INDEX(
+                            GROUP_CONCAT(sk.model ORDER BY ol.order_date DESC SEPARATOR '|||'),
+                            '|||',
+                            1
+                        )
                     ) AS model
                 FROM {work_table} tvc
                 STRAIGHT_JOIN shop s
@@ -306,7 +320,10 @@ def generate_sales_forecast():
                   AND ol.country_code != '' AND ol.country_code IS NOT NULL
                   AND ol.sku != '' AND ol.sku IS NOT NULL
                   AND ol.asin != '' AND ol.asin IS NOT NULL
-                  AND sk.model != '' AND sk.model IS NOT NULL
+                  AND (
+                      tvc.asin_model IS NOT NULL
+                      OR (sk.model != '' AND sk.model IS NOT NULL)
+                  )
                 GROUP BY tvc.shop, tvc.country, tvc.asin, DATE(ol.order_date)
             """
             daily_history = read_sql_logged(daily_history_query, conn, "daily_history")
@@ -361,12 +378,14 @@ def generate_sales_forecast():
                 CREATE TABLE {woot_asin_table} AS
                 SELECT DISTINCT
                     ws.country,
-                    ws.asin
+                    ws.asin,
+                    NULLIF(a.model, '') AS asin_model
                 FROM woot_statistics ws
                 INNER JOIN asin a
                     ON a.country = ws.country
                    AND a.asin = ws.asin
                    AND a.status IN ('新品', '重点', '普通')
+                   AND COALESCE(a.maintenance_level, '') != '变体'
                 WHERE ws.date >= '{ORDER_START_DATE}'
                   AND ws.date <= CURDATE()
                   AND ws.asin IS NOT NULL
@@ -391,7 +410,7 @@ def generate_sales_forecast():
                     ws.asin,
                     ws.date AS sale_date,
                     COALESCE(ws.sales_volume, 0) AS total_sales,
-                    om.model
+                    COALESCE(wa.asin_model, om.model) AS model
                 FROM woot_statistics ws
                 INNER JOIN {woot_asin_table} wa
                     ON wa.country = ws.country
@@ -524,6 +543,12 @@ def generate_sales_forecast():
             dup_df = final_data[final_data.duplicated(subset=['shop_country_asin_date'], keep=False)]
             print(dup_df.head(50).to_string(index=False))
 
+        missing_model_count = int(final_data['model'].isna().sum())
+        print(f"\nmodel 为空记录数: {missing_model_count:,}")
+        if missing_model_count > 0 and DEBUG:
+            print_subtitle("model 为空记录预览")
+            print(final_data[final_data['model'].isna()].head(50).to_string(index=False))
+
         return final_data
 
     finally:
@@ -555,7 +580,7 @@ def update_to_daily_sales(df, table_name='daily_sales'):
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         ON DUPLICATE KEY UPDATE
             asin=VALUES(asin),
-            model=VALUES(model),
+            model=COALESCE(VALUES(model), model),
             country=VALUES(country),
             shop=VALUES(shop),
             date=VALUES(date),
@@ -652,4 +677,4 @@ def main():
         import traceback
         print_title("执行失败", 80)
         print(str(e))
-        traceback.print_exc()
+        print(traceback.format_exc())
