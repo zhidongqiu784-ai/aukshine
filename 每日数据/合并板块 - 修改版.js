@@ -326,7 +326,7 @@
     { key:'weekly_guanggaodianji',              src:'weekly', field:'guanggaodianji',               label:'广告点击',        hidden:false, pinned:false, width:80,  editable:false, columnGroup:'traffic_conversion' },
     { key:'weekly_natural_traffic_proportion',  src:'weekly', field:'natural_traffic_proportion',   label:'自然流量占比',    hidden:false, pinned:false, width:100, editable:false, columnGroup:'traffic_conversion' },
     { key:'weekly_guanggaocvr',                 src:'weekly', field:'guanggaocvr',                  label:'广告转化率',        hidden:false, pinned:false, width:90,  editable:false, columnGroup:'traffic_conversion' },
-    { key:'weekly_zongcvr',                     src:'weekly', field:'zongcvr',                      label:'会话转化率',  hidden:false, pinned:false, width:80,  editable:false, columnGroup:'traffic_conversion' },
+    { key:'weekly_zongcvr',                     src:'weekly', field:'session_conversion_rate',      label:'会话转化率',  hidden:false, pinned:false, width:80,  editable:false, columnGroup:'traffic_conversion' },
     { key:'order_link_real_session_conversion_rate',      src:'order_link', field:'order_link_real_session_conversion_rate', label:'真实会话转化率（剔除测评单）', hidden:false, pinned:false, width:160, editable:false, columnGroup:'traffic_conversion' },
     { key:'order_link_page_view_conversion_rate',         src:'order_link', field:'page_view_conversion_rate',         label:'页面浏览转化率',             hidden:false, pinned:false, width:120, editable:false, columnGroup:'traffic_conversion' },
     { key:'order_link_formula_review_rate',              src:'order_link', field:'formula_review_rate',                label:'公式算-留评率',           hidden:false, pinned:false, width:120, editable:false, columnGroup:'link_tracking' },
@@ -431,7 +431,7 @@
   ];
 
   const MONEY_FIELDS = new Set(['daily_price','list_price','price_after_discount','review_discounted_price','review_actual_price','net_price_without_tax','gross_revenue_local','net_revenue_local','net_profit_local','cumulative_break_even','unit_profit_local','unit_profit_after_ad_local','unit_profit_rmb','product_cost_total','review_refund_total','review_refund_cost','review_refund_per_unit','review_unit_profit','offsite_commission_cost','offsite_cost_per_order','coupon_total_cost','flash_sale_price','flash_sale_total_cost','flash_sale_cost_per_order','ads_sp_cost','ads_sp_sales','ads_sd_cost','ads_sd_sales','shared_ads_sb_cost','shared_ads_sb_sales','shared_ads_sbv_cost','shared_ads_sbv_sales','guanggaohuafei','ad_direct_sales_amount','ad_sales_amount','weekly_ad_total_budget']);
-  const RATE_FIELDS = new Set(['off','real_session_conversion_rate','order_link_real_session_conversion_rate','page_view_conversion_rate','review_orders_ratio','formula_review_rate','offsite_orders_ratio','onsite_orders_ratio','onsite_organic_orders_ratio','onsite_ad_orders_ratio','sp_orders_ratio','sd_orders_ratio','sb_orders_ratio','sbv_orders_ratio','zongcvr','guanggaocvr','volume_cvr','acos','tacos','natural_traffic_proportion','return_rate','return_goods_rate','profit_margin','product_cost_ratio','ad_cost_ratio','review_cost_ratio','coupon_order_ratio_estimated','ctr','adv_rate']);
+  const RATE_FIELDS = new Set(['off','real_session_conversion_rate','order_link_real_session_conversion_rate','page_view_conversion_rate','review_orders_ratio','formula_review_rate','offsite_orders_ratio','onsite_orders_ratio','onsite_organic_orders_ratio','onsite_ad_orders_ratio','sp_orders_ratio','sd_orders_ratio','sb_orders_ratio','sbv_orders_ratio','session_conversion_rate','zongcvr','guanggaocvr','volume_cvr','acos','tacos','natural_traffic_proportion','return_rate','return_goods_rate','profit_margin','product_cost_ratio','ad_cost_ratio','review_cost_ratio','coupon_order_ratio_estimated','ctr','adv_rate']);
   const NUM_FIELDS = new Set(['star_rating','number_of_comments','promotion_days','promo_days_40d','promo_days_90d','lp_duration_days','rsg_number','target_gap','target_order_qty','target_subcategory_rank','sales','zirandan','guanggaodan','ranking','ad_direct_order_quantity','indirect_order_volume','impressions','page_views_total','organic_traffic','return_count','return_goods_count','flash_sale_qty','flash_sale_days','prev_rank','reviews_count','promotion_volume','b2b_volume','sessions','sessions_mobile','zongliuliang','guanggaodianji','zirandianji','cpu','cpa','cpc','cpo','page_views','page_views_mobile','offsite_bg_orders','offsite_xx_orders','offsite_acc_orders','total_offsite_orders','onsite_organic_orders','onsite_ad_orders']);
   const DATE_FIELDS = new Set(['date','updatedAt']);
   const ALL_NUMERIC = new Set([...MONEY_FIELDS, ...RATE_FIELDS, ...NUM_FIELDS]);
@@ -1079,6 +1079,16 @@
       ],
       writeBackField: 'product_config.coupon_order_ratio_estimated',
     },
+    session_conversion_rate: {
+      title: '会话转化率',
+      formula: '实际总单量 ÷ 汇总流量-会话量，并保留 4 位小数。',
+      emptyRules: ['实际总单量为空', '汇总流量-会话量为空或为 0'],
+      fields: [
+        { label: '实际总单量', field: 'weekly_performance.sales' },
+        { label: '汇总流量-会话量', field: 'weekly_performance.zongliuliang' },
+      ],
+      writeBackField: 'weekly_performance.session_conversion_rate',
+    },
     order_link_real_session_conversion_rate: {
       title: '真实会话转化率（剔除测评单）',
       formula: '（实际总单量 - ①测评单）÷ 汇总流量-会话量，并保留 4 位小数。',
@@ -1358,7 +1368,7 @@
     'review_orders_ratio','offsite_orders_ratio','onsite_orders_ratio','onsite_organic_orders_ratio','onsite_ad_orders_ratio',
     'sp_orders_ratio','sd_orders_ratio','sb_orders_ratio','sbv_orders_ratio',
     'adv_rate','natural_traffic_proportion','ctr','cpc','acos','guanggaocvr','cpa','cpu','tacos',
-    'zongcvr','volume_cvr','cpo','order_link_real_session_conversion_rate','real_session_conversion_rate','page_view_conversion_rate',
+    'session_conversion_rate','zongcvr','volume_cvr','cpo','order_link_real_session_conversion_rate','real_session_conversion_rate','page_view_conversion_rate',
     'return_rate','return_goods_rate','profit_margin','ad_cost_ratio','review_cost_ratio','product_cost_ratio',
     'offsite_cost_per_order','flash_sale_cost_per_order','unit_profit_local','unit_profit_after_ad_local','unit_profit_rmb',
     'weekly_ad_total_budget','weekly_target_completion_rate',
@@ -2114,6 +2124,7 @@
     setDerived('guanggaocvr', safeDivide(summaryData.guanggaodan, summaryData.guanggaodianji));
     setMoneyDerived('cpa', safeDivide(summaryData.guanggaohuafei, summaryData.guanggaodan));
     setMoneyDerived('cpu', safeDivide(summaryData.guanggaohuafei, summaryData.sales));
+    setDerived('session_conversion_rate', safeDivide(summaryData.sales, summaryData.zongliuliang));
     setDerived('zongcvr', safeDivide(summaryData.sales, summaryData.zongliuliang));
     setDerived('volume_cvr', safeDivide(summaryData.sales, summaryData.zongliuliang));
     setMoneyDerived('cpo', safeDivide(summaryData.guanggaohuafei, summaryData.sales));
@@ -2215,7 +2226,7 @@
     'target_profit_margin_formula',
     'target_ad_spend_rate_formula',
   ]);
-  const WEEKLY_FORMULA_PATCH_FIELDS = new Set([]);
+  const WEEKLY_FORMULA_PATCH_FIELDS = new Set(['session_conversion_rate']);
   const ORDER_LINK_FORMULA_PATCH_FIELDS = new Set([
     'net_price_without_tax',
     'review_actual_price',
@@ -4007,6 +4018,12 @@
           targetFormulaJobsByKey[key].exists = targetFormulaJobsByKey[key].exists || recordExists;
           targetFormulaJobsByKey[key].updates = { ...targetFormulaJobsByKey[key].updates, ...fieldUpdates };
         };
+        const weeklyJobsByKey = {};
+        const queueWeeklyUpdate = (key, fieldUpdates) => {
+          if (!existingWeeklyMap[key]) return;
+          if (!weeklyJobsByKey[key]) weeklyJobsByKey[key] = { key, updates: {} };
+          weeklyJobsByKey[key].updates = { ...weeklyJobsByKey[key].updates, ...fieldUpdates };
+        };
         const patchMap = {};
         const computedNetProfitMap = {};
         const baseProfitUpdateMap = {};
@@ -4106,8 +4123,16 @@
           const onsiteOrdersRatio = totalOnsiteOrders == null || orderItems == null || orderItems === 0 ? null : roundRate(totalOnsiteOrders / orderItems, 4);
           const onsiteOrganicOrdersRatio = onsiteOrganicOrders == null || orderItems == null || orderItems === 0 ? null : roundRate(onsiteOrganicOrders / orderItems, 4);
           const onsiteAdOrdersRatio = onsiteAdOrders == null || orderItems == null || orderItems === 0 ? null : roundRate(onsiteAdOrders / orderItems, 4);
+          const sessionConversionRate = orderItems == null || sessions == null || sessions === 0 ? null : roundRate(orderItems / sessions, 4);
           const realSessionConversionRate = totalOnsiteOrders == null || sessions == null || sessions === 0 ? null : roundRate(totalOnsiteOrders / sessions, 4);
           const pageViewConversionRate = orderItems == null || pageViewsTotal == null || pageViewsTotal === 0 ? null : roundRate(orderItems / pageViewsTotal, 4);
+          const currentSessionConversionRate = Object.prototype.hasOwnProperty.call(existingWeeklyMap[key] || {}, 'session_conversion_rate')
+            ? existingWeeklyMap[key].session_conversion_rate
+            : (sourceWeekly.session_conversion_rate ?? source?.session_conversion_rate);
+          if (!isFormulaSameValue(currentSessionConversionRate, sessionConversionRate)) {
+            patchMap[key] = { ...(patchMap[key] || {}), session_conversion_rate: sessionConversionRate };
+            queueWeeklyUpdate(key, { session_conversion_rate: sessionConversionRate });
+          }
           const currentOrderLinkRow = existingOrderLinkMap[key] || sourceRowsByKey[key] || {};
           const baseOrderLinkUpdate = {
             country_asin_date: key,
@@ -4430,6 +4455,7 @@
             });
         });
 
+        const weeklyUpdateJobs = Object.values(weeklyJobsByKey);
         const profitUpdateJobs = Object.values(profitJobsByKey);
         const orderLinkUpdateJobs = Object.values(orderLinkJobsByKey);
         const targetFormulaUpdateJobs = Object.values(targetFormulaJobsByKey);
@@ -4438,7 +4464,7 @@
           Object.entries(updates || {}).filter(([field]) => !writeMetaFields.has(field))
         );
 
-        reportProgress(`准备写回 ${updateJobs.length + targetFormulaUpdateJobs.length + orderLinkUpdateJobs.length + profitUpdateJobs.length} 条...`, 55);
+        reportProgress(`准备写回 ${updateJobs.length + weeklyUpdateJobs.length + targetFormulaUpdateJobs.length + orderLinkUpdateJobs.length + profitUpdateJobs.length} 条...`, 55);
         let successCount = 0;
         let failCount = 0;
         for (let i = 0; i < updateJobs.length; i += 100) {
@@ -4454,8 +4480,25 @@
           successCount += results.filter((r) => r.status === 'fulfilled').length;
           failCount += results.filter((r) => r.status === 'rejected').length;
           const done = Math.min(i + batch.length, updateJobs.length);
-          const percent = updateJobs.length ? 55 + (done / updateJobs.length) * 20 : 75;
+          const percent = updateJobs.length ? 55 + (done / updateJobs.length) * 15 : 70;
           reportProgress(`正在写回日表 ${done}/${updateJobs.length}...`, percent);
+        }
+
+        for (let i = 0; i < weeklyUpdateJobs.length; i += 100) {
+          const batch = weeklyUpdateJobs.slice(i, i + 100);
+          const results = await Promise.allSettled(
+            batch.map((job) => ctx.request({
+              url: 'weekly_performance:update',
+              method: 'post',
+              params: { filterByTk: job.key },
+              data: job.updates,
+            }))
+          );
+          successCount += results.filter((r) => r.status === 'fulfilled').length;
+          failCount += results.filter((r) => r.status === 'rejected').length;
+          const done = Math.min(i + batch.length, weeklyUpdateJobs.length);
+          const percent = weeklyUpdateJobs.length ? 70 + (done / weeklyUpdateJobs.length) * 5 : 75;
+          reportProgress(`正在写回周表现 ${done}/${weeklyUpdateJobs.length}...`, percent);
         }
 
         for (let i = 0; i < targetFormulaUpdateJobs.length; i += 100) {
@@ -4559,16 +4602,16 @@
         setData(displayPatchedRows);
 
         if (!silent) {
-          if (!updateJobs.length && !targetFormulaUpdateJobs.length && !profitUpdateJobs.length && !orderLinkUpdateJobs.length && !Object.keys(refreshedSummaryMap || {}).length) {
+          if (!updateJobs.length && !weeklyUpdateJobs.length && !targetFormulaUpdateJobs.length && !profitUpdateJobs.length && !orderLinkUpdateJobs.length && !Object.keys(refreshedSummaryMap || {}).length) {
             ctx.message.success('所有公式已是最新');
           } else if (failCount) ctx.message.warning(`公式计算完成：成功 ${successCount} 条，失败 ${failCount} 条`);
           else ctx.message.success(`公式计算完成：成功 ${successCount} 条`);
         }
         reportProgress(`公式计算完成：成功 ${successCount} 条`, 100);
         return {
-          total: updateJobs.length + targetFormulaUpdateJobs.length + orderLinkUpdateJobs.length + profitUpdateJobs.length,
+          total: updateJobs.length + weeklyUpdateJobs.length + targetFormulaUpdateJobs.length + orderLinkUpdateJobs.length + profitUpdateJobs.length,
           success: successCount,
-          skipped: keys.length - Math.max(updateJobs.length, targetFormulaUpdateJobs.length, orderLinkUpdateJobs.length, profitUpdateJobs.length),
+          skipped: keys.length - Math.max(updateJobs.length, weeklyUpdateJobs.length, targetFormulaUpdateJobs.length, orderLinkUpdateJobs.length, profitUpdateJobs.length),
         };
       } catch (err) {
         if (!silent) ctx.message.error(`公式计算失败：${err?.message || '未知错误'}`);

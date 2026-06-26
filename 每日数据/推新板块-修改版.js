@@ -292,7 +292,7 @@
     actual_natural_order: `【实际自然单】\n= 实际总单量 - 测评单 - 实际广告单\n= weekly_performance.sales - daily_asins.rsg_number - weekly_performance.guanggaodan\n其中 daily_asins.rsg_number 引用订单流量转化里的测评单`,
     plan_eval_judgment: `【计划-测评单判断】对比 单日应需量 vs 预计刷单总数\n• 应需量 = 0      → "无计划"\n• 应需量 > 总数   → "计划测评缺-X单"\n• 应需量 < 总数   → "计划测评超+X单"\n• 相等            → "√"`,
     actual_eval_judgment: `【实际-测评结果判断】对比 实际刷单 vs 预计刷单\n• 预计=0 且 实际=0 → "无计划"\n• 预计=0 且 实际>0 → "无计划但测X单"\n• 实际 > 预计      → "测评超+X单"\n• 实际 < 预计      → "测评缺-X单"\n• 相等             → "√"`,
-    actual_cvr_judgment: `【实际测评转化率判断】= IF(实际CVR为空 或 目标CVR为空, "", 判断实际CVR - 目标CVR)对比 weekly_performance.zongcvr vs daily_keyword_tracking.target_cvr\n• 实际CVR - 目标CVR > 0 → "CVR满足+X.XX%"\n• 实际CVR - 目标CVR < 0 → "CVR不达标-X.XX%-广告失控？测评不足？"\n• 实际CVR - 目标CVR = 0 → "CVR持平"`,
+    actual_cvr_judgment: `【实际测评转化率判断】= IF(实际CVR为空 或 目标CVR为空, "", 判断实际CVR - 目标CVR)对比 weekly_performance.session_conversion_rate vs daily_keyword_tracking.target_cvr\n• 实际CVR - 目标CVR > 0 → "CVR满足+X.XX%"\n• 实际CVR - 目标CVR < 0 → "CVR不达标-X.XX%-广告失控？测评不足？"\n• 实际CVR - 目标CVR = 0 → "CVR持平"`,
   };
 
   const FORMULA_TOOLTIPS = {
@@ -379,7 +379,7 @@
       emptyTitle: '为空情况（满足任意）：',
       emptyRules: ['实际 CVR 为空', '目标转化率为空', '任一数值无法转换为数字'],
       fields: [
-        { label: '实际 CVR', field: 'weekly_performance.zongcvr' },
+        { label: '实际 CVR', field: 'weekly_performance.session_conversion_rate' },
         { label: '目标转化率', field: 'daily_keyword_tracking.target_cvr' },
       ],
       writeBackField: 'daily_keyword_tracking.actual_cvr_judgment',
@@ -393,7 +393,7 @@
     emptyRules: ['目标转化率未填写时该字段为空', '目标转化率未填写时实际测评转化率判断为空', '前一天实际转化率缺失时无法参考，需要人工判断'],
     fields: [
       { label: '目标转化率', field: 'daily_keyword_tracking.target_cvr' },
-      { label: '实际 CVR', field: 'weekly_performance.zongcvr' },
+      { label: '实际 CVR', field: 'weekly_performance.session_conversion_rate' },
     ],
     writeBackField: 'daily_keyword_tracking.target_cvr',
   };
@@ -466,7 +466,7 @@
     { key:'weekly_guanggaodan',    src:'weekly', field:'guanggaodan',     label:'实际广告单',   hidden:false, pinned:false, width:90,  editable:false },
     { key:'keyword_tracking_actual_natural_order', src:'keyword_tracking', field:'actual_natural_order', label:'实际自然单', hidden:false, pinned:false, width:105, editable:false },
     { key:'weekly_zongliuliang',   src:'weekly', field:'zongliuliang',    label:'实际流量',     hidden:false, pinned:false, width:85,  editable:false },
-    { key:'weekly_zongcvr',        src:'weekly', field:'zongcvr',         label:'实际转化率', hidden:false, pinned:false, width:110, editable:false },
+    { key:'weekly_zongcvr',        src:'weekly', field:'session_conversion_rate', label:'实际转化率', hidden:false, pinned:false, width:110, editable:false },
     { key:'keyword_tracking_est_review_total',    src:'keyword_tracking', field:'est_review_total',     label:'预计刷单总数',            hidden:false, pinned:false, width:100, editable:false },
     { key:'keyword_tracking_est_traffic',         src:'keyword_tracking', field:'est_traffic',          label:'预计流量',                hidden:false, pinned:false, width:90,  editable:false },
     { key:'keyword_tracking_target_cvr',          src:'keyword_tracking', field:'target_cvr',           label:'目标转化率-有备注',              hidden:false, pinned:false, width:90,  editable:false },
@@ -479,7 +479,7 @@
     { key:'tool_kw_master', src:'tool', field:'tool_kw_master', label:'🔑 管理关键词按钮', hidden:true, pinned:false, width:0, editable:false },
   ];
   
-  const WEEKLY_ACTUAL_NATURAL_TRIGGER_FIELDS = new Set(['sales', 'guanggaodan', 'zongcvr']);
+  const WEEKLY_ACTUAL_NATURAL_TRIGGER_FIELDS = new Set(['sales', 'guanggaodan', 'session_conversion_rate']);
   const KT_TRIGGER_FIELDS = new Set(['est_traffic','target_cvr','est_nat_order']);
   const DAILY_PRICE_TRIGGER_FIELDS = new Set(['daily_price','list_price']);
 
@@ -498,7 +498,7 @@
     col?.key === 'keyword_tracking_actual_kw_pos' || col?.field === 'actual_keyword_position';
 
   const MONEY_FIELDS = new Set(['daily_price','list_price','price_after_discount']);
-  const RATE_FIELDS  = new Set(['off', 'zongcvr', 'target_cvr']);
+  const RATE_FIELDS  = new Set(['off', 'session_conversion_rate', 'zongcvr', 'target_cvr']);
   const NUM_FIELDS   = new Set(['promotion_days','rsg_number','sales','zirandan','guanggaodan','zongliuliang','est_review_total','est_traffic','est_nat_order','daily_eval_demand','actual_natural_order',]);
   const DATE_FIELDS  = new Set(['date','updatedAt']);
   const ALL_NUMERIC  = new Set([...MONEY_FIELDS, ...RATE_FIELDS, ...NUM_FIELDS]);
@@ -2753,12 +2753,12 @@
 
     let actualCvrJudgment = '';
     const isBlank = (v) => v === null || v === undefined || v === '';
-    if (wp && !isBlank(wp.zongcvr) && !isBlank(kt.target_cvr)) {
-      const zongcvr = Number(wp.zongcvr);
+    if (wp && !isBlank(wp.session_conversion_rate) && !isBlank(kt.target_cvr)) {
+      const sessionConversionRate = Number(wp.session_conversion_rate);
       const targetCvrVal = Number(kt.target_cvr);
 
-      if (!Number.isNaN(zongcvr) && !Number.isNaN(targetCvrVal)) {
-        const diff = zongcvr - targetCvrVal;
+      if (!Number.isNaN(sessionConversionRate) && !Number.isNaN(targetCvrVal)) {
+        const diff = sessionConversionRate - targetCvrVal;
 
         if (diff > 0) {
           actualCvrJudgment = `CVR满足+${(diff * 100).toFixed(2)}%`;
@@ -3899,12 +3899,12 @@
 
           let actualCvrJudgment = '';
 
-          if (wp && !isBlank(wp.zongcvr) && !isBlank(kt.target_cvr)) {
-            const zongcvr = Number(wp.zongcvr);
+          if (wp && !isBlank(wp.session_conversion_rate) && !isBlank(kt.target_cvr)) {
+            const sessionConversionRate = Number(wp.session_conversion_rate);
             const targetCvrVal = Number(kt.target_cvr);
 
-            if (!Number.isNaN(zongcvr) && !Number.isNaN(targetCvrVal)) {
-              const diff = zongcvr - targetCvrVal;
+            if (!Number.isNaN(sessionConversionRate) && !Number.isNaN(targetCvrVal)) {
+              const diff = sessionConversionRate - targetCvrVal;
 
               if (diff > 0) {
                 actualCvrJudgment = `CVR满足+${(diff * 100).toFixed(2)}%`;
@@ -4495,6 +4495,7 @@
           weekly_guanggaodan: actualAdOrder,
           zongliuliang: actualTraffic,
           weekly_zongliuliang: actualTraffic,
+          session_conversion_rate: actualCvr,
           zongcvr: actualCvr,
           weekly_zongcvr: actualCvr,
           est_review_total: estReviewTotal,
@@ -4547,6 +4548,7 @@
           zirandan: actualNaturalOrder,
           guanggaodan: actualAdOrder,
           zongliuliang: actualTraffic,
+          session_conversion_rate: actualCvr,
           zongcvr: actualCvr,
           est_review_total: estReviewTotal,
           est_traffic: estTraffic,
