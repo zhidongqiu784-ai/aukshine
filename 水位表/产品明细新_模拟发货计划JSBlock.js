@@ -15,6 +15,8 @@ const {
   Tag,
 } = ctx.libs.antd;
 const dayjs = ctx.dayjs;
+const antdIcons = ctx.libs.antdIcons || {};
+const { EyeOutlined, FilterOutlined } = antdIcons;
 const MSKU_PAGE_SIZE = 1000;
 
 const DATE_PICKER_LOCALE = {
@@ -282,6 +284,77 @@ function getSortParam(sortState) {
   return sortState.order === 'descend' ? `-${sortState.field}` : sortState.field;
 }
 
+function makeScopeButtonStyle(showAllRows) {
+  const commonStyle = {
+    minWidth: 104,
+    height: 28,
+    paddingInline: 12,
+    borderRadius: 999,
+    fontWeight: 600,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transitionProperty: 'background-color, border-color, box-shadow, color, transform',
+    transitionDuration: '150ms',
+    transitionTimingFunction: 'ease-out',
+  };
+
+  if (showAllRows) {
+    return {
+      ...commonStyle,
+      color: '#0958d9',
+      backgroundColor: '#eef6ff',
+      borderColor: '#91caff',
+      boxShadow: '0 0 0 1px rgba(22, 119, 255, 0.10), 0 2px 6px rgba(22, 119, 255, 0.12)',
+    };
+  }
+
+  return {
+    ...commonStyle,
+    boxShadow: '0 0 0 1px rgba(22, 119, 255, 0.12), 0 3px 8px rgba(22, 119, 255, 0.18)',
+  };
+}
+
+function makeScopeButtonIcon(showAllRows) {
+  const Icon = showAllRows ? FilterOutlined : EyeOutlined;
+  if (!Icon) return undefined;
+  return React.createElement(Icon, { style: { fontSize: 12 } });
+}
+
+function todayText() {
+  if (dayjs) return dayjs().format('YYYY-MM-DD');
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function makeShipmentPlanFilter(activeParams, showAllRows) {
+  const filterItems = [
+    { asin: { $eq: activeParams.asin } },
+    { country: { $eq: activeParams.country } },
+  ];
+
+  if (!showAllRows) {
+    const today = todayText();
+    filterItems.push({
+      $or: [
+        { add_date: { $gte: today } },
+        { 'invoice_information.estimated_arrival_date': { $gte: today } },
+        {
+          $and: [
+            { 'invoice_information.estimated_arrival_date': { $empty: true } },
+            { 'invoice_information.expected_storage_time': { $gte: today } },
+          ],
+        },
+      ],
+    });
+  }
+
+  return { $and: filterItems };
+}
+
 function ShipmentPlanBlock() {
   const [copyForm] = Form.useForm();
   const datePickerOpenRef = useRef(false);
@@ -306,6 +379,7 @@ function ShipmentPlanBlock() {
   const [mskuOptions, setMskuOptions] = useState([]);
   const [mskuLoadingMore, setMskuLoadingMore] = useState(false);
   const [sortState, setSortState] = useState({ field: '', order: null });
+  const [showAllRows, setShowAllRows] = useState(false);
   const mskuPageRef = useRef(1);
   const mskuHasMoreRef = useRef(false);
   const mskuLoadingRef = useRef(false);
@@ -323,6 +397,7 @@ function ShipmentPlanBlock() {
   }
 
   const requestRows = useCallback(async (nextPage = page, nextPageSize = pageSize, activeParams = params, activeSort = sortState, options = {}) => {
+    const activeShowAllRows = options.showAllRows ?? showAllRows;
     if (!activeParams.asin || !activeParams.country) {
       setRows([]);
       setTotal(0);
@@ -340,12 +415,7 @@ function ShipmentPlanBlock() {
           pageSize: nextPageSize,
           ...(sort ? { sort } : {}),
           appends: 'shop_info,current_inventory_info,country_info,logistics_channel,invoice_information,f_i4gws625myg,sku',
-          filter: JSON.stringify({
-            $and: [
-              { asin: { $eq: activeParams.asin } },
-              { country: { $eq: activeParams.country } },
-            ],
-          }),
+          filter: JSON.stringify(makeShipmentPlanFilter(activeParams, activeShowAllRows)),
         },
       });
       const meta = pickMeta(response);
@@ -356,7 +426,7 @@ function ShipmentPlanBlock() {
     } finally {
       if (!options.silent) setLoading(false);
     }
-  }, [page, pageSize, params.asin, params.country, sortState]);
+  }, [page, pageSize, params.asin, params.country, sortState, showAllRows]);
 
   useEffect(() => {
     const host = ctx.element;
@@ -651,6 +721,15 @@ function ShipmentPlanBlock() {
     requestRows(nextPage, nextPageSize, params, nextSortState);
   }
 
+  function toggleRowScope() {
+    const nextShowAllRows = !showAllRows;
+    cancelCellEdit();
+    setShowAllRows(nextShowAllRows);
+    setPage(1);
+    setSelectedRowKeys([]);
+    requestRows(1, pageSize, params, sortState, { showAllRows: nextShowAllRows });
+  }
+
   function renderEditor(row, column) {
     const optionTexts = column.type === 'sku'
       ? skuOptions.map((option) => option.label)
@@ -892,6 +971,15 @@ function ShipmentPlanBlock() {
     title: '模拟发货计划',
     bodyStyle: { padding: 0 },
     extra: React.createElement(Space, { size: 8 },
+      React.createElement(Button, {
+        size: 'small',
+        type: showAllRows ? 'default' : 'primary',
+        icon: makeScopeButtonIcon(showAllRows),
+        style: makeScopeButtonStyle(showAllRows),
+        title: showAllRows ? '切回只看未入库记录' : '查看当前ASIN国家全部模拟发货记录',
+        onClick: toggleRowScope,
+        disabled: loading,
+      }, showAllRows ? '只看未入库' : '展示全部'),
       React.createElement(Popconfirm, {
         title: `确认删除选中的 ${selectedRowKeys.length} 条记录？`,
         disabled: !selectedRowKeys.length,
