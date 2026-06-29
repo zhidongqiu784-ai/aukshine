@@ -6426,9 +6426,13 @@
     const tableWidth = visibleCols.reduce((s, c) => s + (c.width || 80), 0);
     const HEADER_MAIN_HEIGHT = 30;
     const HEADER_SUB_HEIGHT = 24;
-    const TABLE_VISIBLE_ROWS = 10;
     const TABLE_BODY_ROW_HEIGHT = 66;
-    const tableWrapHeight = HEADER_MAIN_HEIGHT + (hasKwColumns ? HEADER_SUB_HEIGHT : 0) + TABLE_BODY_ROW_HEIGHT * TABLE_VISIBLE_ROWS + 2;
+    const TABLE_MIN_VISIBLE_ROWS = 8;
+    const TABLE_MAX_VISIBLE_ROWS = 20;
+    const tableHeaderHeight = HEADER_MAIN_HEIGHT + (hasKwColumns ? HEADER_SUB_HEIGHT : 0) + 2;
+    const tableWrapMinHeight = tableHeaderHeight + TABLE_BODY_ROW_HEIGHT * TABLE_MIN_VISIBLE_ROWS;
+    const tableWrapMaxHeight = tableHeaderHeight + TABLE_BODY_ROW_HEIGHT * TABLE_MAX_VISIBLE_ROWS;
+    const tableWrapHeight = `clamp(${tableWrapMinHeight}px, calc(100dvh - 395px), ${tableWrapMaxHeight}px)`;
     const getSourceFieldName = (col) => {
       const sourceCollection = SRC_COLLECTION_NAME[col.src];
       return sourceCollection ? `${sourceCollection}.${col.field}` : col.field;
@@ -6852,7 +6856,7 @@
         style: {
           overflowX: 'auto',
           overflowY: 'auto',
-          height: `${tableWrapHeight}px`,
+          height: tableWrapHeight,
           borderRadius: '8px',
           border: '1px solid #d9d9d9',
           boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
