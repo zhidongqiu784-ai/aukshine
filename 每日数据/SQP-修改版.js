@@ -2837,6 +2837,7 @@
     const [country, setCountry] = useState(DEFAULT_TERM_COUNTRIES[0]);
     const [category, setCategory] = useState('');
     const [categoryOptions, setCategoryOptions] = useState([]);
+    const [currentAsinCategory, setCurrentAsinCategory] = useState('');
     const [tab, setTab] = useState('keyword');
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -2847,29 +2848,44 @@
     const [updatingId, setUpdatingId] = useState(null);
     const title = tab === 'root' ? '默认词根' : '默认关键词';
     const normalizeName = (value) => String(value || '').trim();
+    const wasVisibleRef = useRef(false);
+    const selectedCountryRef = useRef(country);
+    selectedCountryRef.current = country;
 
     const loadCategoryOptions = useCallback(async () => {
       if (!visible) return;
+      const selectedCountry = normalizeName(country);
+      if (!selectedCountry) {
+        setCategoryOptions([]);
+        setCategory('');
+        setCurrentAsinCategory('');
+        return;
+      }
       try {
-        const res = await ctx.request({
-          url: 'sqp_default_terms:list',
-          method: 'get',
-          params: { pageSize: 500, sort: 'category' },
-        });
-        const nextOptions = Array.from(new Set(
-          (Array.isArray(res?.data?.data) ? res.data.data : [])
-            .map((item) => normalizeName(item.category))
-            .filter(Boolean)
-        )).map((item) => ({ value: item, label: item }));
-        let preferredCategory = '';
+        const fetchAll = async (url, params = {}) => {
+          const pageSize = 500;
+          const rows = [];
+          for (let page = 1; page <= 10000; page += 1) {
+            const res = await ctx.request({
+              url,
+              method: 'get',
+              params: { ...params, page, pageSize },
+            });
+            const batch = Array.isArray(res?.data?.data) ? res.data.data : [];
+            rows.push(...batch);
+            const totalPage = Number(res?.data?.meta?.totalPage);
+            if (batch.length < pageSize || (Number.isFinite(totalPage) && page >= totalPage)) break;
+          }
+          return rows;
+        };
         const cleanCountry = normalizeName(currentCountry);
         const cleanModel = normalizeName(currentModel);
-        if (cleanCountry && cleanModel) {
-          const skuRes = await ctx.request({
-            url: 'sku:list',
-            method: 'get',
-            params: {
-              pageSize: 1,
+        const defaultRows = await fetchAll('sqp_default_terms:list', {
+          sort: 'category',
+          filter: JSON.stringify({ country: { $eq: selectedCountry } }),
+        });
+        const currentSkuRows = cleanCountry && cleanModel
+          ? await fetchAll('sku:list', {
               sort: 'sku',
               filter: JSON.stringify({
                 $and: [
@@ -2877,21 +2893,48 @@
                   { model: { $eq: cleanModel } },
                 ],
               }),
-            },
-          });
-          preferredCategory = normalizeName((Array.isArray(skuRes?.data?.data) ? skuRes.data.data[0] : null)?.type);
-        }
+            })
+          : [];
+        const preferredCategory = normalizeName(currentSkuRows[0]?.type);
+        const preferredForSelectedCountry = selectedCountry === cleanCountry ? preferredCategory : '';
+        const nextOptions = Array.from(new Set(
+          defaultRows.map((item) => normalizeName(item.category)).filter(Boolean)
+        ))
+          .sort((a, b) => a.localeCompare(b, 'zh-Hans'))
+          .map((item) => ({ value: item, label: item }));
+        if (normalizeName(selectedCountryRef.current) !== selectedCountry) return;
         setCategoryOptions(nextOptions);
-        const hasCurrent = nextOptions.some((item) => item.value === category);
-        const hasPreferred = nextOptions.some((item) => item.value === preferredCategory);
-        if (hasPreferred) setCategory(preferredCategory);
-        else if (!hasCurrent) setCategory(nextOptions[0]?.value || '');
+        setCurrentAsinCategory(preferredCategory);
+        setCategory((prevCategory) => {
+          const cleanCategory = normalizeName(prevCategory);
+          const hasCurrent = nextOptions.some((item) => item.value === cleanCategory);
+          const hasPreferred = preferredForSelectedCountry && nextOptions.some((item) => item.value === preferredForSelectedCountry);
+          if (hasCurrent) return cleanCategory;
+          if (hasPreferred) return preferredForSelectedCountry;
+          return nextOptions[0]?.value || '';
+        });
       } catch (err) {
         ctx.message.error(`加载类目失败：${err?.message || '未知错误'}`);
         setCategoryOptions([]);
         setCategory('');
+        setCurrentAsinCategory('');
       }
-    }, [visible, category, currentCountry, currentModel]);
+    }, [visible, country, currentCountry, currentModel]);
+
+    useEffect(() => {
+      if (visible && !wasVisibleRef.current) {
+        setCategory('');
+      }
+      wasVisibleRef.current = visible;
+    }, [visible]);
+
+    useEffect(() => {
+      if (!visible) return;
+      setName('');
+      setEditingId(null);
+      setEditingName('');
+      setUpdatingId(null);
+    }, [visible, country, category]);
 
     const load = useCallback(async () => {
       if (!visible || !category) {
@@ -2928,6 +2971,7 @@
     useEffect(() => { load(); }, [load]);
     useEffect(() => {
       if (visible && currentCountry && DEFAULT_TERM_COUNTRIES.includes(currentCountry)) {
+        selectedCountryRef.current = currentCountry;
         setCountry(currentCountry);
       }
     }, [visible, currentCountry]);
@@ -2941,6 +2985,7 @@
     }, [visible]);
 
     const existingNames = useMemo(() => new Set(items.map((item) => normalizeName(item.term_name).toLowerCase()).filter(Boolean)), [items]);
+    const currentModelLabel = normalizeName(currentModel);
 
     const addItem = async () => {
       const trimmed = normalizeName(name);
@@ -3048,6 +3093,18 @@
             React.createElement(Button, { type: tab === 'root' ? 'primary' : 'default', onClick: () => setTab('root') }, '默认词根')
           )
         ),
+
+        React.createElement('div', {
+          style: {
+            padding: '7px 10px',
+            borderRadius: '6px',
+            border: '1px solid #bfdbfe',
+            background: '#eff6ff',
+            color: '#1d4ed8',
+            fontSize: `${FONT_SIZE_XS}px`,
+            lineHeight: 1.6,
+          },
+        }, `当前站点：${country || '未识别'}；当前型号：${currentModelLabel || '未识别'}；当前类目：${currentAsinCategory || '未识别'}（类目下拉仅来自当前选择站点的默认词配置）`),
 
         React.createElement('div', { style: { display: 'flex', gap: 8 } },
           React.createElement(Input, {
