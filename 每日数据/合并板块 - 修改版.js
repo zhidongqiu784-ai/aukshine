@@ -607,10 +607,18 @@
     const idx = getCompetitorRoleIndex(role);
     return palette[(Number.isFinite(idx) && idx > 0 ? idx - 1 : 0) % palette.length];
   };
+  const COMPETITOR_GROUP_HEADER_COLOR = '#EB6793';
   const COMPETITOR_SUB_FIELDS = [
     { key: 'rank', label: '排名', width: 110, headerColor: '#EB6793' },
     { key: 'notes', label: '操作分析', width: 220, headerColor: '#F2BABA' },
   ];
+  const TARGET_HEADER_VALUE_CONFIG = {
+    target_ad_cvr_formula: { sourceField: 'target_ad_cvr', type: 'percent' },
+    target_cpa_formula: { sourceField: 'target_cpa', type: 'number' },
+    ideal_cpu_by_margin_formula: { sourceField: 'ideal_cpu_by_margin', type: 'number' },
+    target_profit_margin_formula: { sourceField: 'target_profit_margin', type: 'percent' },
+    target_ad_spend_rate_formula: { sourceField: 'target_ad_spend_rate', type: 'percent' },
+  };
   const isDynamicColumnKey = (key) => {
     return String(key || '').startsWith('kw_actual_') || String(key || '').startsWith('competitor_dynamic_');
   };
@@ -3090,7 +3098,7 @@
     // 计算日期范围
     const getDateRange = useMemo(() => {
       if (dateFilterType === 'all')    return null;
-      if (dateFilterType === 'custom') return expandDateRangeToNaturalWeeks(customDateRange);
+      if (dateFilterType === 'custom') return customDateRange;
       const now = new Date();
       const pad = (n) => String(n).padStart(2, '0');
       const fmt = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -3107,7 +3115,7 @@
         case 'last_month': { const s = new Date(now.getFullYear(), now.getMonth() - 1, 1); const e = new Date(now.getFullYear(), now.getMonth(), 0); range = [fmt(s), fmt(e)]; break; }
         default: range = null;
       }
-      return expandDateRangeToNaturalWeeks(range);
+      return range;
     }, [dateFilterType, customDateRange]);
 
     const pickTotalFromResponse = (res) => {
@@ -3768,7 +3776,7 @@
               _competitorField: sub.key,
               _competitorGroupKey: groupKey,
               _competitorGroupLabel: groupLabel,
-              _competitorGroupHeaderColor: getCompetitorColor(role),
+              _competitorGroupHeaderColor: COMPETITOR_GROUP_HEADER_COLOR,
               _competitorSubLabel: sub.label,
               _isCompetitorSubColumn: true,
             });
@@ -7691,9 +7699,42 @@
         hideEmptyRules: true,
       });
     };
+    const formatTargetHeaderNumber = (value) => {
+      const n = toFormulaNumber(value);
+      if (n == null) return '';
+      const rounded = Math.round((n + Number.EPSILON) * 100) / 100;
+      return String(rounded).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
+    };
+    const getTargetHeaderValue = (sourceField) => {
+      if (!sourceField) return null;
+      if (targetDefaultRecord?.country_asin === currentCountryAsin && !isBlankLike(targetDefaultRecord[sourceField])) {
+        return targetDefaultRecord[sourceField];
+      }
+      const rows = Array.isArray(data) ? data : [];
+      for (let i = 0; i < rows.length; i += 1) {
+        const row = rows[i];
+        if (!row || row.__rowType === WEEKLY_SUMMARY_ROW_TYPE) continue;
+        const sourceValue = row.__src?.target_default?.[sourceField];
+        if (!isBlankLike(sourceValue)) return sourceValue;
+        if (!isBlankLike(row[sourceField])) return row[sourceField];
+      }
+      return null;
+    };
+    const getHeaderDisplayLabel = (col) => {
+      const config = TARGET_HEADER_VALUE_CONFIG[col.field];
+      if (!config) return col.label;
+      const rawValue = getTargetHeaderValue(config.sourceField);
+      const numericValue = toFormulaNumber(rawValue);
+      if (numericValue == null) return col.label;
+      const formattedValue = config.type === 'percent'
+        ? `${formatTargetHeaderNumber(numericValue * 100)}%`
+        : formatTargetHeaderNumber(numericValue);
+      return formattedValue ? `${col.label}-${formattedValue}` : col.label;
+    };
     const renderHeaderLabel = (col) => {
       const isOwnPageScreenshotCol = col.key === 'order_link_page_screenshot';
       const currentAsinUrl = isOwnPageScreenshotCol ? buildAmazonAsinUrl(filterAsin, filterCountry) : '';
+      const displayLabel = getHeaderDisplayLabel(col);
       const content = currentAsinUrl
         ? React.createElement(React.Fragment, null,
             React.createElement('a', {
@@ -7733,9 +7774,9 @@
                 },
               }, filterAsin)
             ),
-            React.createElement('span', { style: { display: 'block', lineHeight: '13px', marginTop: '1px' } }, col.label)
+            React.createElement('span', { style: { display: 'block', lineHeight: '13px', marginTop: '1px' } }, displayLabel)
           )
-        : col.label;
+        : displayLabel;
       return React.createElement(Tooltip, {
         title: getHeaderTooltipText(col),
         placement: 'top',
