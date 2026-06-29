@@ -6140,9 +6140,13 @@
     const HEADER_GROUP_HEIGHT = 28;
     const HEADER_MAIN_HEIGHT = 26;
     const HEADER_SUB_HEIGHT = 20;
-    const TABLE_VISIBLE_ROWS = 10;
     const TABLE_BODY_ROW_HEIGHT = 66;
-    const tableWrapHeight = HEADER_GROUP_HEIGHT + HEADER_MAIN_HEIGHT + (hasCompetitorColumns ? HEADER_SUB_HEIGHT : 0) + TABLE_BODY_ROW_HEIGHT * TABLE_VISIBLE_ROWS + 2;
+    const TABLE_MIN_VISIBLE_ROWS = 8;
+    const TABLE_MAX_VISIBLE_ROWS = 20;
+    const tableHeaderHeight = HEADER_GROUP_HEIGHT + HEADER_MAIN_HEIGHT + (hasCompetitorColumns ? HEADER_SUB_HEIGHT : 0) + 2;
+    const tableWrapMinHeight = tableHeaderHeight + TABLE_BODY_ROW_HEIGHT * TABLE_MIN_VISIBLE_ROWS;
+    const tableWrapMaxHeight = tableHeaderHeight + TABLE_BODY_ROW_HEIGHT * TABLE_MAX_VISIBLE_ROWS;
+    const tableWrapHeight = `clamp(${tableWrapMinHeight}px, calc(100dvh - 395px), ${tableWrapMaxHeight}px)`;
     const pinnedLeftMap = useMemo(() => { const map = {}; let left = 0; visibleCols.forEach((col) => { if (col.pinned) { map[col.key] = left; left += col.width || 80; } }); return map; }, [visibleCols]);
     const headerColumnGroups = useMemo(() => {
       const groups = [];
@@ -8571,7 +8575,7 @@
         onDragOver: onTableDragOver,
         onMouseUp: stopSelecting,
         onMouseLeave: stopSelecting,
-        style: { overflowX: 'auto', overflowY: 'auto', height: `${tableWrapHeight}px`, borderRadius: '8px', border: '1px solid #d9d9d9', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', background: '#fff', outline: 'none' }
+        style: { overflowX: 'auto', overflowY: 'auto', height: tableWrapHeight, borderRadius: '8px', border: '1px solid #d9d9d9', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', background: '#fff', outline: 'none' }
       },
         loading && data.length === 0
           ? React.createElement('div', { style: { padding: '40px', textAlign: 'center', color: '#999', fontSize: `${FONT_SIZE}px` } }, '正在加载数据...')
