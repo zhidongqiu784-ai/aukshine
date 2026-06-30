@@ -13,7 +13,7 @@
   const BLOCK_NAME_SETTING_KEY = `${BLOCK_UID}__block_name`;
   const COLUMN_GROUP_ORDER_KEY = '__column_group_order';
   const COLUMN_PAGE_SIZE_KEY = '__page_size';
-  const IS_ADMIN         = currentUserLevel >= 2;
+  const IS_ADMIN         = currentUserLevel === 3;
   const DEFAULT_COLUMN_VIEW_IDS = ['default_1', 'default_2'];
   const DEFAULT_COLUMN_VIEW_LABELS = {
     default_1: '完整列',
@@ -61,6 +61,7 @@
   const SK_COUNTRY     = '__up_country';
   const SK_ASIN        = '__up_asin';
   const SK_SALE_OWNER  = '__up_saleOwner';
+  const SK_STATUS      = '__up_status';
   const readGlobal     = () => ctx.engine[GLOBAL_KEY] || null;
   const writeGlobal    = (data) => {
     ctx.engine[GLOBAL_KEY] = data ? {
@@ -68,6 +69,7 @@
       country: data.country || null,
       asin: data.asin || null,
       sale_owner: data.saleOwner || data.sale_owner || null,
+      status: data.status || null,
     } : null;
   };
 
@@ -85,6 +87,7 @@
     saveToEngine(SK_COUNTRY,    params?.country);
     saveToEngine(SK_ASIN,       params?.asin);
     saveToEngine(SK_SALE_OWNER, params?.saleOwner || params?.sale_owner);
+    saveToEngine(SK_STATUS,     params?.status);
   }
 
   function loadCachedParams() {
@@ -94,6 +97,7 @@
       country:   getFromEngine(SK_COUNTRY)    || globalParams.country    || null,
       asin:      getFromEngine(SK_ASIN)       || globalParams.asin       || null,
       saleOwner: getFromEngine(SK_SALE_OWNER) || globalParams.saleOwner  || globalParams.sale_owner || null,
+      status:    getFromEngine(SK_STATUS)     || globalParams.status     || null,
     };
   }
 
@@ -117,6 +121,7 @@
     if (params.country)   parts.push('country='    + encodeURIComponent(params.country));
     if (params.asin)      parts.push('asin='       + encodeURIComponent(params.asin));
     if (params.saleOwner) parts.push('sale_owner=' + encodeURIComponent(params.saleOwner));
+    if (params.status)    parts.push('status='     + encodeURIComponent(params.status));
     return parts.length ? '?' + parts.join('&') : '';
   }
 
@@ -138,12 +143,13 @@
     const country   = p['country']    || cached.country   || null;
     const asin      = p['asin']       || cached.asin      || null;
     const saleOwner = p['sale_owner'] || cached.saleOwner || null;
+    const status    = p['status']     || cached.status    || null;
 
-    return { model, country, asin, saleOwner };
+    return { model, country, asin, saleOwner, status };
   }
 
   function hasUrlParams(params) {
-    return !!(params?.model || params?.country || params?.asin || params?.saleOwner || params?.sale_owner);
+    return !!(params?.model || params?.country || params?.asin || params?.saleOwner || params?.sale_owner || params?.status);
   }
 
   function needPatchSearch(parsed, params) {
@@ -151,7 +157,8 @@
       (!parsed['model']      && params.model)     ||
       (!parsed['country']    && params.country)   ||
       (!parsed['asin']       && params.asin)      ||
-      (!parsed['sale_owner'] && params.saleOwner)
+      (!parsed['sale_owner'] && params.saleOwner) ||
+      (!parsed['status']     && params.status)
     );
   }
 
@@ -735,6 +742,58 @@
     promo_days_40d: '公式：同 ASIN + 国家，统计当条 date 往前 1 到 40 天内 activity_annotation 非空的天数。',
     promo_days_90d: '公式：同 ASIN + 国家，统计当条 date 往前 1 到 90 天内 activity_annotation 非空的天数。',
     lp_duration_days: '公式：同 ASIN + 国家按 date 排序，统计当前 LP/WP/TP 连续未变化天数。',
+  };
+
+  const WEEKLY_PERFORMANCE_FIELD_TOOLTIP_TEXT = {
+    sales: '销量 = 领星销量按国家+ASIN汇总累加。\nsales = sum(volume)。',
+    zirandan: '自然订单量 = 总订单量 - 广告订单量。\nzirandan = order_items - guanggaodan。',
+    guanggaodan: '广告订单量 = 领星广告订单量按国家+ASIN汇总累加。\nguanggaodan = sum(ad_order_quantity)。',
+    adv_rate: '广告订单量占比 = 广告订单量 ÷ 销量；销量为空时为空。\nadv_rate = round(guanggaodan ÷ sales, 4)；sales 为 0 时为 null。',
+    zongliuliang: '总流量 = 同国家+ASIN下取 Sessions-Total 最大值。\nzongliuliang = max(sessions_total)。',
+    guanggaodianji: '广告点击量 = 领星广告点击量按国家+ASIN汇总累加。\nguanggaodianji = sum(clicks)。',
+    zirandianji: '自然点击 = 总流量 - 广告点击量。\nzirandianji = zongliuliang - guanggaodianji。',
+    guanggaohuafei: '广告花费 = 领星广告花费按国家+ASIN汇总累加，金额保留两位小数。\nguanggaohuafei = round(sum(abs(spend)), 2)。',
+    guanggaocvr: '广告CVR = 广告订单量 ÷ 广告点击量；广告点击量为空时为空。\nguanggaocvr = round(guanggaodan ÷ guanggaodianji, 4)；guanggaodianji 为 0 时为 null。',
+    cpo: 'CPO = 广告花费 ÷ 广告订单量，结果取绝对值并保留两位小数；广告订单量为空时为空。\ncpo = abs(round(guanggaohuafei ÷ guanggaodan, 2))；guanggaodan 为 0 时为 null。',
+    cpu: 'CPU = 广告花费 ÷ 销量，结果取绝对值并保留两位小数；销量为空时为空。\ncpu = abs(round(guanggaohuafei ÷ sales, 2))；sales 为 0 时为 null。',
+    cpc: 'CPC = 广告花费 ÷ 广告点击量，保留两位小数；广告点击量为空时为空。\ncpc = round(guanggaohuafei ÷ guanggaodianji, 2)；guanggaodianji 为 0 时为 null。',
+    ranking: '小类排名 = 从小类排名数组取第一个小类排名。\nranking = small_cate_rank[0].rank。',
+    reviews_count: '评论数量 = 同国家+ASIN下取评论数量最大值。\nreviews_count = max(reviews_count)。',
+    avg_star: '评分 = 取领星接口当前评分。\navg_star = avg_star。',
+    prev_star: '前一个评分 = 取领星接口前一个评分。\nprev_star = prev_star。',
+    prev_rank: '上一次小类排名 = 从小类排名数组取第一个上一次小类排名。\nprev_rank = small_cate_rank[0].prev_rank。',
+    promotion_volume: '促销销量 = 促销销量按国家+ASIN汇总累加。\npromotion_volume = sum(promotion_volume)。',
+    ad_sales_amount: '广告销售额 = 广告销售额按国家+ASIN汇总累加，金额保留两位小数。\nad_sales_amount = round(sum(abs(ad_sales_amount)), 2)。',
+    b2b_volume: 'B2B销量 = B2B销量按国家+ASIN汇总累加。\nb2b_volume = sum(b2b_volume)。',
+    return_count: '退款量 = 退款量按国家+ASIN汇总累加。\nreturn_count = sum(return_count)。',
+    impressions: '展示量 = 展示量按国家+ASIN汇总累加。\nimpressions = sum(impressions)。',
+    shared_ads_sb_cost: 'SB广告费 = SB广告费按国家+ASIN汇总累加，金额保留两位小数。\nshared_ads_sb_cost = round(sum(abs(shared_ads_sb_cost)), 2)。',
+    shared_ads_sbv_cost: 'SBV广告费 = SBV广告费按国家+ASIN汇总累加，金额保留两位小数。\nshared_ads_sbv_cost = round(sum(abs(shared_ads_sbv_cost)), 2)。',
+    ads_sd_cost: 'SD广告费 = SD广告费按国家+ASIN汇总累加，金额保留两位小数。\nads_sd_cost = round(sum(abs(ads_sd_cost)), 2)。',
+    ads_sp_cost: 'SP广告费 = SP广告费按国家+ASIN汇总累加，金额保留两位小数。\nads_sp_cost = round(sum(abs(ads_sp_cost)), 2)。',
+    ads_sd_sales: 'SD广告销售额 = SD广告销售额按国家+ASIN汇总累加，金额保留两位小数。\nads_sd_sales = round(sum(abs(ads_sd_sales)), 2)。',
+    ads_sp_sales: 'SP广告销售额 = SP广告销售额按国家+ASIN汇总累加，金额保留两位小数。\nads_sp_sales = round(sum(abs(ads_sp_sales)), 2)。',
+    shared_ads_sb_sales: 'SB广告销售额 = SB广告销售额按国家+ASIN汇总累加，金额保留两位小数。\nshared_ads_sb_sales = round(sum(abs(shared_ads_sb_sales)), 2)。',
+    shared_ads_sbv_sales: 'SBV广告销售额 = SBV广告销售额按国家+ASIN汇总累加，金额保留两位小数。\nshared_ads_sbv_sales = round(sum(abs(shared_ads_sbv_sales)), 2)。',
+    ad_direct_order_quantity: '直接成交订单量 = 直接成交订单量按国家+ASIN汇总累加。\nad_direct_order_quantity = sum(ad_direct_order_quantity)。',
+    page_views_total: 'PV-Total = 同国家+ASIN下取 PV-Total 最大值。\npage_views_total = max(page_views_total)。',
+    page_views: 'PV-Browser = 同国家+ASIN下取 PV-Browser 最大值。\npage_views = max(page_views)。',
+    page_views_mobile: 'PV-Mobile = 同国家+ASIN下取 PV-Mobile 最大值。\npage_views_mobile = max(page_views_mobile)。',
+    sessions: 'Sessions-Browser = 同国家+ASIN下取 Sessions-Browser 最大值。\nsessions = max(sessions)。',
+    sessions_mobile: 'Sessions-Mobile = 同国家+ASIN下取 Sessions-Mobile 最大值。\nsessions_mobile = max(sessions_mobile)。',
+    ctr: 'CTR = 广告点击量 ÷ 展示量；展示量为空时为空。\nctr = round(guanggaodianji ÷ impressions, 4)；impressions 为 0 时为 null。',
+    volume_cvr: '销量CVR = 销量 ÷ 总流量；总流量为空时为空。\nvolume_cvr = round(sales ÷ zongliuliang, 4)；zongliuliang 为 0 时为 null。',
+    return_rate: '退款率 = 退款量 ÷ 销量；销量为空时为空。\nreturn_rate = round(return_count ÷ sales, 4)；sales 为 0 时为 null。',
+    return_goods_count: '退货量 = 退货量按国家+ASIN汇总累加。\nreturn_goods_count = sum(return_goods_count)。',
+    date: '日期 = 取本次查询日期。\ndate = start_date。',
+    return_goods_rate: '退货率 = 退货量 ÷ 销量；销量为空时为空。\nreturn_goods_rate = round(return_goods_count ÷ sales, 4)；sales 为 0 时为 null。',
+    organic_traffic: '自然流量 = 总流量 - 广告点击量。\norganic_traffic = zongliuliang - guanggaodianji。',
+    natural_traffic_proportion: '自然流量占比 = 自然流量 ÷ 总流量；总流量为空时为空。\nnatural_traffic_proportion = round(organic_traffic ÷ zongliuliang, 4)；zongliuliang 为 0 时为 null。',
+    ad_direct_sales_amount: '直接成交额 = 直接成交额按国家+ASIN汇总累加，金额保留两位小数。\nad_direct_sales_amount = round(sum(abs(ad_direct_sales_amount)), 2)。',
+    acos: 'ACOS = 广告花费 ÷ 广告销售额；广告销售额为空时为空。\nacos = round(guanggaohuafei ÷ ad_sales_amount, 4)；ad_sales_amount 为 0 时为 null。',
+    cpa: 'CPA = 广告花费 ÷ 广告订单量，保留两位小数；广告订单量为空时为空。\ncpa = round(guanggaohuafei ÷ guanggaodan, 2)；guanggaodan 为 0 时为 null。',
+    indirect_order_volume: '间接跑单订单量 = 广告订单量 - 直接成交订单量。\nindirect_order_volume = guanggaodan - ad_direct_order_quantity。',
+    category: '类别 = 从小类排名数组取第一个类别。\ncategory = small_cate_rank[0].category。',
   };
 
   const SQL_UPDATED_FIELD_TEXT = {
@@ -2225,7 +2284,7 @@
     };
   };
 
-  const DAILY_FORMULA_PATCH_FIELDS = new Set(['off', 'promo_day', 'lp_duration_days', 'promo_days_40d', 'promo_days_90d', 'target_gap']);
+  const DAILY_FORMULA_PATCH_FIELDS = new Set(['activity_annotation', 'off', 'promo_day', 'lp_duration_days', 'promo_days_40d', 'promo_days_90d', 'target_gap']);
   const TARGET_FORMULA_PATCH_FIELDS = new Set([
     'goal_subcategory_rank',
     'target_ad_cvr_formula',
@@ -2929,6 +2988,7 @@
     const filterCountry = urlParams?.country || null;
     const filterModel   = urlParams?.model   || null;
     const filterSaleOwner = urlParams?.saleOwner || urlParams?.sale_owner || null;
+    const hasRequiredUrlParams = !!(filterModel && filterCountry && filterAsin && filterSaleOwner);
 
     useEffect(function() {
       function setResolvedParams(search) {
@@ -2972,6 +3032,7 @@
             country:   p['country']    || getFromEngine(SK_COUNTRY),
             asin:      p['asin']       || getFromEngine(SK_ASIN),
             saleOwner: p['sale_owner'] || getFromEngine(SK_SALE_OWNER),
+            status:    p['status']     || getFromEngine(SK_STATUS),
           });
         }
 
@@ -3164,6 +3225,64 @@
       }
       return all;
     }, [fetchAllList]);
+
+    const buildActivityAnnotationMatchMap = useCallback(async (dailyRows) => {
+      const sourceRows = Array.isArray(dailyRows) ? dailyRows.filter(Boolean) : [];
+      const rowMetaByKey = {};
+      const asins = new Set();
+      const countries = new Set();
+      sourceRows.forEach((row) => {
+        const rowKey = row?.country_asin_date;
+        const asin = String(row?.asin ?? '').trim();
+        const country = String(row?.country ?? '').trim();
+        const dateKey = toDateKey(row?.date);
+        if (!rowKey || !asin || !country || !dateKey) return;
+        rowMetaByKey[rowKey] = { asin, country, dateKey };
+        asins.add(asin);
+        countries.add(country);
+      });
+      if (!Object.keys(rowMetaByKey).length || !asins.size) return {};
+
+      const dealRows = await fetchAllByIn('deal_date:list', 'asin', [...asins], {
+        extraAnd: [
+          countries.size ? { country: { $in: [...countries] } } : null,
+          { promotion_type: { $in: ['BD', 'LD'] } },
+          { origin_status: { $in: ['已结束', '进行中'] } },
+        ].filter(Boolean),
+        chunkSize: 80,
+        pageSize: 500,
+      });
+
+      const dealsByCountryAsin = {};
+      [...dealRows]
+        .sort((a, b) => {
+          const startCompare = toDateKey(a?.promotion_start_time).localeCompare(toDateKey(b?.promotion_start_time));
+          if (startCompare) return startCompare;
+          return String(a?.id ?? '').localeCompare(String(b?.id ?? ''));
+        })
+        .forEach((deal) => {
+          const promotionType = String(deal?.promotion_type ?? '').trim();
+          const originStatus = String(deal?.origin_status ?? '').trim();
+          const asin = String(deal?.asin ?? '').trim();
+          const country = String(deal?.country ?? '').trim();
+          const startDate = toDateKey(deal?.promotion_start_time);
+          const endDate = toDateKey(deal?.promotion_end_time);
+          if (!['BD', 'LD'].includes(promotionType)) return;
+          if (!['已结束', '进行中'].includes(originStatus)) return;
+          if (!asin || !country || !startDate || !endDate) return;
+          const countryAsin = toCountryAsinKey(country, asin);
+          if (!dealsByCountryAsin[countryAsin]) dealsByCountryAsin[countryAsin] = [];
+          dealsByCountryAsin[countryAsin].push({ startDate, endDate, promotionType });
+        });
+
+      const result = {};
+      Object.entries(rowMetaByKey).forEach(([rowKey, meta]) => {
+        const deals = dealsByCountryAsin[toCountryAsinKey(meta.country, meta.asin)] || [];
+        const matchedDeal = deals.find((deal) => meta.dateKey >= deal.startDate && meta.dateKey <= deal.endDate);
+        if (matchedDeal?.promotionType) result[rowKey] = matchedDeal.promotionType;
+      });
+      return result;
+    }, [fetchAllByIn]);
 
     const buildRsgRefundNumberMap = useCallback(async (dailyRows) => {
       const sourceRows = Array.isArray(dailyRows) ? dailyRows.filter(Boolean) : [];
@@ -3463,7 +3582,6 @@
           { date: { $gte: group.start } },
           { date: { $lte: group.end } },
         ];
-        if (currentUserLevel === 1) filterAnd.push({ sale_owner: { $eq: currentUserName } });
         const rows = await fetchAllList('daily_asins:list', {
           sort: 'date',
           filter: JSON.stringify({ $and: filterAnd }),
@@ -3890,6 +4008,23 @@
         });
         const rsgSyncResult = await syncDailyRsgNumbersFromRefunds(dailyRowsForFormula, { writeBack: false });
         dailyRowsForFormula = rsgSyncResult.rows.length ? rsgSyncResult.rows : dailyRowsForFormula;
+        const originalActivityAnnotationMap = {};
+        dailyRowsForFormula.forEach((row) => {
+          if (row?.country_asin_date) originalActivityAnnotationMap[row.country_asin_date] = row.activity_annotation;
+        });
+        let activityAnnotationMatchMap = {};
+        try {
+          activityAnnotationMatchMap = await buildActivityAnnotationMatchMap(dailyRowsForFormula);
+          if (Object.keys(activityAnnotationMatchMap).length) {
+            dailyRowsForFormula = dailyRowsForFormula.map((row) => {
+              const key = row?.country_asin_date;
+              if (!key || !Object.prototype.hasOwnProperty.call(activityAnnotationMatchMap, key)) return row;
+              return { ...row, activity_annotation: activityAnnotationMatchMap[key] };
+            });
+          }
+        } catch (err) {
+          if (!silent) ctx.message.warning(`活动标注匹配失败，已跳过：${err?.message || ''}`);
+        }
         reportProgress(allDailyRows && allDailyRows.length <= rows.length ? '正在读取当前行关联数据...' : '正在读取试算与关联数据...', 22);
         const pricingScenarioRows = await fetchAllByIn('pricing_scenarios:list', 'asin_country', asinCountries, {
           extraAnd: [{ scenario_type: { $in: ['normal', 'review'] } }],
@@ -4171,7 +4306,13 @@
             }
             queueOrderLinkUpdate(key, baseOrderLinkUpdate, { [field]: value });
           });
+          const hasMatchedActivityAnnotation = Object.prototype.hasOwnProperty.call(activityAnnotationMatchMap, key);
+          const matchedActivityAnnotation = hasMatchedActivityAnnotation ? activityAnnotationMatchMap[key] : null;
+          const activityAnnotationUpdate = hasMatchedActivityAnnotation && !isFormulaSameValue(originalActivityAnnotationMap[key], matchedActivityAnnotation)
+            ? { activity_annotation: matchedActivityAnnotation }
+            : {};
           const updates = {
+            ...activityAnnotationUpdate,
             rsg_number: rsgNumber,
             off: buildDailyOffValue(source),
             promo_day: hasPromoActivity(source) ? 1 : 0,
@@ -4180,6 +4321,7 @@
             promo_days_90d: promoDays90dMap[key] ?? null,
             target_gap: targetGap,
           };
+          const sameActivityAnnotation = !Object.keys(activityAnnotationUpdate).length;
           const sameRsgNumber = !rsgSyncResult.patchMap[key];
           const sameOff = isFormulaSameValue(source.off, updates.off);
           const samePromoDay = isFormulaSameValue(source.promo_day, updates.promo_day);
@@ -4187,7 +4329,7 @@
           const samePromoDays40d = isFormulaSameValue(source.promo_days_40d, updates.promo_days_40d);
           const samePromoDays90d = isFormulaSameValue(source.promo_days_90d, updates.promo_days_90d);
           const sameTargetGap = isFormulaSameValue(source.target_gap, updates.target_gap);
-          if (!(sameRsgNumber && sameOff && samePromoDay && sameLpDuration && samePromoDays40d && samePromoDays90d && sameTargetGap)) {
+          if (!(sameActivityAnnotation && sameRsgNumber && sameOff && samePromoDay && sameLpDuration && samePromoDays40d && samePromoDays90d && sameTargetGap)) {
             patchMap[key] = { ...(patchMap[key] || {}), ...updates };
             updateJobs.push({ key, updates });
           }
@@ -4630,7 +4772,7 @@
           setCalcProgress('');
         }
       }
-    }, [attachWeeklySummaryDataToRows, fetchAllByIn, getSummaryKeyForRow, refreshWeeklySummariesFromRows, syncDailyRsgNumbersFromRefunds]);
+    }, [attachWeeklySummaryDataToRows, buildActivityAnnotationMatchMap, fetchAllByIn, getSummaryKeyForRow, refreshWeeklySummariesFromRows, syncDailyRsgNumbersFromRefunds]);
 
     async function loadAllDailyRowsForCurrentCountryAsin() {
       if (!filterCountry || !filterAsin) return [];
@@ -4638,7 +4780,6 @@
         { country: { $eq: filterCountry } },
         { asin: { $eq: filterAsin } },
       ];
-      if (currentUserLevel === 1) filterAnd.push({ sale_owner: { $eq: currentUserName } });
       return fetchAllList('daily_asins:list', {
         sort: 'date',
         filter: JSON.stringify({ $and: filterAnd }),
@@ -4730,8 +4871,13 @@
       const skipFormula = options.skipFormula === true;
       try {
         setLoading(true);
+        if (!hasRequiredUrlParams) {
+          dataRef.current = [];
+          setData([]);
+          setTotal(0);
+          return [];
+        }
         const dailyFilterAnd = [];
-        if (currentUserLevel === 1) dailyFilterAnd.push({ sale_owner: { $eq: currentUserName } });
         if (filterAsin)    dailyFilterAnd.push({ asin:    { $eq: filterAsin    } });
         if (filterCountry) dailyFilterAnd.push({ country: { $eq: filterCountry } });
         // 日期筛选
@@ -4772,7 +4918,6 @@
         const rangeStarts = candidateSummaryRanges.map((item) => item.start).filter(Boolean).sort();
         const rangeEnds = candidateSummaryRanges.map((item) => item.end).filter(Boolean).sort();
         const summaryDailyFilterAnd = [];
-        if (currentUserLevel === 1) summaryDailyFilterAnd.push({ sale_owner: { $eq: currentUserName } });
         if (productConfigAsinCountries.length) summaryDailyFilterAnd.push({ asin_country: { $in: productConfigAsinCountries } });
         else {
           if (filterAsin) summaryDailyFilterAnd.push({ asin: { $eq: filterAsin } });
@@ -4995,7 +5140,7 @@
       } finally {
         setLoading(false);
       }
-    }, [filterAsin, filterCountry, currentUserName, currentUserLevel, dateFilterType, getDateRange, getDailySort, fetchAllList, fetchAllByIn, buildDynamicKeywordCols, buildDynamicCompetitorCols, normalizeWeeklySummaryRecord, getSummaryKeyForRow, attachWeeklySummaryDataToRows, refreshWeeklySummariesFromRows, recalcAllCoreFormulas, showFormulaProgress, finishFormulaProgress, resetFormulaProgress, syncDailyRsgNumbersFromRefunds]);
+    }, [filterAsin, filterCountry, hasRequiredUrlParams, dateFilterType, getDateRange, getDailySort, fetchAllList, fetchAllByIn, buildDynamicKeywordCols, buildDynamicCompetitorCols, normalizeWeeklySummaryRecord, getSummaryKeyForRow, attachWeeklySummaryDataToRows, refreshWeeklySummariesFromRows, recalcAllCoreFormulas, showFormulaProgress, finishFormulaProgress, resetFormulaProgress, syncDailyRsgNumbersFromRefunds]);
 
     useEffect(() => {
       const backgroundState = backgroundMergeSummaryRef.current;
@@ -5060,12 +5205,11 @@
         { country: { $eq: filterCountry } },
         { asin: { $eq: filterAsin } },
       ];
-      if (currentUserLevel === 1) dailyFilterAnd.push({ sale_owner: { $eq: currentUserName } });
       return fetchAllList('daily_asins:list', {
         sort: 'date',
         filter: JSON.stringify({ $and: dailyFilterAnd }),
       }, 1000);
-    }, [currentUserLevel, currentUserName, filterAsin, filterCountry, fetchAllList]);
+    }, [filterAsin, filterCountry, fetchAllList]);
 
     const scheduleBackgroundFormulaSync = useCallback((changedRows = []) => {
       const asinCountries = [
@@ -7680,6 +7824,19 @@
         hideEmptyRules: true,
       });
       if (FIELD_TOOLTIP_DATA[col.field]) return renderTooltip(FIELD_TOOLTIP_DATA[col.field]);
+      if (col.src === 'weekly' && WEEKLY_PERFORMANCE_FIELD_TOOLTIP_TEXT[col.field]) {
+        const weeklyTooltipLines = WEEKLY_PERFORMANCE_FIELD_TOOLTIP_TEXT[col.field].split('\n');
+        return renderTooltip({
+          title: col.label,
+          formula: weeklyTooltipLines[0] || '直接展示该指标值',
+          fields: [
+            { label: '字段标识公式', field: weeklyTooltipLines[1] || `${col.field} = 直接展示该指标值` },
+            { label: `字段来源（${col.label}）`, field: `weekly_performance.${col.field}` },
+          ],
+          writeBackField: `weekly_performance.${col.field}`,
+          hideEmptyRules: true,
+        });
+      }
       const sqlSourceKey = `${col.src}.${col.field}`;
       if (SQL_UPDATED_FIELD_TEXT[sqlSourceKey]) return renderTooltip({
         title: col.label,
@@ -8457,7 +8614,7 @@
           }, crossHighlightEnabled ? '高亮行列：开' : '高亮行列'),
           React.createElement('button', { type: 'button', onClick: openTargetManager, disabled: !currentCountryAsin, style: { ...btnStyle('#EB6793', '#fff', '#d84f7c'), opacity: currentCountryAsin ? 1 : 0.6, cursor: currentCountryAsin ? 'pointer' : 'not-allowed' } }, '管理目标值'),
           React.createElement('button', { type: 'button', onClick: openCompetitorManager, disabled: !currentCountryAsin, style: { ...btnStyle('#EB6793', '#fff', '#d84f7c'), opacity: currentCountryAsin ? 1 : 0.6, cursor: currentCountryAsin ? 'pointer' : 'not-allowed' } }, '管理竞对 ASIN'),
-          React.createElement('button', { type: 'button', onClick: openKeywordManager, disabled: !currentCountryAsin, style: { ...btnStyle('#EB6793', '#fff', '#d84f7c'), opacity: currentCountryAsin ? 1 : 0.6, cursor: currentCountryAsin ? 'pointer' : 'not-allowed' } }, '追踪 SQP 词自然位'),
+          React.createElement('button', { type: 'button', onClick: openKeywordManager, disabled: !currentCountryAsin, style: { ...btnStyle('#EB6793', '#fff', '#d84f7c'), opacity: currentCountryAsin ? 1 : 0.6, cursor: currentCountryAsin ? 'pointer' : 'not-allowed' } }, '管理 SQP 关键词'),
           React.createElement('button', { type: 'button', onClick: openCouponManager, disabled: !currentAsinCountry, style: { ...btnStyle('#EB6793', '#fff', '#d84f7c'), opacity: currentAsinCountry ? 1 : 0.6, cursor: currentAsinCountry ? 'pointer' : 'not-allowed' } }, '管理 Coupon 预估比例'),
         ),
 
@@ -8577,7 +8734,9 @@
         onMouseLeave: stopSelecting,
         style: { overflowX: 'auto', overflowY: 'auto', height: tableWrapHeight, borderRadius: '8px', border: '1px solid #d9d9d9', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', background: '#fff', outline: 'none' }
       },
-        loading && data.length === 0
+        !hasRequiredUrlParams
+          ? React.createElement('div', { style: { padding: '40px', textAlign: 'center', color: '#999', fontSize: `${FONT_SIZE}px` } }, '暂无数据 请重新进入页面')
+          : loading && data.length === 0
           ? React.createElement('div', { style: { padding: '40px', textAlign: 'center', color: '#999', fontSize: `${FONT_SIZE}px` } }, '正在加载数据...')
           : data.length === 0
             ? React.createElement('div', { style: { padding: '40px', textAlign: 'center', color: '#999', fontSize: `${FONT_SIZE}px` } }, '暂无数据')

@@ -19,7 +19,7 @@
   const DEFAULT_COLUMN_VIEW_LABELS = { [DEFAULT_COLUMN_VIEW_ID]: '默认视图' };
   const TERM_FIELD_TEMPLATE_KEY = '__term_field_template';
   const TERM_FIELD_COLORS_KEY = '__term_field_colors';
-  const IS_ADMIN         = currentUserLevel >= 2;
+  const IS_ADMIN         = currentUserLevel === 3;
   const DEFAULT_TERM_COUNTRIES = ['US', 'CA', 'JP', 'DE', 'FR'];
   const DEFAULT_MARKET_BRAND = 'ONOAYO';
 
@@ -59,7 +59,16 @@
 
   const GLOBAL_KEY  = '__urlParams_global';
   const readGlobal  = ()     => ctx.engine[GLOBAL_KEY] || null;
-  const writeGlobal = (data) => { ctx.engine[GLOBAL_KEY] = data; };
+  const writeGlobal = (data) => {
+    ctx.engine[GLOBAL_KEY] = data ? {
+      country: data.country || null,
+      asin: data.asin || null,
+      model: data.model || null,
+      sale_owner: data.sale_owner || data.saleOwner || null,
+      status: data.status || null,
+      search_query: data.search_query || null,
+    } : null;
+  };
 
   function parseSearch(search) {
     const result = {};
@@ -84,9 +93,10 @@
     const asin         = p['asin']         || null;
     const model        = p['model']        || null;
     const sale_owner   = p['sale_owner']   || p['saleOwner'] || null;
+    const status       = p['status']       || null;
     const search_query = p['search_query'] || null;
-    if (!country && !asin && !model && !sale_owner && !search_query) return null;
-    return { country, asin, model, sale_owner, search_query };
+    if (!country && !asin && !model && !sale_owner && !status && !search_query) return null;
+    return { country, asin, model, sale_owner, status, search_query };
   }
 
   function loadUrlParams() {
@@ -3286,6 +3296,7 @@
     const filterCountry        = urlParams?.country      || null;
     const filterModel          = urlParams?.model        || null;
     const filterSaleOwner      = urlParams?.sale_owner   || null;
+    const hasRequiredUrlParams = !!(filterModel && filterCountry && filterAsin && filterSaleOwner);
 
     const loadAsinStageDefaultShare = useCallback(async () => {
       const state = await fetchAsinDefaultStageShare(filterCountry, filterAsin);
@@ -4111,6 +4122,11 @@
       const requestSeq = ++requestSeqRef.current;
       try {
         setLoading(true);
+        if (!hasRequiredUrlParams) {
+          setData([]);
+          setTotal(0);
+          return;
+        }
         const sqpFilterAnd = [];
         if (filterAsin)    sqpFilterAnd.push({ asin:    { $eq: filterAsin    } });
         if (filterCountry) sqpFilterAnd.push({ country: { $eq: filterCountry } });
@@ -4249,7 +4265,7 @@
       } finally {
         if (requestSeq === requestSeqRef.current) setLoading(false);
       }
-    }, [filterAsin, filterCountry, getDateRange, loadActiveTermRefs, loadAsinStageDefaultShare, mergeTermColumns, sortConfig, getTermOrderIndex]);
+    }, [filterAsin, filterCountry, hasRequiredUrlParams, getDateRange, loadActiveTermRefs, loadAsinStageDefaultShare, mergeTermColumns, sortConfig, getTermOrderIndex]);
 
     const openStageDefaultModal = useCallback(async () => {
       if (!filterCountry || !filterAsin) {
@@ -6255,7 +6271,9 @@
           boxShadow: '0 1px 4px rgba(0,0,0,0.07)',
           outline: 'none'
         } },
-        loading && data.length === 0
+        !hasRequiredUrlParams
+          ? React.createElement('div', { style: { padding: '40px', textAlign: 'center', color: '#999', fontSize: `${FONT_SIZE}px` } }, '暂无数据 请重新进入页面')
+          : loading && data.length === 0
           ? React.createElement('div', { style: { padding: '40px', textAlign: 'center', color: '#999', fontSize: `${FONT_SIZE}px` } }, '正在加载数据...')
           : data.length === 0
             ? React.createElement('div', { style: { padding: '40px', textAlign: 'center', color: '#999', fontSize: `${FONT_SIZE}px` } }, '暂无数据')

@@ -13,7 +13,7 @@
   const DEFAULT_COLUMN_VIEWS_KEY = `${BLOCK_UID}__default_column_views`;
   const BLOCK_NAME       = '推新板块';
   const BLOCK_NAME_SETTING_KEY = `${BLOCK_UID}__block_name`;
-  const IS_ADMIN         = currentUserLevel >= 2;
+  const IS_ADMIN         = currentUserLevel === 3;
   const DEFAULT_COLUMN_VIEW_IDS = ['default_1'];
   const DEFAULT_COLUMN_VIEW_LABELS = { default_1: '默认视图' };
 
@@ -57,6 +57,7 @@
   const SK_COUNTRY     = '__up_country';
   const SK_ASIN        = '__up_asin';
   const SK_SALE_OWNER  = '__up_saleOwner';
+  const SK_STATUS      = '__up_status';
   const readGlobal     = ()     => ctx.engine[GLOBAL_KEY] || null;
   const writeGlobal    = (data) => {
     ctx.engine[GLOBAL_KEY] = data ? {
@@ -64,6 +65,7 @@
       country: data.country || null,
       asin: data.asin || null,
       sale_owner: data.saleOwner || data.sale_owner || null,
+      status: data.status || null,
     } : null;
   };
 
@@ -81,6 +83,7 @@
     saveToEngine(SK_COUNTRY,    params?.country);
     saveToEngine(SK_ASIN,       params?.asin);
     saveToEngine(SK_SALE_OWNER, params?.saleOwner || params?.sale_owner);
+    saveToEngine(SK_STATUS,     params?.status);
   }
 
   function loadCachedParams() {
@@ -90,6 +93,7 @@
       country:   getFromEngine(SK_COUNTRY)    || globalParams.country    || null,
       asin:      getFromEngine(SK_ASIN)       || globalParams.asin       || null,
       saleOwner: getFromEngine(SK_SALE_OWNER) || globalParams.saleOwner  || globalParams.sale_owner || null,
+      status:    getFromEngine(SK_STATUS)     || globalParams.status     || null,
     };
   }
 
@@ -113,6 +117,7 @@
     if (params.country)   parts.push('country='    + encodeURIComponent(params.country));
     if (params.asin)      parts.push('asin='       + encodeURIComponent(params.asin));
     if (params.saleOwner) parts.push('sale_owner=' + encodeURIComponent(params.saleOwner));
+    if (params.status)    parts.push('status='     + encodeURIComponent(params.status));
     return parts.length ? '?' + parts.join('&') : '';
   }
 
@@ -134,12 +139,13 @@
     const country   = p['country']    || cached.country   || null;
     const asin      = p['asin']       || cached.asin      || null;
     const saleOwner = p['sale_owner'] || cached.saleOwner || null;
+    const status    = p['status']     || cached.status    || null;
 
-    return { model, country, asin, saleOwner };
+    return { model, country, asin, saleOwner, status };
   }
 
   function hasUrlParams(params) {
-    return !!(params?.model || params?.country || params?.asin || params?.saleOwner || params?.sale_owner);
+    return !!(params?.model || params?.country || params?.asin || params?.saleOwner || params?.sale_owner || params?.status);
   }
 
   function needPatchSearch(parsed, params) {
@@ -147,7 +153,8 @@
       (!parsed['model']      && params.model)     ||
       (!parsed['country']    && params.country)   ||
       (!parsed['asin']       && params.asin)      ||
-      (!parsed['sale_owner'] && params.saleOwner)
+      (!parsed['sale_owner'] && params.saleOwner) ||
+      (!parsed['status']     && params.status)
     );
   }
 
@@ -384,6 +391,14 @@
       ],
       writeBackField: 'daily_keyword_tracking.actual_cvr_judgment',
     },
+  };
+
+  const WEEKLY_PERFORMANCE_FIELD_TOOLTIP_TEXT = {
+    sales: '销量 = 领星销量按国家+ASIN汇总累加。\nsales = sum(volume)。',
+    zirandan: '自然订单量 = 总订单量 - 广告订单量。\nzirandan = order_items - guanggaodan。',
+    guanggaodan: '广告订单量 = 领星广告订单量按国家+ASIN汇总累加。\nguanggaodan = sum(ad_order_quantity)。',
+    zongliuliang: '总流量 = 同国家+ASIN下取 Sessions-Total 最大值。\nzongliuliang = max(sessions_total)。',
+    session_conversion_rate: '会话转化率 = 实际总单量 ÷ 汇总流量-会话量，并保留 4 位小数。\nsession_conversion_rate = round(sales ÷ zongliuliang, 4)；zongliuliang 为 0 时为 null。',
   };
 
   const TARGET_CVR_NOTE_TOOLTIP = {
@@ -3033,6 +3048,7 @@
     const filterCountry = urlParams?.country || null;
     const filterModel   = urlParams?.model   || null;
     const filterSaleOwner = urlParams?.saleOwner || urlParams?.sale_owner || null;
+    const hasRequiredUrlParams = !!(filterModel && filterCountry && filterAsin && filterSaleOwner);
 
     useEffect(function() {
       function setResolvedParams(search) {
@@ -3076,6 +3092,7 @@
             country:   p['country']    || getFromEngine(SK_COUNTRY),
             asin:      p['asin']       || getFromEngine(SK_ASIN),
             saleOwner: p['sale_owner'] || getFromEngine(SK_SALE_OWNER),
+            status:    p['status']     || getFromEngine(SK_STATUS),
           });
         }
 
@@ -4117,8 +4134,6 @@
         { country: { $eq: filterCountry } },
         { asin: { $eq: filterAsin } },
       ];
-      if (currentUserLevel === 1) dailyFilterAnd.push({ sale_owner: { $eq: currentUserName } });
-
       const pageSize = 500;
       const rows = [];
       let totalCount = null;
@@ -4140,7 +4155,7 @@
         if (!batch.length || batch.length < pageSize || (totalCount != null && rows.length >= totalCount)) break;
       }
       return rows;
-    }, [currentUserLevel, currentUserName, filterAsin, filterCountry]);
+    }, [filterAsin, filterCountry]);
 
     const getDailySort = useCallback(() => {
       if (!sortConfig.key) return 'date';
@@ -4720,7 +4735,6 @@
           { date: { $gte: group.start } },
           { date: { $lte: group.end } },
         ];
-        if (currentUserLevel === 1) filterAnd.push({ sale_owner: { $eq: currentUserName } });
         const rows = await fetchAllList('daily_asins:list', {
           sort: 'date',
           filter: JSON.stringify({ $and: filterAnd }),
@@ -4758,7 +4772,7 @@
       const summaryRows = buildWeeklySummaryRows(fullMergedRows, dynamicCols)
         .filter((summary) => groups[summary.country_asin_week_range]);
       return syncWeeklySummaryRows(summaryRows);
-    }, [buildDynamicKwCols, buildMergedRows, buildWeeklySummaryRows, currentUserLevel, currentUserName, fetchAllList, syncWeeklySummaryRows]);
+    }, [buildDynamicKwCols, buildMergedRows, buildWeeklySummaryRows, fetchAllList, syncWeeklySummaryRows]);
 
     function scheduleCurrentPagePushSummaryRefresh(rows, options = {}) {
       const sourceRows = (Array.isArray(rows) ? rows : []).filter((row) => row && !row._isWeeklySummary && row.country && row.asin && row.date);
@@ -4922,8 +4936,12 @@
       const skipFormula = options.skipFormula === true;
       try {
         setLoading(true);
+        if (!hasRequiredUrlParams) {
+          setData([]);
+          setTotal(0);
+          return [];
+        }
         const dailyFilterAnd = [];
-        if (currentUserLevel === 1) dailyFilterAnd.push({ sale_owner: { $eq: currentUserName } });
         if (filterAsin)    dailyFilterAnd.push({ asin:    { $eq: filterAsin    } });
         if (filterCountry) dailyFilterAnd.push({ country: { $eq: filterCountry } });
         const dateRange = expandDateRangeToNaturalWeeks(getDateRange);
@@ -5061,7 +5079,7 @@
         setData([]); setTotal(0);
         return [];
       } finally { setLoading(false); }
-    }, [filterAsin, filterCountry, currentUserName, currentUserLevel, getDateRange, buildDynamicKwCols, getDailySort, buildMergedRows, shouldShowWeeklySummary, loadWeeklySummaryRowsForDailyRows, interleaveWeeklySummaryRows, syncKeywordActualReviewQtyFromRefunds, showKwOptionalFields]);
+    }, [filterAsin, filterCountry, hasRequiredUrlParams, getDateRange, buildDynamicKwCols, getDailySort, buildMergedRows, shouldShowWeeklySummary, loadWeeklySummaryRowsForDailyRows, interleaveWeeklySummaryRows, syncKeywordActualReviewQtyFromRefunds, showKwOptionalFields]);
 
     useEffect(() => { setCurPage(1); loadData({ page: 1 }); }, [loadData]);
 
@@ -6440,6 +6458,19 @@
     const getHeaderTooltipData = (col) => {
       if (col.field === 'target_cvr') return { ...TARGET_CVR_NOTE_TOOLTIP, hideEmptyRules: false };
       if (FORMULA_TOOLTIPS[col.field]) return { ...FORMULA_TOOLTIPS[col.field], hideEmptyRules: false };
+      if (col.src === 'weekly' && WEEKLY_PERFORMANCE_FIELD_TOOLTIP_TEXT[col.field]) {
+        const weeklyTooltipLines = WEEKLY_PERFORMANCE_FIELD_TOOLTIP_TEXT[col.field].split('\n');
+        return {
+          title: col.label,
+          formula: weeklyTooltipLines[0] || '直接展示该指标值',
+          hideEmptyRules: true,
+          fields: [
+            { label: '字段标识公式', field: weeklyTooltipLines[1] || `${col.field} = 直接展示该指标值` },
+            { label: `字段来源（${col.label}）`, field: `weekly_performance.${col.field}` },
+          ],
+          writeBackField: `weekly_performance.${col.field}`,
+        };
+      }
       if (col.src === 'daily' && DAILY_SQL_UPDATED_FIELDS.has(col.field)) {
         return {
           title: col.label,
@@ -6505,8 +6536,8 @@
           React.createElement('li', { key: `empty_${idx}` }, rule)
         )
       ),
-      React.createElement('hr', { style: { border: 0, borderTop: '1px solid rgba(255,255,255,0.22)', margin: '8px 0' } }),
-      React.createElement('div', { style: { fontSize: '12px', opacity: 0.75, lineHeight: 1.55 } },
+      IS_ADMIN && React.createElement('hr', { style: { border: 0, borderTop: '1px solid rgba(255,255,255,0.22)', margin: '8px 0' } }),
+      IS_ADMIN && React.createElement('div', { style: { fontSize: '12px', opacity: 0.75, lineHeight: 1.55 } },
         React.createElement('div', { style: { fontWeight: 700, marginBottom: '4px' } }, '🔧 字段说明（开发用）'),
         Array.isArray(sourceInfos) && sourceInfos.map((source, idx) => React.createElement('div', {
           key: `source_${idx}`,
@@ -6863,7 +6894,9 @@
           background: '#fff',
           outline: 'none'
         } },
-        loading && data.length === 0
+        !hasRequiredUrlParams
+          ? React.createElement('div', { style: { padding: '40px', textAlign: 'center', color: '#999', fontSize: `${FONT_SIZE}px` } }, '暂无数据 请重新进入页面')
+          : loading && data.length === 0
           ? React.createElement('div', { style: { padding: '40px', textAlign: 'center', color: '#999', fontSize: `${FONT_SIZE}px` } }, '正在加载数据...')
           : data.length === 0
             ? React.createElement('div', { style: { padding: '40px', textAlign: 'center', color: '#999', fontSize: `${FONT_SIZE}px` } }, '暂无数据')
