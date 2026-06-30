@@ -411,11 +411,11 @@
     date: '每天自动生成从今天起未来 3 个月的日期。',
     model: '每天自动从 ASIN 表同步型号。',
     sale_owner: '每天自动从 ASIN 表同步销售负责人。',
-    activity_annotation: '自动匹配 BD/LD 活动日期，活动当天显示活动类型。',
-    daily_price: '每天自动同步昨日购物车价格：非 US/CA 早上 8:30，US/CA 中午 1:00。',
-    promotion_days: '按该 ASIN/国家的首单日期计算推广天数：非 US/CA 早上 8:30，US/CA 中午 1:00。',
-    list_price: '每天自动同步昨日 LP/WP/TP：非 US/CA 早上 8:30，US/CA 中午 1:00。',
-    selling_accounts: '每天自动同步昨日售卖账号：非 US/CA 早上 8:30，US/CA 中午 1:00。',
+    activity_annotation: '每天 5:30 同步昨日活动标注。',
+    daily_price: '每天 5:30 同步昨日购物车价格。',
+    promotion_days: '每天 5:30 同步昨日推广天数。',
+    list_price: '每天 5:30 同步昨日 LP/WP/TP。',
+    selling_accounts: '每天 5:30 同步昨日售卖账号。',
   };
 
   const DAILY_SQL_UPDATED_FIELD_SOURCE = {
@@ -424,22 +424,22 @@
     date: [{ workflow: '每日生成类型、asin数据', schedule: '每天早上 8:30', node: '每日asin主表-生成未来 3 个月的数据的asin数据' }],
     model: [{ workflow: '每日生成类型、asin数据', schedule: '每天早上 8:30', node: '每日asin主表-生成未来 3 个月的数据的asin数据' }],
     sale_owner: [{ workflow: '每日生成类型、asin数据', schedule: '每天早上 8:30', node: '每日asin主表-生成未来 3 个月的数据的asin数据' }],
-    activity_annotation: [{ workflow: '每日生成类型、asin数据', schedule: '每天早上 8:30', node: '3更新 活动标注' }],
+    activity_annotation: [{ workflow: '每日生成类型、asin数据', schedule: '每天 5:30', node: '3更新 活动标注' }],
     daily_price: [
-      { workflow: '每日生成类型、asin数据', schedule: '每天早上 8:30', scope: '非 US/CA', node: '1更新 非US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
-      { workflow: '更新US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号', schedule: '每天中午 1:00', scope: 'US/CA', node: '1更新 US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
+      { workflow: '每日生成类型、asin数据', schedule: '每天 5:30', scope: '非 US/CA', node: '1更新 非US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
+      { workflow: '更新US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号', schedule: '每天 5:30', scope: 'US/CA', node: '1更新 US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
     ],
     promotion_days: [
-      { workflow: '每日生成类型、asin数据', schedule: '每天早上 8:30', scope: '非 US/CA', node: '1更新 非US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
-      { workflow: '更新US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号', schedule: '每天中午 1:00', scope: 'US/CA', node: '1更新 US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
+      { workflow: '每日生成类型、asin数据', schedule: '每天 5:30', scope: '非 US/CA', node: '1更新 非US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
+      { workflow: '更新US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号', schedule: '每天 5:30', scope: 'US/CA', node: '1更新 US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
     ],
     list_price: [
-      { workflow: '每日生成类型、asin数据', schedule: '每天早上 8:30', scope: '非 US/CA', node: '1更新 非US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
-      { workflow: '更新US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号', schedule: '每天中午 1:00', scope: 'US/CA', node: '1更新 US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
+      { workflow: '每日生成类型、asin数据', schedule: '每天 5:30', scope: '非 US/CA', node: '1更新 非US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
+      { workflow: '更新US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号', schedule: '每天 5:30', scope: 'US/CA', node: '1更新 US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
     ],
     selling_accounts: [
-      { workflow: '每日生成类型、asin数据', schedule: '每天早上 8:30', scope: '非 US/CA', node: '1更新 非US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
-      { workflow: '更新US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号', schedule: '每天中午 1:00', scope: 'US/CA', node: '1更新 US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
+      { workflow: '每日生成类型、asin数据', schedule: '每天 5:30', scope: '非 US/CA', node: '1更新 非US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
+      { workflow: '更新US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号', schedule: '每天 5:30', scope: 'US/CA', node: '1更新 US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
     ],
   };
 
