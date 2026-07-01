@@ -251,7 +251,9 @@
     competitor: COLOR_BLUE,
   };
 
+  const IMPORTANT_COLUMN_BODY_COLOR = '#BADDB1';
   const getColHeaderColor = (col) => col.headerColor || SRC_DEFAULT_COLOR[col.src] || COLOR_GREEN;
+  const getColBodyColor = (col) => col?.bodyColor || null;
 
   const withCreateTimestamps = (payload) => {
     const now = new Date().toISOString();
@@ -1446,7 +1448,7 @@
   const MERGED_WEEKLY_DISPLAY_FIELDS = new Set(['weekly_ad_total_budget', 'weekly_target_completion_rate']);
 
   const buildColumnPayload = (cols, preserved = []) => [
-    ...cols.map((c) => ({ key: c.key, hidden: c.hidden === true, pinned: c.pinned === true, width: Number(c.width) || 80, headerColor: c.headerColor || null, editable: c.editable === true, richEdit: c.richEdit === true })),
+    ...cols.map((c) => ({ key: c.key, hidden: c.hidden === true, pinned: c.pinned === true, width: Number(c.width) || 80, headerColor: c.headerColor || null, bodyColor: getColBodyColor(c), editable: c.editable === true, richEdit: c.richEdit === true })),
     ...preserved,
   ];
 
@@ -1710,8 +1712,13 @@
     if (!Array.isArray(payload)) return map;
     payload.forEach((item) => {
       if (!item?.key || isColumnSettingMetaKey(item.key)) return;
-      if (!Object.prototype.hasOwnProperty.call(item, 'headerColor')) return;
-      map[item.key] = migrateLegacyColor(item.headerColor) || null;
+      const hasHeaderColor = Object.prototype.hasOwnProperty.call(item, 'headerColor');
+      const hasBodyColor = Object.prototype.hasOwnProperty.call(item, 'bodyColor');
+      if (!hasHeaderColor && !hasBodyColor) return;
+      map[item.key] = {
+        headerColor: hasHeaderColor ? (migrateLegacyColor(item.headerColor) || null) : undefined,
+        bodyColor: hasBodyColor ? (getColBodyColor(item) || null) : undefined,
+      };
     });
     return map;
   };
@@ -1722,9 +1729,22 @@
     return targetPayload.map((item) => {
       if (!item?.key || isColumnSettingMetaKey(item.key)) return item;
       if (!Object.prototype.hasOwnProperty.call(colorMap, item.key)) return item;
-      const nextColor = colorMap[item.key] || null;
+      const stylePatch = colorMap[item.key];
+      const nextColor = stylePatch && typeof stylePatch === 'object' ? stylePatch.headerColor : (stylePatch || null);
+      const nextBodyColor = stylePatch && typeof stylePatch === 'object' ? stylePatch.bodyColor : undefined;
       const currentColor = migrateLegacyColor(item.headerColor) || null;
-      return currentColor === nextColor ? item : { ...item, headerColor: nextColor };
+      const currentBodyColor = getColBodyColor(item);
+      const nextItem = { ...item };
+      let changed = false;
+      if (nextColor !== undefined && currentColor !== nextColor) {
+        nextItem.headerColor = nextColor;
+        changed = true;
+      }
+      if (nextBodyColor !== undefined && currentBodyColor !== nextBodyColor) {
+        nextItem.bodyColor = nextBodyColor;
+        changed = true;
+      }
+      return changed ? nextItem : item;
     });
   };
 
@@ -1905,7 +1925,7 @@
     const result = [];
     saved.forEach((s) => {
       if (!s?.key || !initMap[s.key]) return;
-      result.push({ ...initMap[s.key], hidden: s.hidden === true, pinned: s.pinned === true, width: Number(s.width) || initMap[s.key].width, headerColor: migrateLegacyColor(s.headerColor), editable: s.editable === true, richEdit: s.richEdit === true });
+      result.push({ ...initMap[s.key], hidden: s.hidden === true, pinned: s.pinned === true, width: Number(s.width) || initMap[s.key].width, headerColor: migrateLegacyColor(s.headerColor), bodyColor: getColBodyColor(s), editable: s.editable === true, richEdit: s.richEdit === true });
     });
     INITIAL_COLUMNS.forEach((c, idx) => {
       if (savedMap[c.key]) return;
@@ -2647,7 +2667,7 @@
     );
   };
 
-  const RichTextImageCell = ({ value, onSave, placeholder = '+', cellKey, openSignal }) => {
+  const RichTextImageCell = ({ value, onSave, placeholder = '+', cellKey, openSignal, cellBackground = null }) => {
     const [content, setContent] = useState(value || '');
     const [isEditing, setIsEditing] = useState(false);
     const [tempContent, setTempContent] = useState('');
@@ -2858,7 +2878,7 @@
     }
     const isEmpty = !cleanText && imageUrls.length === 0;
     return React.createElement(React.Fragment, null,
-      React.createElement('div', { ref: cellRef, onMouseEnter: (e) => { if (!isEmpty) setHoverTip({ x: e.clientX, y: e.clientY }); }, onMouseMove: (e) => { if (!isEmpty) setHoverTip({ x: e.clientX, y: e.clientY }); }, onMouseLeave: () => setHoverTip(null), style: { height: '46px', display: 'flex', alignItems: 'center', justifyContent: isEmpty ? 'center' : 'flex-start', gap: '5px', padding: '3px 5px', background: content ? '#fafafa' : '#fff', border: '1px solid #e5e7eb', borderRadius: '6px', cursor: 'cell', overflow: 'hidden', boxSizing: 'border-box' } },
+      React.createElement('div', { ref: cellRef, onMouseEnter: (e) => { if (!isEmpty) setHoverTip({ x: e.clientX, y: e.clientY }); }, onMouseMove: (e) => { if (!isEmpty) setHoverTip({ x: e.clientX, y: e.clientY }); }, onMouseLeave: () => setHoverTip(null), style: { height: '46px', display: 'flex', alignItems: 'center', justifyContent: isEmpty ? 'center' : 'flex-start', gap: '5px', padding: '3px 5px', background: cellBackground || (content ? '#fafafa' : '#fff'), border: '1px solid #e5e7eb', borderRadius: '6px', cursor: 'cell', overflow: 'hidden', boxSizing: 'border-box' } },
         isEmpty
           ? React.createElement('div', { style: { fontSize: '16px', color: '#999', lineHeight: '18px', fontWeight: 700, textAlign: 'center' } }, placeholder)
           : React.createElement(React.Fragment, null,
@@ -2929,6 +2949,8 @@
     const [dynamicColumnPrefs, setDynamicColumnPrefs] = useState({});
     const [columnGroupOrder, setColumnGroupOrder] = useState([]);
     const [columnSearchValue, setColumnSearchValue] = useState(undefined);
+    const [quickJumpSelectValues, setQuickJumpSelectValues] = useState({ keyword: undefined, competitor: undefined });
+    const [colorLegendExpanded, setColorLegendExpanded] = useState(false);
     const [panelColumnSearchText, setPanelColumnSearchText] = useState('');
     const [highlightColumnKey, setHighlightColumnKey] = useState(null);
     const [sortConfig, setSortConfig]           = useState({ key: 'daily_date', dir: 'asc' });
@@ -3073,6 +3095,7 @@
             pinned: item.pinned === true,
             width: Number(item.width) || undefined,
             headerColor: item.headerColor || null,
+            bodyColor: getColBodyColor(item),
           };
           if (Object.prototype.hasOwnProperty.call(item, 'richEdit')) pref.richEdit = item.richEdit === true;
           prefs[item.key] = pref;
@@ -3825,6 +3848,7 @@
         headerColor: col._dynamicKind === 'competitor'
           ? col.headerColor
           : (Object.prototype.hasOwnProperty.call(pref, 'headerColor') ? pref.headerColor : col.headerColor),
+        bodyColor: Object.prototype.hasOwnProperty.call(pref, 'bodyColor') ? (pref.bodyColor || null) : getColBodyColor(col),
       };
     }, [activeColumnViewId, dynamicColumnPrefs]);
 
@@ -5946,7 +5970,7 @@
         ));
         const result = await saveDefaultColumnViewsToAllUsers(defaultViews, targetUserIds, { syncCustomHeaderColorsFromViewId: activeColumnViewId });
         if (result.ok) {
-          ctx.message.success(`已同步默认视图和自定义视图列头颜色给 ${result.total} 位用户`);
+          ctx.message.success(`已同步默认视图和自定义视图列头颜色、重要指标标记给 ${result.total} 位用户`);
         } else if (!result.total) {
           ctx.message.warning('未选择到有效推送用户');
         } else {
@@ -6198,16 +6222,26 @@
       markColumnLayoutChanged();
       return true;
     };
-    const toggleCol      = (key) => { if (!ensureColumnViewEditable()) return; const cur = allColumns.find((c) => c.key === key); if (updateDynamicCol(key, (c) => ({ ...c, hidden: !c.hidden }))) { persistDynamicColPrefs(key, { hidden: !(cur?.hidden === true), width: cur?.width, pinned: cur?.pinned === true, headerColor: cur?.headerColor || null }); return; } updateAndSave((p) => normalizeColumnsByGroup(p.map((c) => c.key === key ? { ...c, hidden: !c.hidden } : c))); };
-    const togglePin      = (key) => { if (!ensureColumnViewEditable()) return; const cur = allColumns.find((c) => c.key === key); if (updateDynamicCol(key, (c) => ({ ...c, pinned: !c.pinned }))) { persistDynamicColPrefs(key, { pinned: !(cur?.pinned === true), width: cur?.width, hidden: cur?.hidden === true, headerColor: cur?.headerColor || null }); return; } updateAndSave((p) => p.map((c) => c.key === key ? { ...c, pinned: !c.pinned } : c)); };
-    const setHColor      = (key, color) => { if (!ensureColumnViewEditable()) return; const cur = allColumns.find((c) => c.key === key); if (updateDynamicCol(key, (c) => ({ ...c, headerColor: color }))) { persistDynamicColPrefs(key, { headerColor: color, width: cur?.width, hidden: cur?.hidden === true, pinned: cur?.pinned === true }); return; } updateAndSave((p) => p.map((c) => c.key === key ? { ...c, headerColor: color } : c)); };
-    const clearHColor    = (key) => { if (!ensureColumnViewEditable()) return; const cur = allColumns.find((c) => c.key === key); if (updateDynamicCol(key, (c) => ({ ...c, headerColor: null }))) { persistDynamicColPrefs(key, { headerColor: null, width: cur?.width, hidden: cur?.hidden === true, pinned: cur?.pinned === true }); return; } updateAndSave((p) => p.map((c) => c.key === key ? { ...c, headerColor: null } : c)); };
+    const toggleCol      = (key) => { if (!ensureColumnViewEditable()) return; const cur = allColumns.find((c) => c.key === key); if (updateDynamicCol(key, (c) => ({ ...c, hidden: !c.hidden }))) { persistDynamicColPrefs(key, { hidden: !(cur?.hidden === true), width: cur?.width, pinned: cur?.pinned === true, headerColor: cur?.headerColor || null, bodyColor: getColBodyColor(cur) }); return; } updateAndSave((p) => normalizeColumnsByGroup(p.map((c) => c.key === key ? { ...c, hidden: !c.hidden } : c))); };
+    const togglePin      = (key) => { if (!ensureColumnViewEditable()) return; const cur = allColumns.find((c) => c.key === key); if (updateDynamicCol(key, (c) => ({ ...c, pinned: !c.pinned }))) { persistDynamicColPrefs(key, { pinned: !(cur?.pinned === true), width: cur?.width, hidden: cur?.hidden === true, headerColor: cur?.headerColor || null, bodyColor: getColBodyColor(cur) }); return; } updateAndSave((p) => p.map((c) => c.key === key ? { ...c, pinned: !c.pinned } : c)); };
+    const setHColor      = (key, color) => { if (!ensureColumnViewEditable()) return; const cur = allColumns.find((c) => c.key === key); if (updateDynamicCol(key, (c) => ({ ...c, headerColor: color }))) { persistDynamicColPrefs(key, { headerColor: color, bodyColor: getColBodyColor(cur), width: cur?.width, hidden: cur?.hidden === true, pinned: cur?.pinned === true }); return; } updateAndSave((p) => p.map((c) => c.key === key ? { ...c, headerColor: color } : c)); };
+    const clearHColor    = (key) => { if (!ensureColumnViewEditable()) return; const cur = allColumns.find((c) => c.key === key); if (updateDynamicCol(key, (c) => ({ ...c, headerColor: null }))) { persistDynamicColPrefs(key, { headerColor: null, bodyColor: getColBodyColor(cur), width: cur?.width, hidden: cur?.hidden === true, pinned: cur?.pinned === true }); return; } updateAndSave((p) => p.map((c) => c.key === key ? { ...c, headerColor: null } : c)); };
     const toggleEditable = (key) => { if (!ensureColumnViewEditable()) return; updateAndSave((p) => p.map((c) => c.key === key ? { ...c, editable: !c.editable } : c)); };
-    const toggleRichEdit = (key) => { if (!ensureColumnViewEditable()) return; const cur = allColumns.find((c) => c.key === key); if (updateDynamicCol(key, (c) => ({ ...c, richEdit: c.richEdit !== true }))) { persistDynamicColPrefs(key, { richEdit: !(cur?.richEdit === true), width: cur?.width, hidden: cur?.hidden === true, pinned: cur?.pinned === true, headerColor: cur?.headerColor || null }); return; } updateAndSave((p) => p.map((c) => c.key === key ? { ...c, richEdit: !c.richEdit } : c)); };
+    const toggleRichEdit = (key) => { if (!ensureColumnViewEditable()) return; const cur = allColumns.find((c) => c.key === key); if (updateDynamicCol(key, (c) => ({ ...c, richEdit: c.richEdit !== true }))) { persistDynamicColPrefs(key, { richEdit: !(cur?.richEdit === true), width: cur?.width, hidden: cur?.hidden === true, pinned: cur?.pinned === true, headerColor: cur?.headerColor || null, bodyColor: getColBodyColor(cur) }); return; } updateAndSave((p) => p.map((c) => c.key === key ? { ...c, richEdit: !c.richEdit } : c)); };
+    const toggleImportantColumn = (key) => {
+      if (!ensureColumnViewEditable()) return;
+      const cur = allColumns.find((c) => c.key === key);
+      const nextBodyColor = getColBodyColor(cur) ? null : IMPORTANT_COLUMN_BODY_COLOR;
+      if (updateDynamicCol(key, (c) => ({ ...c, bodyColor: nextBodyColor }))) {
+        persistDynamicColPrefs(key, { bodyColor: nextBodyColor, width: cur?.width, hidden: cur?.hidden === true, pinned: cur?.pinned === true, headerColor: cur?.headerColor || null, richEdit: cur?.richEdit === true });
+        return;
+      }
+      updateAndSave((p) => p.map((c) => c.key === key ? { ...c, bodyColor: nextBodyColor } : c));
+    };
     const setDynamicHiddenBySrc = (src, hidden) => {
       const updateSet = (setFn) => setFn((prev) => prev.map((c) => {
         if (c.src !== src) return c;
-        persistDynamicColPrefs(c.key, { hidden, width: c.width, pinned: c.pinned === true, headerColor: c.headerColor || null });
+        persistDynamicColPrefs(c.key, { hidden, width: c.width, pinned: c.pinned === true, headerColor: c.headerColor || null, bodyColor: getColBodyColor(c) });
         return { ...c, hidden };
       }));
       updateSet(setDynamicKeywordCols);
@@ -6216,7 +6250,7 @@
     const setDynamicHiddenByGroup = (groupKey, hidden) => {
       const updateSet = (setFn) => setFn((prev) => prev.map((c) => {
         if (getColumnGroupKey(c) !== groupKey) return c;
-        persistDynamicColPrefs(c.key, { hidden, width: c.width, pinned: c.pinned === true, headerColor: c.headerColor || null, richEdit: c.richEdit === true });
+        persistDynamicColPrefs(c.key, { hidden, width: c.width, pinned: c.pinned === true, headerColor: c.headerColor || null, bodyColor: getColBodyColor(c), richEdit: c.richEdit === true });
         return { ...c, hidden };
       }));
       updateSet(setDynamicKeywordCols);
@@ -6360,6 +6394,33 @@
       });
       return { keywordItems, competitorItems };
     }, [visibleCols]);
+    const quickJumpSelectOptions = useMemo(() => ({
+      keyword: columnIndexGroups.keywordItems.map((item) => ({
+        value: `keyword:${item.key}`,
+        label: item.label,
+        title: item.label,
+      })),
+      competitor: columnIndexGroups.competitorItems.map((item) => ({
+        value: `competitor:${item.key}`,
+        label: item.label,
+        title: item.label,
+      })),
+    }), [columnIndexGroups]);
+    const quickJumpIndexMap = useMemo(() => {
+      const entries = [];
+      columnIndexGroups.keywordItems.forEach((item) => entries.push([`keyword:${item.key}`, item]));
+      columnIndexGroups.competitorItems.forEach((item) => entries.push([`competitor:${item.key}`, item]));
+      return Object.fromEntries(entries);
+    }, [columnIndexGroups]);
+    const handleQuickJumpSelect = useCallback((type, value) => {
+      const item = quickJumpIndexMap[value];
+      if (!item) return;
+      scrollToIndexLeft(item.left);
+      setQuickJumpSelectValues(type === 'competitor'
+        ? { keyword: undefined, competitor: value }
+        : { keyword: value, competitor: undefined }
+      );
+    }, [quickJumpIndexMap, scrollToIndexLeft]);
 
     const normalizeColumnSearchText = normalizeSearchText;
     const getColumnSearchText = useCallback((col) => {
@@ -6479,7 +6540,7 @@
       const cur = allColumns.find((c) => c.key === colKey);
       if (isDynamicColumnKey(colKey)) {
         if (updateDynamicCol(colKey, (c) => ({ ...c, width: nw }))) {
-          persistDynamicColPrefs(colKey, { width: nw, hidden: cur?.hidden === true, pinned: cur?.pinned === true, headerColor: cur?.headerColor || null });
+          persistDynamicColPrefs(colKey, { width: nw, hidden: cur?.hidden === true, pinned: cur?.pinned === true, headerColor: cur?.headerColor || null, bodyColor: getColBodyColor(cur) });
         }
         return;
       }
@@ -6566,9 +6627,11 @@
       return r === activeCell.r || c === activeCell.c;
     }, [activeCell, crossHighlightEnabled]);
 
-    const getBodyCellBackground = useCallback((r, c, selected) => {
+    const getBodyCellBackground = useCallback((r, c, selected, col = null) => {
       if (selected) return '#e6f4ff';
       if (isActiveCrossCell(r, c)) return crossHighlightColor;
+      const bodyColor = getColBodyColor(col);
+      if (bodyColor) return bodyColor;
       return r % 2 === 0 ? '#fff' : '#fafafa';
     }, [crossHighlightColor, isActiveCrossCell]);
 
@@ -8051,6 +8114,7 @@
       const currentColor = getColHeaderColor(col);
       const srcDefault   = SRC_DEFAULT_COLOR[col.src] || COLOR_GREEN;
       const isCustom     = !!col.headerColor;
+      const isImportantColumn = !!getColBodyColor(col);
       const editableIconStyle = col.editable ? { fontSize: `${FONT_SIZE_SM}px`, color: '#EB6793', fontWeight: 'bold' } : { fontSize: `${FONT_SIZE_XS}px`, color: '#999' };
       const richEditIconStyle = col.richEdit ? { fontSize: `${FONT_SIZE_SM}px`, color: '#1890ff', fontWeight: 'bold' } : { fontSize: `${FONT_SIZE_XS}px`, color: '#999' };
       return React.createElement('div', { key: col.key, style: { display: 'flex', alignItems: 'center', gap: '6px', padding: '3px 0 3px 12px', borderBottom: '1px solid #fafafa' } },
@@ -8082,6 +8146,11 @@
         IS_ADMIN && supportsRichEdit(col) && React.createElement('label', { title: '使用 + 编辑，可输入多行内容和粘贴截图', style: { display: 'flex', alignItems: 'center', gap: '3px', cursor: 'pointer', flexShrink: 0 } },
           React.createElement('input', { type: 'checkbox', checked: col.richEdit === true, onChange: () => toggleRichEdit(col.key), style: { cursor: 'pointer' } }),
           React.createElement('span', { style: richEditIconStyle }, '+编辑'),
+        ),
+        React.createElement('label', { title: '将该列数据区标记为重要指标，列头不变', style: { display: 'flex', alignItems: 'center', gap: '3px', cursor: 'pointer', flexShrink: 0 } },
+          React.createElement('input', { type: 'checkbox', checked: isImportantColumn, onChange: () => toggleImportantColumn(col.key), style: { cursor: 'pointer' } }),
+          React.createElement('span', { style: { fontSize: `${FONT_SIZE_XS}px`, color: isImportantColumn ? '#2f5f1a' : '#777', fontWeight: isImportantColumn ? 800 : 600, whiteSpace: 'nowrap' } }, '重要指标'),
+          React.createElement('span', { style: { width: '12px', height: '12px', borderRadius: '2px', background: IMPORTANT_COLUMN_BODY_COLOR, border: '1px solid rgba(0,0,0,0.18)', flexShrink: 0 } }),
         ),
         IS_ADMIN && React.createElement('div', { style: { display: 'flex', gap: '3px', alignItems: 'center' } },
           PRESET_COLORS.map((pc) => React.createElement('div', { key: pc.value, title: pc.label, onClick: () => setHColor(col.key, pc.value), style: { width: '14px', height: '14px', borderRadius: '2px', cursor: 'pointer', flexShrink: 0, background: pc.value, border: currentColor === pc.value ? '2px solid #333' : '2px solid transparent', boxSizing: 'border-box' } })),
@@ -8528,6 +8597,56 @@
       }, `${formulaProgress.label || '正在同步公式...'} ${Math.round(formulaProgress.percent || 0)}%`)
     );
 
+    const primaryColorLegendItems = PRESET_COLORS.slice(0, 4);
+    const extraColorLegendItems = PRESET_COLORS.slice(4);
+    const renderColorLegendItem = (pc, index) => {
+      const label = index === 0 ? '基础' : pc.label;
+      return React.createElement('div', {
+        key: pc.value,
+        style: { display: 'flex', alignItems: 'center', gap: '2px' },
+      },
+        React.createElement('div', { style: { width: '10px', height: '10px', borderRadius: '2px', background: pc.value, border: '1px solid rgba(0,0,0,0.15)' } }),
+        label && React.createElement('span', { style: { color: '#666' } }, label)
+      );
+    };
+    const quickJumpEl = (quickJumpSelectOptions.keyword.length > 0 || quickJumpSelectOptions.competitor.length > 0) && React.createElement('div', {
+      style: { display: 'inline-flex', width: 'fit-content', maxWidth: '100%', alignItems: 'center', columnGap: '10px', rowGap: '5px', flexWrap: 'wrap', marginBottom: '4px', minHeight: '30px', padding: '5px 10px', background: '#fafafa', border: '1px solid #d9d9d9', borderRadius: 8, boxShadow: '0 1px 2px rgba(15,23,42,0.05)', fontSize: `${FONT_SIZE_XS}px`, boxSizing: 'border-box' },
+    },
+      React.createElement('span', { style: { color: '#666', fontWeight: 600, flexShrink: 0 } }, '快速跳转：'),
+      React.createElement('span', { style: { display: 'inline-flex', alignItems: 'center', gap: '4px', flexShrink: 0 } },
+        React.createElement('span', { style: { color: '#389e0d', fontWeight: 700, whiteSpace: 'nowrap' } }, 'SQP词'),
+        React.createElement(Select, {
+          size: 'small',
+          value: quickJumpSelectValues.keyword,
+          allowClear: true,
+          showSearch: true,
+          placeholder: quickJumpSelectOptions.keyword.length ? '选择SQP词' : '暂无SQP词',
+          options: quickJumpSelectOptions.keyword,
+          onSelect: (value) => handleQuickJumpSelect('keyword', value),
+          optionFilterProp: 'label',
+          disabled: !quickJumpSelectOptions.keyword.length,
+          popupMatchSelectWidth: false,
+          style: { width: '210px', maxWidth: '36vw' },
+        })
+      ),
+      React.createElement('span', { style: { display: 'inline-flex', alignItems: 'center', gap: '4px', flexShrink: 0 } },
+        React.createElement('span', { style: { color: '#0958d9', fontWeight: 700, whiteSpace: 'nowrap' } }, '竞对ASIN'),
+        React.createElement(Select, {
+          size: 'small',
+          value: quickJumpSelectValues.competitor,
+          allowClear: true,
+          showSearch: true,
+          placeholder: quickJumpSelectOptions.competitor.length ? '选择竞对ASIN' : '暂无竞对ASIN',
+          options: quickJumpSelectOptions.competitor,
+          onSelect: (value) => handleQuickJumpSelect('competitor', value),
+          optionFilterProp: 'label',
+          disabled: !quickJumpSelectOptions.competitor.length,
+          popupMatchSelectWidth: false,
+          style: { width: '220px', maxWidth: '36vw' },
+        })
+      )
+    );
+
     return React.createElement('div', { ref: rootRef, style: { position: 'relative' } },
       isResizing && React.createElement('div', { onMouseMove: onOverlayMove, onMouseUp: onOverlayUp, onMouseLeave: onOverlayUp, style: { position: 'fixed', inset: 0, zIndex: 9999, cursor: 'col-resize', background: 'transparent' } }),
       keywordManagerModal,
@@ -8544,32 +8663,36 @@
           style: { display: 'inline-flex', width: 'fit-content', maxWidth: '100%', columnGap: '8px', rowGap: '4px', flexWrap: 'wrap', minHeight: '30px', padding: '5px 10px', background: '#fafafa', borderRadius: '8px', border: '1px solid #d9d9d9', boxShadow: '0 1px 2px rgba(15,23,42,0.05)', alignItems: 'center', fontSize: `${FONT_SIZE_XS}px`, boxSizing: 'border-box' }
         },
           React.createElement('span', { style: { fontWeight: 600, color: '#555', marginRight: '4px' } }, '列头颜色：'),
-          ...PRESET_COLORS.map(pc =>
-            React.createElement('div', { key: pc.value, style: { display: 'flex', alignItems: 'center', gap: '2px' } },
-              React.createElement('div', { style: { width: '10px', height: '10px', borderRadius: '2px', background: pc.value, border: '1px solid rgba(0,0,0,0.15)' } }),
-              React.createElement('span', { style: { color: '#666' } }, pc.label)
-            )
+          ...primaryColorLegendItems.map(renderColorLegendItem),
+          React.createElement('button', {
+            type: 'button',
+            onClick: () => setColorLegendExpanded((v) => !v),
+            title: colorLegendExpanded ? '收起剩余列头颜色' : '向右展开剩余列头颜色',
+            style: {
+              minHeight: '22px',
+              padding: '1px 7px',
+              border: '1px solid #d9d9d9',
+              borderRadius: '5px',
+              background: '#fff',
+              color: '#555',
+              cursor: 'pointer',
+              fontSize: `${FONT_SIZE_XS}px`,
+              fontWeight: 700,
+              lineHeight: '18px',
+              whiteSpace: 'nowrap',
+            },
+          }, colorLegendExpanded ? '‹ 收起' : '展开 ›'),
+          colorLegendExpanded && React.createElement(React.Fragment, null,
+            React.createElement('span', { style: { color: '#bbb' } }, '|'),
+            ...extraColorLegendItems.map((pc, idx) => renderColorLegendItem(pc, idx + primaryColorLegendItems.length))
           ),
         ),
+        quickJumpEl
       ),
 
       panelEl,
       pushPanelEl,
       crossHighlightPanelEl,
-
-      (columnIndexGroups.keywordItems.length > 0 || columnIndexGroups.competitorItems.length > 0) && React.createElement('div', {
-        style: { display: 'inline-flex', width: 'fit-content', maxWidth: '100%', alignItems: 'center', columnGap: '10px', rowGap: '5px', flexWrap: 'wrap', marginBottom: '4px', minHeight: '30px', padding: '5px 10px', background: '#fafafa', border: '1px solid #d9d9d9', borderRadius: 8, boxShadow: '0 1px 2px rgba(15,23,42,0.05)', fontSize: `${FONT_SIZE_XS}px`, boxSizing: 'border-box' },
-      },
-        React.createElement('span', { style: { color: '#666', fontWeight: 600, flexShrink: 0 } }, '快速跳转：'),
-        columnIndexGroups.keywordItems.length > 0 && React.createElement('span', { style: { display: 'inline-flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' } },
-          React.createElement('span', { style: { color: '#389e0d', fontWeight: 700, whiteSpace: 'nowrap' } }, 'SQP词：'),
-          ...columnIndexGroups.keywordItems.map(renderIndexButton),
-        ),
-        columnIndexGroups.competitorItems.length > 0 && React.createElement('span', { style: { display: 'inline-flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' } },
-          React.createElement('span', { style: { color: '#0958d9', fontWeight: 700, whiteSpace: 'nowrap' } }, '竞对ASIN：'),
-          ...columnIndexGroups.competitorItems.map(renderIndexButton),
-        ),
-      ),
 
       // 销售操作区
       React.createElement('div', { style: { display: 'flex', columnGap: '8px', rowGap: '6px', flexWrap: 'wrap', marginTop: '8px', marginBottom: '6px', alignItems: 'stretch' } },
@@ -8931,6 +9054,8 @@
                         const selected  = isCellSelected(rIdx, cIdx);
                         const isSelectionInputCell = selectionInputValue !== '' && selected && canEdit;
                         const isHighlighted = highlightColumnKey === col.key;
+                        const bodyCellBackground = getBodyCellBackground(rIdx, cIdx, selected, col);
+                        const cellBackground = isSummaryRow ? WEEKLY_SUMMARY_BG : (isHighlighted ? '#FFF7D6' : bodyCellBackground);
                         const weeklyMergedCell = !isSummaryRow && MERGED_WEEKLY_DISPLAY_FIELDS.has(col.field)
                           ? weeklyMergedCellMap[rowId]?.[col.key]
                           : null;
@@ -8973,7 +9098,7 @@
                               position: isPinned ? 'sticky' : undefined,
                               left: isPinned ? `${leftOff}px` : undefined,
                               zIndex: isPinned ? 1 : undefined,
-                              background: isSummaryRow ? WEEKLY_SUMMARY_BG : (isHighlighted ? '#FFF7D6' : getBodyCellBackground(rIdx, cIdx, selected)),
+                              background: cellBackground,
                               padding: '2px',
                               borderBottom: '1px solid #e8e8e8',
                               borderRight: isPinned ? '2px solid rgba(0,0,0,0.18)' : '1px solid #e8e8e8',
@@ -8989,6 +9114,7 @@
                             placeholder: '+',
                             cellKey: richCellKey,
                             openSignal: richEditOpenSignal,
+                            cellBackground,
                           }));
                         }
 
@@ -9005,7 +9131,7 @@
                             position: isPinned ? 'sticky' : undefined,
                             left: isPinned ? `${leftOff}px` : undefined,
                             zIndex: isPinned ? 1 : undefined,
-                            background: isSummaryRow ? WEEKLY_SUMMARY_BG : (isHighlighted ? '#FFF7D6' : getBodyCellBackground(rIdx, cIdx, selected)),
+                            background: cellBackground,
                             padding: isEditing ? '3px 5px' : '5px 8px',
                             borderBottom: '1px solid #e8e8e8',
                             borderRight: isPinned ? '2px solid rgba(0,0,0,0.18)' : '1px solid #e8e8e8',

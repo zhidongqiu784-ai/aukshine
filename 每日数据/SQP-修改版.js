@@ -157,6 +157,7 @@
     { label:'青绿', value:'#87E8DE' },
   ];
   const DEFAULT_ACTIVE_CROSS_HIGHLIGHT_COLOR = '#D6E4FF';
+  const IMPORTANT_COLUMN_BODY_COLOR = '#BADDB1';
 
   const SRC_DEFAULT_COLOR = {
     sqp: COLOR_GREEN,
@@ -199,6 +200,7 @@
   const getTermGroupHeaderColor = (col) => col.termGroupHeaderColor || col.termGroupDefaultColor || DEFAULT_TERM_GROUP_COLOR;
   const getTermFieldHeaderColor = (col) => col.termFieldHeaderColor || SRC_DEFAULT_COLOR[col.src] || COLOR_GREEN;
   const getColHeaderColor = (col) => col?._isTermColumn ? getTermFieldHeaderColor(col) : (col.headerColor || SRC_DEFAULT_COLOR[col.src] || COLOR_GREEN);
+  const getColBodyColor = (col) => col?.bodyColor || null;
   const withCreateTimestamps = (payload) => {
     const now = new Date().toISOString();
     return {
@@ -648,6 +650,7 @@
       hidden: false,
       width: sub.width,
       editable: sub.key === 'stage_target_share' || sub.key === 'monday_review_note',
+      bodyColor: null,
     }])
   );
 
@@ -659,6 +662,7 @@
         hidden: item.hidden === true,
         width: Math.max(Number(item.width) || sub.width, getTermSubFieldMinWidth(sub.key, sub.type)),
         editable: item.editable === true || sub.key === 'stage_target_share' || sub.key === 'monday_review_note',
+        bodyColor: item.bodyColor || null,
       };
     });
     return defaults;
@@ -667,6 +671,35 @@
   const getTermFieldTemplateFromPayload = (payload) => {
     const item = Array.isArray(payload) ? payload.find((entry) => entry?.key === TERM_FIELD_TEMPLATE_KEY) : null;
     return normalizeTermFieldTemplate(item?.fields || {});
+  };
+
+  const getTermFieldBodyColorsFromPayload = (payload) => {
+    const template = getTermFieldTemplateFromPayload(payload);
+    return Object.fromEntries(
+      TERM_SUB_FIELDS.map((sub) => [sub.key, template[sub.key]?.bodyColor || null])
+    );
+  };
+
+  const mergeTermFieldBodyColorsIntoPayload = (targetPayload, sourceBodyColors = {}) => {
+    const bodyColors = sourceBodyColors && typeof sourceBodyColors === 'object' ? sourceBodyColors : {};
+    if (!Object.keys(bodyColors).length || !Array.isArray(targetPayload)) return targetPayload;
+    const currentTemplate = getTermFieldTemplateFromPayload(targetPayload);
+    TERM_SUB_FIELDS.forEach((sub) => {
+      if (!Object.prototype.hasOwnProperty.call(bodyColors, sub.key)) return;
+      currentTemplate[sub.key] = {
+        ...(currentTemplate[sub.key] || {}),
+        bodyColor: bodyColors[sub.key] || null,
+      };
+    });
+    let replaced = false;
+    const nextPayload = targetPayload.map((item) => {
+      if (item?.key !== TERM_FIELD_TEMPLATE_KEY) return item;
+      replaced = true;
+      return { key: TERM_FIELD_TEMPLATE_KEY, fields: currentTemplate };
+    });
+    return replaced
+      ? nextPayload
+      : [...nextPayload, { key: TERM_FIELD_TEMPLATE_KEY, fields: currentTemplate }];
   };
 
   const normalizeTermFieldColors = (raw = {}) => {
@@ -728,19 +761,24 @@
     return [...rows, { key: TERM_FIELD_COLORS_KEY, colors: normalizeTermFieldColors(fieldColors) }];
   };
 
-  const syncHeaderColorsIntoColumnViews = (views, sourceHeaderColorMap, sourceTermFieldColors = {}, updatedAt = new Date().toISOString()) => {
+  const syncHeaderColorsIntoColumnViews = (views, sourceHeaderColorMap, sourceTermFieldColors = {}, updatedAt = new Date().toISOString(), sourceTermFieldBodyColors = null) => {
     const colorMap = sourceHeaderColorMap && typeof sourceHeaderColorMap === 'object' ? sourceHeaderColorMap : {};
     const termColors = normalizeTermFieldColors(sourceTermFieldColors);
+    const termBodyColors = sourceTermFieldBodyColors && typeof sourceTermFieldBodyColors === 'object' ? sourceTermFieldBodyColors : null;
     const hasHeaderColors = Object.keys(colorMap).length > 0;
     const hasTermColors = Object.keys(termColors).length > 0;
-    if (!hasHeaderColors && !hasTermColors) return Array.isArray(views) ? views : [];
+    const hasTermBodyColors = termBodyColors && Object.keys(termBodyColors).length > 0;
+    if (!hasHeaderColors && !hasTermColors && !hasTermBodyColors) return Array.isArray(views) ? views : [];
     return (Array.isArray(views) ? views : []).map((view) => {
       const payloadWithHeaderColors = hasHeaderColors
         ? mergeHeaderColorsIntoColumnPayload(view.payload, colorMap)
         : view.payload;
+      const payloadWithBodyColors = hasTermBodyColors
+        ? mergeTermFieldBodyColorsIntoPayload(payloadWithHeaderColors, termBodyColors)
+        : payloadWithHeaderColors;
       return {
         ...view,
-        payload: replaceTermFieldColorsPayload(payloadWithHeaderColors, termColors),
+        payload: replaceTermFieldColorsPayload(payloadWithBodyColors, termColors),
         updated_at: updatedAt,
       };
     });
@@ -752,10 +790,12 @@
       const matches = (cols || []).filter((c) => c?._isTermColumn && c.field === sub.key);
       if (!matches.length) return;
       const widths = matches.map((c) => Number(c.width)).filter((n) => Number.isFinite(n) && n > 0);
+      const bodyColor = matches.map((c) => c.bodyColor || null).find(Boolean) || null;
       template[sub.key] = {
         hidden: matches.every((c) => c.hidden === true),
         width: Math.max(widths.length ? Math.max(...widths) : sub.width, getTermSubFieldMinWidth(sub.key, sub.type)),
         editable: matches.some((c) => c.editable === true) || sub.key === 'stage_target_share' || sub.key === 'monday_review_note',
+        bodyColor,
       };
     });
     return template;
@@ -978,6 +1018,7 @@
     };
     const sourceHeaderColorMap = getHeaderColorMapFromPayload(sourceView.payload);
     const sourceTermFieldColors = getTermFieldColorsFromPayload(sourceView.payload, fieldColors || {});
+    const sourceTermFieldBodyColors = getTermFieldBodyColorsFromPayload(sourceView.payload);
     const res = await ctx.request({ url: 'users:list', method: 'get', params: { pageSize: 200 } });
     const allUsers = Array.isArray(res?.data?.data) ? res.data.data : [];
     const targetSet = Array.isArray(targetUserIds) && targetUserIds.length ? new Set(targetUserIds.map((id) => String(id))) : null;
@@ -999,7 +1040,8 @@
           existingState.views.map((item) => item.id === DEFAULT_COLUMN_VIEW_ID ? sourceView : item),
           sourceHeaderColorMap,
           sourceTermFieldColors,
-          sourceView.updated_at
+          sourceView.updated_at,
+          sourceTermFieldBodyColors
         );
         const nextSetting = {
           ...existingSetting,
@@ -1038,11 +1080,13 @@
     const existingState = normalizeColumnViewState(existingSetting);
     const sourceHeaderColorMap = getHeaderColorMapFromPayload(sourceView.payload);
     const sourceTermFieldColors = getTermFieldColorsFromPayload(sourceView.payload, fieldColors || {});
+    const sourceTermFieldBodyColors = getTermFieldBodyColorsFromPayload(sourceView.payload);
     const syncedViews = syncHeaderColorsIntoColumnViews(
       existingState.views.map((item) => item.id === DEFAULT_COLUMN_VIEW_ID ? sourceView : item),
       sourceHeaderColorMap,
       sourceTermFieldColors,
-      sourceView.updated_at
+      sourceView.updated_at,
+      sourceTermFieldBodyColors
     );
     await ctx.request({
       url: 'users:update',
@@ -1111,6 +1155,7 @@
           pinned: s.pinned === true,
           width: Math.max(Number(template.width) || Number(s.width) || subDef?.width || 80, getTermSubFieldMinWidth(s.field, s._termSubType || subDef?.type)),
           headerColor: migrateLegacyColor(s.headerColor),
+          bodyColor: template.bodyColor || null,
           termGroupHeaderColor: migrateLegacyColor(s.termGroupHeaderColor),
           termFieldHeaderColor: payloadTermFieldColors[s.field] || migrateLegacyColor(s.termFieldHeaderColor),
           editable: template.editable === true || s.editable === true,
@@ -3416,6 +3461,7 @@
           hidden: template.hidden === true,
           width: Math.max(Number(template.width) || Number(col.width) || subDef?.width || 80, getTermSubFieldMinWidth(col.field, col._termSubType || subDef?.type)),
           editable: template.editable === true || col.editable === true,
+          bodyColor: template.bodyColor || null,
           _termSubType: col._termSubType || subDef?.type,
           termFieldHeaderColor: nextFieldColors[col.field] || null,
         };
@@ -3488,11 +3534,13 @@
         if (!saved) throw new Error('默认视图配置未保存');
         const sourceHeaderColorMap = getHeaderColorMapFromPayload(defaultView.payload);
         const sourceTermFieldColors = getTermFieldColorsFromPayload(defaultView.payload, termFieldColors);
+        const sourceTermFieldBodyColors = getTermFieldBodyColorsFromPayload(defaultView.payload);
         const nextViews = syncHeaderColorsIntoColumnViews(
           views.map((view) => view.id === viewId ? { ...view, ...defaultView } : view),
           sourceHeaderColorMap,
           sourceTermFieldColors,
-          defaultView.updated_at
+          defaultView.updated_at,
+          sourceTermFieldBodyColors
         );
         setColumnViewsLocal(nextViews);
         ctx.message.success('默认视图已保存');
@@ -3591,14 +3639,16 @@
         const views = columnViewsRef.current.length ? columnViewsRef.current : columnViews;
         const sourceHeaderColorMap = getHeaderColorMapFromPayload(defaultView.payload);
         const sourceTermFieldColors = getTermFieldColorsFromPayload(defaultView.payload, termFieldColors);
+        const sourceTermFieldBodyColors = getTermFieldBodyColorsFromPayload(defaultView.payload);
         setColumnViewsLocal(syncHeaderColorsIntoColumnViews(
           views.map((view) => view.id === DEFAULT_COLUMN_VIEW_ID ? { ...view, ...defaultView } : view),
           sourceHeaderColorMap,
           sourceTermFieldColors,
-          defaultView.updated_at
+          defaultView.updated_at,
+          sourceTermFieldBodyColors
         ));
         if (result.ok) {
-          ctx.message.success(`已设为默认视图，并同步自定义视图列头颜色给 ${result.total} 位用户`);
+          ctx.message.success(`已设为默认视图，并同步自定义视图列头颜色和重要指标标记给 ${result.total} 位用户`);
         } else {
           ctx.message.warning(`默认视图已部分保存，失败 ${result.failCount}/${result.total} 位用户`);
         }
@@ -3622,14 +3672,16 @@
         const views = columnViewsRef.current.length ? columnViewsRef.current : columnViews;
         const sourceHeaderColorMap = getHeaderColorMapFromPayload(defaultView.payload);
         const sourceTermFieldColors = getTermFieldColorsFromPayload(defaultView.payload, termFieldColors);
+        const sourceTermFieldBodyColors = getTermFieldBodyColorsFromPayload(defaultView.payload);
         setColumnViewsLocal(syncHeaderColorsIntoColumnViews(
           views.map((view) => view.id === DEFAULT_COLUMN_VIEW_ID ? { ...view, ...defaultView } : view),
           sourceHeaderColorMap,
           sourceTermFieldColors,
-          defaultView.updated_at
+          defaultView.updated_at,
+          sourceTermFieldBodyColors
         ));
         if (result.ok) {
-          ctx.message.success(`已同步默认视图和自定义视图列头颜色给 ${result.total} 位用户`);
+          ctx.message.success(`已同步默认视图、自定义视图列头颜色和重要指标标记给 ${result.total} 位用户`);
         } else if (!result.total) {
           ctx.message.warning('未选择到有效推送用户');
         } else {
@@ -4104,6 +4156,7 @@
             hidden: fieldTemplate.hidden === true,
             width: Math.max(Number(fieldTemplate.width) || Number(oldCol.width) || col.width, getTermColumnMinWidth(col)),
             editable: fieldTemplate.editable === true || oldCol.editable === true || col.editable === true,
+            bodyColor: fieldTemplate.bodyColor || null,
             _termSubType: col._termSubType,
             termGroupDefaultColor: getTermGroupDefaultColor(col._termType, groupIndex),
             termGroupHeaderColor: oldCol.termGroupHeaderColor || groupColors[groupKey] || cachedPrefs.groupColors[groupKey] || (groupNameKey ? cachedPrefs.groupColorsByName[groupNameKey] : null) || null,
@@ -4487,6 +4540,25 @@
       termFieldTemplateRef.current = nextTemplate;
       updateAndSave((p) => p.map((c) => c._isTermColumn && c.field === field ? { ...c, hidden: nextHidden } : c));
     };
+    const isTermFieldImportant = (field) => termFieldTemplateRef.current?.[field]?.bodyColor === IMPORTANT_COLUMN_BODY_COLOR;
+    const toggleTermFieldImportant = (field) => {
+      const current = termFieldTemplateRef.current || getDefaultTermFieldTemplate();
+      const nextBodyColor = current[field]?.bodyColor === IMPORTANT_COLUMN_BODY_COLOR ? null : IMPORTANT_COLUMN_BODY_COLOR;
+      const nextTemplate = normalizeTermFieldTemplate({
+        ...current,
+        [field]: {
+          ...(current[field] || {}),
+          bodyColor: nextBodyColor,
+        },
+      });
+      termFieldTemplateRef.current = nextTemplate;
+      markColumnLayoutChanged();
+      setColumns((prev) => {
+        const next = prev.map((c) => c._isTermColumn && c.field === field ? { ...c, bodyColor: nextBodyColor } : c);
+        rememberTermColumnPrefs(next);
+        return next;
+      });
+    };
 
     const visibleCols   = useMemo(() => { const vis = columns.filter((c) => !c.hidden); return [...vis.filter((c) => c.pinned), ...vis.filter((c) => !c.pinned)]; }, [columns]);
     const pinnedLeftMap = useMemo(() => { const map = {}; let left = 0; visibleCols.forEach((col) => { if (col.pinned) { map[col.key] = left; left += getColumnRenderWidth(col); } }); return map; }, [visibleCols]);
@@ -4516,6 +4588,7 @@
             items.push({
               key,
               label: col._termName || col._termGroupLabel || col._termGroupKey || col.label,
+              type: col._termType === 'root' ? 'root' : 'keyword',
               typeLabel: col._termType === 'root' ? '词根' : '关键词',
               left,
             });
@@ -4532,6 +4605,30 @@
       wrap.scrollTo?.({ left: Math.max(0, left - pinnedWidth), behavior: 'smooth' });
       if (!wrap.scrollTo) wrap.scrollLeft = Math.max(0, left - pinnedWidth);
     }, [visibleCols]);
+    const termQuickSelectOptions = useMemo(() => {
+      const groups = { keyword: [], root: [] };
+      termQuickIndexItems.forEach((item) => {
+        const type = item.type === 'root' ? 'root' : 'keyword';
+        groups[type].push({
+          value: item.key,
+          label: item.label,
+          title: `${item.typeLabel}：${item.label}`,
+        });
+      });
+      return groups;
+    }, [termQuickIndexItems]);
+    const termQuickIndexMap = useMemo(() => Object.fromEntries(termQuickIndexItems.map((item) => [item.key, item])), [termQuickIndexItems]);
+    const [termQuickSelectValues, setTermQuickSelectValues] = useState({ keyword: undefined, root: undefined });
+    const [colorLegendExpanded, setColorLegendExpanded] = useState(false);
+    const handleTermQuickSelect = useCallback((type, key) => {
+      const item = termQuickIndexMap[key];
+      if (!item) return;
+      scrollToTermGroup(item.left);
+      setTermQuickSelectValues(type === 'root'
+        ? { keyword: undefined, root: key }
+        : { keyword: key, root: undefined }
+      );
+    }, [scrollToTermGroup, termQuickIndexMap]);
     const onDragStart = (e, key) => { if (isResizing) { e.preventDefault(); return; } dragColKey.current = key; e.dataTransfer.effectAllowed = 'move'; };
     const onDragOver  = (e) => e.preventDefault();
     const onDrop      = (e, targetKey) => { e.preventDefault(); const fromKey = dragColKey.current; if (!fromKey || fromKey === targetKey) return; updateResizableColumns((prev) => { const next = [...prev]; const fi = next.findIndex((c) => c.key === fromKey); const ti = next.findIndex((c) => c.key === targetKey); const [moved] = next.splice(fi, 1); next.splice(ti, 0, moved); return next; }); dragColKey.current = null; };
@@ -4620,6 +4717,8 @@
     const getTermBodyCellBackground = useCallback((col, r, c, selected) => {
       if (selected) return '#e6f4ff';
       if (isActiveCrossCell(r, c)) return crossHighlightColor;
+      const bodyColor = getColBodyColor(col);
+      if (bodyColor) return bodyColor;
       return getTermCellBackground(col, r, false);
     }, [crossHighlightColor, isActiveCrossCell]);
 
@@ -5651,6 +5750,7 @@
                 const isCustom = !!fixedColor || !!sampleCol.termFieldHeaderColor;
                 const resetColor = SRC_DEFAULT_COLOR[sampleCol.src] || COLOR_ORANGE;
                 const visible = isTermFieldTemplateVisible(sub.key);
+                const important = isTermFieldImportant(sub.key);
                 return React.createElement('div', {
                   key: sub.key,
                   style: {
@@ -5672,6 +5772,38 @@
                       textOverflow: 'ellipsis',
                     }
                   }, sub.label),
+                  React.createElement('label', {
+                    title: '将所有关键词和词根下该字段标记为重要指标，列头不变',
+                    style: {
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '3px',
+                      fontSize: `${FONT_SIZE_XS}px`,
+                      color: '#666',
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                      userSelect: 'none',
+                    }
+                  },
+                    React.createElement('input', {
+                      type: 'checkbox',
+                      checked: important,
+                      onChange: () => toggleTermFieldImportant(sub.key),
+                      style: { cursor: 'pointer' }
+                    }),
+                    React.createElement('span', {
+                      style: {
+                        display: 'inline-block',
+                        width: '12px',
+                        height: '12px',
+                        background: IMPORTANT_COLUMN_BODY_COLOR,
+                        border: '1px solid #9ab98c',
+                        borderRadius: '2px',
+                        boxSizing: 'border-box',
+                      }
+                    }),
+                    '重要指标'
+                  ),
                   IS_ADMIN && renderColorSwatches(currentColor, isCustom, (color) => setTermFieldColor(sub.key, color), () => clearTermFieldColor(sub.key), resetColor)
                 );
               })
@@ -6029,6 +6161,69 @@
       }, `${formulaProgress.label || '正在同步公式...'} ${Math.round(formulaProgress.percent || 0)}%`)
     );
 
+    const primaryColorLegendItems = PRESET_COLORS.slice(0, 3);
+    const extraColorLegendItems = PRESET_COLORS.slice(3);
+    const renderColorLegendItem = (pc) => React.createElement('div', {
+      key: pc.label || pc.value,
+      style: { display: 'flex', alignItems: 'center', gap: '4px' }
+    },
+      React.createElement('div', { style: { width: '14px', height: '14px', borderRadius: '3px', background: pc.value, border: '1px solid rgba(0,0,0,0.15)' } }),
+      React.createElement('span', { style: { color: '#666' } }, pc.label)
+    );
+    const quickJumpEl = termQuickIndexItems.length > 0 && React.createElement('div', {
+      style: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        columnGap: '10px',
+        rowGap: '5px',
+        flexWrap: 'wrap',
+        maxWidth: '100%',
+        minHeight: '30px',
+        marginBottom: '4px',
+        padding: '5px 10px',
+        border: '1px solid #e8e8e8',
+        borderRadius: '8px',
+        background: '#fafafa',
+        boxShadow: '0 1px 2px rgba(15,23,42,0.05)',
+        overflowX: 'auto',
+        whiteSpace: 'nowrap',
+        fontSize: `${FONT_SIZE_XS}px`,
+        boxSizing: 'border-box',
+      }
+    },
+      React.createElement('span', { style: { color: '#666', fontWeight: 600, flexShrink: 0 } }, '快速跳转：'),
+      React.createElement('div', { style: { display: 'inline-flex', alignItems: 'center', columnGap: '5px', flexShrink: 0 } },
+        React.createElement('span', { style: { color: '#6d28d9', fontWeight: 700, flexShrink: 0 } }, '关键词'),
+        React.createElement(Select, {
+          size: 'small',
+          value: termQuickSelectValues.keyword,
+          allowClear: true,
+          showSearch: true,
+          placeholder: termQuickSelectOptions.keyword.length ? '选择关键词' : '暂无关键词',
+          options: termQuickSelectOptions.keyword,
+          onSelect: (key) => handleTermQuickSelect('keyword', key),
+          optionFilterProp: 'label',
+          disabled: !termQuickSelectOptions.keyword.length,
+          style: { width: '220px', maxWidth: '42vw' },
+        })
+      ),
+      React.createElement('div', { style: { display: 'inline-flex', alignItems: 'center', columnGap: '5px', flexShrink: 0 } },
+        React.createElement('span', { style: { color: '#0f766e', fontWeight: 700, flexShrink: 0 } }, '词根'),
+        React.createElement(Select, {
+          size: 'small',
+          value: termQuickSelectValues.root,
+          allowClear: true,
+          showSearch: true,
+          placeholder: termQuickSelectOptions.root.length ? '选择词根' : '暂无词根',
+          options: termQuickSelectOptions.root,
+          onSelect: (key) => handleTermQuickSelect('root', key),
+          optionFilterProp: 'label',
+          disabled: !termQuickSelectOptions.root.length,
+          style: { width: '220px', maxWidth: '42vw' },
+        })
+      )
+    );
+
     return React.createElement('div', { ref: rootRef, style: { position: 'relative' } },
       isResizing && React.createElement('div', { onMouseMove: onOverlayMove, onMouseUp: onOverlayUp, onMouseLeave: onOverlayUp, style: { position: 'fixed', inset: 0, zIndex: 9999, cursor: 'col-resize', background: 'transparent' } }),
 
@@ -6057,73 +6252,34 @@
           }
         },
           React.createElement('span', { style: { fontWeight: 600, color: '#555', marginRight: '4px' } }, '列头颜色：'),
-          ...PRESET_COLORS.map(pc =>
-            React.createElement('div', { key: pc.value, style: { display: 'flex', alignItems: 'center', gap: '4px' } },
-              React.createElement('div', { style: { width: '14px', height: '14px', borderRadius: '3px', background: pc.value, border: '1px solid rgba(0,0,0,0.15)' } }),
-              React.createElement('span', { style: { color: '#666' } }, pc.label)
-            )
-          ),
-          React.createElement('span', { style: { color: '#bbb' } }, '|'),
-          React.createElement('span', { style: { fontWeight: 600, color: '#555' } }, '词列默认：'),
-          ...TERM_GROUP_COLOR_LEGEND.map(pc =>
-            React.createElement('div', { key: pc.label, style: { display: 'flex', alignItems: 'center', gap: '4px' } },
-              React.createElement('div', { style: { width: '14px', height: '14px', borderRadius: '3px', background: pc.value, border: '1px solid rgba(0,0,0,0.15)' } }),
-              React.createElement('span', { style: { color: '#666' } }, pc.label)
-            )
+          ...primaryColorLegendItems.map(renderColorLegendItem),
+          React.createElement('button', {
+            type: 'button',
+            onClick: () => setColorLegendExpanded((v) => !v),
+            title: colorLegendExpanded ? '收起剩余列头颜色' : '向右展开剩余列头颜色',
+            style: {
+              minHeight: '22px',
+              padding: '1px 7px',
+              border: '1px solid #d9d9d9',
+              borderRadius: '5px',
+              background: '#fff',
+              color: '#555',
+              cursor: 'pointer',
+              fontSize: `${FONT_SIZE_XS}px`,
+              fontWeight: 700,
+              lineHeight: '18px',
+              whiteSpace: 'nowrap',
+            },
+          }, colorLegendExpanded ? '‹ 收起' : '展开 ›'),
+          colorLegendExpanded && React.createElement(React.Fragment, null,
+            React.createElement('span', { style: { color: '#bbb' } }, '|'),
+            ...extraColorLegendItems.map(renderColorLegendItem),
+            React.createElement('span', { style: { color: '#bbb' } }, '|'),
+            React.createElement('span', { style: { fontWeight: 600, color: '#555' } }, '词列默认：'),
+            ...TERM_GROUP_COLOR_LEGEND.map(renderColorLegendItem)
           ),
         ),
-      ),
-
-      termQuickIndexItems.length > 0 && React.createElement('div', {
-      style: {
-      display: 'inline-flex',
-      alignItems: 'center',
-      columnGap: '10px',
-      rowGap: '5px',
-      flexWrap: 'wrap',
-      maxWidth: '100%',
-      minHeight: '30px',
-      marginBottom: '4px',
-      padding: '5px 10px',
-      border: '1px solid #e8e8e8',
-      borderRadius: '8px',
-      background: '#fafafa',
-      boxShadow: '0 1px 2px rgba(15,23,42,0.05)',
-      overflowX: 'auto',
-      whiteSpace: 'nowrap',
-      fontSize: `${FONT_SIZE_XS}px`,
-      boxSizing: 'border-box',
-      }
-      },
-      React.createElement('span', { style: { color: '#666', fontWeight: 600, flexShrink: 0 } }, '快速跳转：'),
-      termQuickIndexItems.map((item) => React.createElement('button', {
-      key: item.key,
-      type: 'button',
-      onClick: () => scrollToTermGroup(item.left),
-      title: `${item.typeLabel}：${item.label}`,
-      style: {
-      flexShrink: 0,
-      minHeight: '24px',
-      display: 'inline-flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '2px 9px',
-      border: '1px solid #d9d9d9',
-      borderRadius: '5px',
-      background: item.typeLabel === '词根' ? '#f0fdfa' : '#f5f3ff',
-      color: item.typeLabel === '词根' ? '#0f766e' : '#6d28d9',
-      cursor: 'pointer',
-      fontSize: `${FONT_SIZE_XS}px`,
-      fontWeight: 700,
-      whiteSpace: 'nowrap',
-      boxSizing: 'border-box',
-      letterSpacing: 0,
-      boxShadow: '0 1px 2px rgba(15,23,42,0.08), inset 0 1px 0 rgba(255,255,255,0.24)',
-      transitionProperty: 'box-shadow, opacity',
-      transitionDuration: '120ms',
-      transitionTimingFunction: 'cubic-bezier(0.2, 0, 0, 1)',
-      }
-      }, `${item.label}（${item.typeLabel}）`))
+        quickJumpEl
       ),
 
       React.createElement('div', { style: { display: 'flex', columnGap: '8px', rowGap: '6px', flexWrap: 'wrap', marginTop: '8px', marginBottom: '6px', alignItems: 'stretch' } },

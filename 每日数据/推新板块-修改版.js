@@ -217,12 +217,14 @@
     { label:'青绿', value:'#87E8DE' },
   ];
   const DEFAULT_ACTIVE_CROSS_HIGHLIGHT_COLOR = '#D6E4FF';
+  const IMPORTANT_COLUMN_BODY_COLOR = '#BADDB1';
 
   const SRC_DEFAULT_COLOR = {
     daily: COLOR_GREEN, weekly: COLOR_ORANGE, keyword_tracking: '#b5796a', tool: '#fa8c16',
   };
 
   const getColHeaderColor = (col) => col.headerColor || SRC_DEFAULT_COLOR[col.src] || COLOR_GREEN;
+  const getColBodyColor = (col) => col?.bodyColor || null;
 
   const withCreateTimestamps = (payload) => {
     const now = new Date().toISOString();
@@ -936,6 +938,7 @@
     ...(Array.isArray(cols) ? cols : []).map((c) => ({
       key: c.key, hidden: c.hidden === true, pinned: c.pinned === true,
       width: Number(c.width) || 80, headerColor: c.headerColor || null,
+      bodyColor: c.bodyColor || null,
       editable: c.editable === true,
     })),
     ...preserved,
@@ -978,6 +981,7 @@
         pinned: fallback.pinned === true,
         width: Number(fallback.width) || 80,
         headerColor: fallback.headerColor || null,
+        bodyColor: fallback.bodyColor || null,
         editable: fallback.editable === true,
         ...patch,
       });
@@ -995,7 +999,7 @@
     const result   = [];
     saved.forEach((s) => {
       if (!s?.key || !initMap[s.key]) return;
-      result.push({ ...initMap[s.key], hidden: s.hidden === true, pinned: s.pinned === true, width: Number(s.width) || initMap[s.key].width, headerColor: migrateLegacyColor(s.headerColor), editable: s.editable === true });
+      result.push({ ...initMap[s.key], hidden: s.hidden === true, pinned: s.pinned === true, width: Number(s.width) || initMap[s.key].width, headerColor: migrateLegacyColor(s.headerColor), bodyColor: s.bodyColor || null, editable: s.editable === true });
     });
     INITIAL_COLUMNS.forEach((c) => { if (!savedMap[c.key]) result.push({ ...c }); });
     return result;
@@ -1029,8 +1033,13 @@
     if (!Array.isArray(payload)) return map;
     payload.forEach((item) => {
       if (!item?.key) return;
-      if (!Object.prototype.hasOwnProperty.call(item, 'headerColor')) return;
-      map[item.key] = migrateLegacyColor(item.headerColor) || null;
+      const hasHeaderColor = Object.prototype.hasOwnProperty.call(item, 'headerColor');
+      const hasBodyColor = Object.prototype.hasOwnProperty.call(item, 'bodyColor');
+      if (!hasHeaderColor && !hasBodyColor) return;
+      map[item.key] = {
+        headerColor: hasHeaderColor ? (migrateLegacyColor(item.headerColor) || null) : undefined,
+        bodyColor: hasBodyColor ? (item.bodyColor || null) : undefined,
+      };
     });
     return map;
   };
@@ -1040,9 +1049,19 @@
     if (!Object.keys(colorMap).length || !Array.isArray(targetPayload)) return targetPayload;
     return targetPayload.map((item) => {
       if (!item?.key || !Object.prototype.hasOwnProperty.call(colorMap, item.key)) return item;
-      const nextColor = colorMap[item.key] || null;
-      const currentColor = migrateLegacyColor(item.headerColor) || null;
-      return currentColor === nextColor ? item : { ...item, headerColor: nextColor };
+      const styleConfig = colorMap[item.key];
+      const hasNextHeaderColor = styleConfig && typeof styleConfig === 'object' && Object.prototype.hasOwnProperty.call(styleConfig, 'headerColor');
+      const hasNextBodyColor = styleConfig && typeof styleConfig === 'object' && Object.prototype.hasOwnProperty.call(styleConfig, 'bodyColor');
+      const nextHeaderColor = hasNextHeaderColor
+        ? styleConfig.headerColor
+        : (typeof styleConfig === 'string' ? migrateLegacyColor(styleConfig) : undefined);
+      const nextBodyColor = hasNextBodyColor ? (styleConfig.bodyColor || null) : undefined;
+      const currentHeaderColor = migrateLegacyColor(item.headerColor) || null;
+      const currentBodyColor = item.bodyColor || null;
+      const patch = {};
+      if (nextHeaderColor !== undefined && currentHeaderColor !== nextHeaderColor) patch.headerColor = nextHeaderColor;
+      if (nextBodyColor !== undefined && currentBodyColor !== nextBodyColor) patch.bodyColor = nextBodyColor;
+      return Object.keys(patch).length ? { ...item, ...patch } : item;
     });
   };
 
@@ -1343,7 +1362,7 @@
   };
 
   /* ========== 【修复】关键词单元格：消除输入框溢出 ========== */
-  const KeywordCell = ({ data, countryAsinDate, date, role, onSaved, colWidth, showOptionalFields, onSubMouseDown, onSubMouseEnter, isSubSelected, readOnly = false, onProgress }) => {
+  const KeywordCell = ({ data, countryAsinDate, date, role, onSaved, colWidth, showOptionalFields, onSubMouseDown, onSubMouseEnter, isSubSelected, readOnly = false, cellBackground = null, onProgress }) => {
     const [editingField, setEditingField] = useState(null);
     const [editValue, setEditValue] = useState('');
     const [saving, setSaving] = useState(false);
@@ -1368,7 +1387,7 @@
           textAlign: 'center',
           padding: '12px',
           fontSize: '13px',
-          background: '#fafafa',
+          background: readOnly ? '#eaf4ff' : (cellBackground || '#fafafa'),
           borderRadius: '4px',
           display: 'flex',
           alignItems: 'center',
@@ -1432,7 +1451,7 @@
         width: '100%',                // ← 关键：占满父容器
         minHeight: '32px',
         padding: '6px 8px',
-        background: readOnly ? '#eaf4ff' : '#fff',
+        background: readOnly ? '#eaf4ff' : (cellBackground || '#fff'),
         border: readOnly ? '1px solid #8ec5ff' : '1px solid #d0d5dd',
         borderRadius: '4px',
         cursor: readOnly ? 'default' : 'cell',
@@ -1545,7 +1564,7 @@
   };
 
 
-  const ActualKeywordPosCell = ({ rowId, country, asin, date, screenshot, onSaved, readOnly = false, cellKey, openSignal }) => {
+  const ActualKeywordPosCell = ({ rowId, country, asin, date, screenshot, onSaved, readOnly = false, cellBackground = null, cellKey, openSignal }) => {
     const [content, setContent] = useState(screenshot || '');
     const [isEditing, setIsEditing] = useState(false);
     const [tempContent, setTempContent] = useState('');
@@ -1765,7 +1784,7 @@
             justifyContent: isEmpty ? 'center' : undefined,
             gap: '8px',
             padding: '6px 8px',
-            background: content ? '#fafafa' : '#fff',
+            background: cellBackground || (content ? '#fafafa' : '#fff'),
             border: '1px solid #e5e7eb',
             borderRadius: '6px',
             cursor: 'cell',
@@ -2841,6 +2860,7 @@
     const [crossHighlightEnabled, setCrossHighlightEnabled] = useState(false);
     const [crossHighlightColor, setCrossHighlightColor] = useState(DEFAULT_ACTIVE_CROSS_HIGHLIGHT_COLOR);
     const [showCrossHighlightPanel, setShowCrossHighlightPanel] = useState(false);
+    const [colorLegendExpanded, setColorLegendExpanded] = useState(false);
     const selectingRef = useRef(false);
 
     const getTextColorForBg = (hexColor) => {
@@ -3264,7 +3284,7 @@
       const payload = mergeColumnPayloadEntries(buildColumnPayload(allColumns), dynamicPayload);
       const dynamicDebug = payload
         .filter((c) => String(c?.key || '').startsWith('kw_dynamic_'))
-        .map((c) => ({ key: c.key, width: c.width, hidden: c.hidden, pinned: c.pinned, headerColor: c.headerColor }));
+        .map((c) => ({ key: c.key, width: c.width, hidden: c.hidden, pinned: c.pinned, headerColor: c.headerColor, bodyColor: c.bodyColor }));
       console.log('[推新板块视图保存] dynamic keyword payload', dynamicDebug);
       return payload;
     }, [allColumns, showKwOptionalFields]);
@@ -3389,7 +3409,7 @@
         ));
         const result = await saveDefaultColumnViewToUsers(defaultView, targetUserIds);
         if (result.ok) {
-          ctx.message.success(`已同步默认视图和自定义视图列头颜色给 ${result.total} 位用户`);
+          ctx.message.success(`已同步默认视图、自定义视图列头颜色和重要指标标记给 ${result.total} 位用户`);
         } else if (!result.total) {
           ctx.message.warning('未选择到有效推送用户');
         } else {
@@ -5011,6 +5031,7 @@
               hidden: Object.prototype.hasOwnProperty.call(saved || {}, 'hidden') ? saved.hidden === true : old?.hidden === true,
               pinned: Object.prototype.hasOwnProperty.call(saved || {}, 'pinned') ? saved.pinned === true : old?.pinned === true,
               headerColor: Object.prototype.hasOwnProperty.call(saved || {}, 'headerColor') ? (saved.headerColor || c.headerColor) : (old?.headerColor || c.headerColor),
+              bodyColor: Object.prototype.hasOwnProperty.call(saved || {}, 'bodyColor') ? (saved.bodyColor || null) : (old?.bodyColor || null),
               editable: Object.prototype.hasOwnProperty.call(saved || {}, 'editable') ? saved.editable === true : old?.editable === true,
             };
           });
@@ -5025,7 +5046,8 @@
                 c.width === n.width &&
                 c.hidden === n.hidden &&
                 c.pinned === n.pinned &&
-                c.headerColor === n.headerColor;
+                c.headerColor === n.headerColor &&
+                c.bodyColor === n.bodyColor;
             });
 
           return same ? prev : next;
@@ -5222,6 +5244,15 @@
       }
       updateAndSave((p) => p.map((c) => c.key === key ? { ...c, headerColor: null } : c));
     };
+    const toggleImportantColumn = (key) => {
+      const target = allColumns.find((c) => c.key === key);
+      const nextBodyColor = getColBodyColor(target) === IMPORTANT_COLUMN_BODY_COLOR ? null : IMPORTANT_COLUMN_BODY_COLOR;
+      if (String(key || '').startsWith('kw_dynamic_')) {
+        syncDynamicKwColumnConfig(key, { bodyColor: nextBodyColor });
+        return;
+      }
+      updateAndSave((p) => p.map((c) => c.key === key ? { ...c, bodyColor: nextBodyColor } : c));
+    };
     const saveKwSubFieldHeaderColorsToCurrentView = useCallback(async (nextColors) => {
       const viewId = activeColumnViewIdRef.current || activeColumnViewId;
       const safeColors = normalizeKwSubFieldHeaderColors(nextColors);
@@ -5387,9 +5418,11 @@
       return r === activeCell.r || c === activeCell.c;
     }, [activeCell, crossHighlightEnabled]);
 
-    const getBodyCellBackground = useCallback((r, c, selected) => {
+    const getBodyCellBackground = useCallback((r, c, selected, col = null) => {
       if (selected) return '#e6f4ff';
       if (isActiveCrossCell(r, c)) return crossHighlightColor;
+      const bodyColor = getColBodyColor(col);
+      if (bodyColor) return bodyColor;
       return r % 2 === 0 ? '#fff' : '#fafafa';
     }, [crossHighlightColor, isActiveCrossCell]);
 
@@ -6148,6 +6181,7 @@
       const isCustom     = !!col.headerColor;
       const isToolCol    = col.src === 'tool';
       const isReadonly   = READONLY_FIELDS.has(col.field);
+      const isImportantColumn = getColBodyColor(col) === IMPORTANT_COLUMN_BODY_COLOR;
 
       return React.createElement('div', {
         key: col.key,
@@ -6193,6 +6227,43 @@
             userSelect: 'none'
           }
         }, col.label),
+
+        !isToolCol && React.createElement('label', {
+          title: '将该列数据区标记为重要指标，列头不变',
+          style: {
+            display: 'flex',
+            alignItems: 'center',
+            gap: '3px',
+            fontSize: `${FONT_SIZE_XS}px`,
+            color: '#666',
+            cursor: canModifyActiveColumnView ? 'pointer' : 'not-allowed',
+            flexShrink: 0,
+            marginRight: '4px',
+            userSelect: 'none'
+          }
+        },
+          React.createElement('input', {
+            type: 'checkbox',
+            checked: isImportantColumn,
+            disabled: !canModifyActiveColumnView,
+            onChange: () => canModifyActiveColumnView ? toggleImportantColumn(col.key) : warnReadonlyDefaultView(),
+            style: {
+              cursor: canModifyActiveColumnView ? 'pointer' : 'not-allowed'
+            }
+          }),
+          React.createElement('span', {
+            style: {
+              display: 'inline-block',
+              width: '12px',
+              height: '12px',
+              background: IMPORTANT_COLUMN_BODY_COLOR,
+              border: '1px solid #9ab98c',
+              borderRadius: '2px',
+              boxSizing: 'border-box'
+            }
+          }),
+          '重要指标'
+        ),
 
         IS_ADMIN && !isToolCol && React.createElement('label', {
           title: isReadonly ? '该字段为系统只读字段，不能开启编辑' : '允许在表格中双击编辑该列',
@@ -6714,6 +6785,19 @@
       }, `${formulaProgress.label || '正在同步公式...'} ${Math.round(formulaProgress.percent || 0)}%`)
     );
 
+    const primaryColorLegendItems = PRESET_COLORS.slice(0, 4);
+    const extraColorLegendItems = PRESET_COLORS.slice(4);
+    const renderColorLegendItem = (pc, index) => {
+      const label = index === 0 ? '基础' : pc.label;
+      return React.createElement('div', {
+        key: pc.value,
+        style: { display: 'flex', alignItems: 'center', gap: '2px' },
+      },
+        React.createElement('div', { style: { width: '10px', height: '10px', borderRadius: '2px', background: pc.value, border: '1px solid rgba(0,0,0,0.15)' } }),
+        React.createElement('span', { style: { color: '#666' } }, label)
+      );
+    };
+
     return React.createElement('div', { ref: rootRef, style: { position: 'relative' } },
       isResizing && React.createElement('div', { onMouseMove: onOverlayMove, onMouseUp: onOverlayUp, onMouseLeave: onOverlayUp, style: { position: 'fixed', inset: 0, zIndex: 9999, cursor: 'col-resize', background: 'transparent' } }),
 
@@ -6727,11 +6811,28 @@
         style: { display: 'inline-flex', width: 'fit-content', maxWidth: '100%', columnGap: '8px', rowGap: '4px', flexWrap: 'wrap', minHeight: '30px', padding: '5px 10px', background: '#fafafa', borderRadius: '8px', border: '1px solid #d9d9d9', boxShadow: '0 1px 2px rgba(15,23,42,0.05)', alignItems: 'center', fontSize: `${FONT_SIZE_XS}px`, boxSizing: 'border-box' }
       },
         React.createElement('span', { style: { fontWeight: 600, color: '#555', marginRight: '4px' } }, '列头颜色：'),
-        ...PRESET_COLORS.map(pc =>
-          React.createElement('div', { key: pc.value, style: { display: 'flex', alignItems: 'center', gap: '2px' } },
-            React.createElement('div', { style: { width: '10px', height: '10px', borderRadius: '2px', background: pc.value, border: '1px solid rgba(0,0,0,0.15)' } }),
-            React.createElement('span', { style: { color: '#666' } }, pc.label)
-          )
+        ...primaryColorLegendItems.map(renderColorLegendItem),
+        React.createElement('button', {
+          type: 'button',
+          onClick: () => setColorLegendExpanded((v) => !v),
+          title: colorLegendExpanded ? '收起剩余列头颜色' : '向右展开剩余列头颜色',
+          style: {
+            minHeight: '22px',
+            padding: '1px 7px',
+            border: '1px solid #d9d9d9',
+            borderRadius: '5px',
+            background: '#fff',
+            color: '#555',
+            cursor: 'pointer',
+            fontSize: `${FONT_SIZE_XS}px`,
+            fontWeight: 700,
+            lineHeight: '18px',
+            whiteSpace: 'nowrap',
+          },
+        }, colorLegendExpanded ? '‹ 收起' : '展开 ›'),
+        colorLegendExpanded && React.createElement(React.Fragment, null,
+          React.createElement('span', { style: { color: '#bbb' } }, '|'),
+          ...extraColorLegendItems.map((pc, idx) => renderColorLegendItem(pc, idx + primaryColorLegendItems.length))
         ),
       )
       ),
@@ -7075,6 +7176,8 @@
                       const isEditing = editingCell && editingCell.rowId === rowId && editingCell.colKey === col.key;
                       const cIdx      = visibleCols.findIndex((c) => c.key === col.key);
                       const selected  = isCellSelected(rIdx, cIdx);
+                      const bodyCellBackground = getBodyCellBackground(rIdx, cIdx, selected, col);
+                      const cellBackground = isWeeklySummaryRow ? summaryBg : bodyCellBackground;
 
                       // 动态词列渲染（单行 6 字段紧凑排列）
                       if (col.field && col.field.startsWith('kw_dynamic_')) {
@@ -7084,7 +7187,7 @@
                             position: isPinned ? 'sticky' : undefined,
                             left: isPinned ? `${leftOff}px` : undefined,
                             zIndex: isPinned ? 1 : undefined,
-                            background: isWeeklySummaryRow ? summaryBg : getBodyCellBackground(rIdx, cIdx, selected),
+                            background: cellBackground,
                             padding: '2px',
                             borderBottom: '1px solid #e8e8e8',
                             borderRight: '1px solid #e8e8e8',
@@ -7107,6 +7210,7 @@
                           colWidth: col.width,
                           showOptionalFields: showKwOptionalFields,
                           readOnly: isWeeklySummaryRow,
+                          cellBackground,
                           onSubMouseDown: (e, subKey) => handleCellMouseDown(e, rIdx, cIdx, subKey),
                           onSubMouseEnter: (subKey) => handleCellMouseEnter(rIdx, cIdx, subKey),
                           isSubSelected: (subKey) => isKeywordSubSelected(rIdx, cIdx, subKey)
@@ -7135,7 +7239,7 @@
                             position: isPinned ? 'sticky' : undefined,
                             left: isPinned ? `${leftOff}px` : undefined,
                             zIndex: isPinned ? 1 : undefined,
-                            background: isWeeklySummaryRow ? summaryBg : getBodyCellBackground(rIdx, cIdx, selected),
+                            background: cellBackground,
                             padding: '2px',
                             borderBottom: '1px solid #e8e8e8',
                             borderRight: '1px solid #e8e8e8',
@@ -7153,6 +7257,7 @@
                             screenshot: row.actual_keyword_position,
                             onSaved: recalcKeywordTracking,
                             readOnly: isWeeklySummaryRow,
+                            cellBackground,
                             cellKey: richCellKey,
                             openSignal: richEditOpenSignal
                           })
@@ -7174,7 +7279,7 @@
                           position: isPinned ? 'sticky' : undefined,
                           left: isPinned ? `${leftOff}px` : undefined,
                           zIndex: isPinned ? 1 : undefined,
-                          background: isWeeklySummaryRow ? summaryBg : getBodyCellBackground(rIdx, cIdx, selected),
+                          background: cellBackground,
                           padding: isEditing ? '3px 5px' : '5px 8px',
                           borderBottom: '1px solid #e8e8e8',
                           borderRight: '1px solid #e8e8e8',
