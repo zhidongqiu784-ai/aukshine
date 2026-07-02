@@ -37,10 +37,13 @@ otw_base AS (
              -- ✅ 优化：提前过滤，只计算目标 ASIN 和国家
              INNER JOIN base_keys bk ON dn.asin = bk.asin AND dn.country = bk.country
     WHERE (dn.state != '已索赔' OR dn.state IS NULL)
-      AND COALESCE(
-                  NULLIF(TRIM(dn.estimated_arrival_date), ''),
-                  dn.expected_storage_time
-          ) >= CURRENT_DATE
+      AND (
+              COALESCE(
+                      NULLIF(TRIM(dn.estimated_arrival_date), ''),
+                      dn.expected_storage_time
+              ) >= CURRENT_DATE
+              OR TRIM(dn.status) = '待配货'
+          )
     GROUP BY
         dn.shop,
         dn.country,
@@ -177,6 +180,15 @@ stockout_lookup AS (
       AND ds.date >= CURRENT_DATE
       AND ds.inventory < 0
     GROUP BY ds.asin, ds.country
+),
+cycle_param AS (
+    SELECT
+        site,
+        cycle_days_new_off_min,
+        cycle_days_new_peak_min,
+        cycle_days_old_off_min,
+        cycle_days_old_peak_min
+    FROM v3_cfg_cycle_param
 )
 
 -- ====================================================================
@@ -247,6 +259,79 @@ SELECT
 
     (COALESCE(otw.real_on_the_way, 0) + COALESCE(inv.real_inventory, 0) + COALESCE(ds.quantity_receive, 0) + COALESCE(ds.overseas_warehouse_new_product, 0) + COALESCE(ds.overseas_warehouse_test_product, 0)) as total_instock,
 
+    CASE
+        WHEN sl.first_stockout_date IS NULL THEN NULL
+        WHEN ds.days_on_sale < 90 THEN
+            CASE
+                WHEN DATE_FORMAT(sl.first_stockout_date, '%m-%d') BETWEEN '06-10' AND '07-10'
+                    OR DATE_FORMAT(sl.first_stockout_date, '%m-%d') BETWEEN '09-10' AND '10-10'
+                    OR DATE_FORMAT(sl.first_stockout_date, '%m-%d') BETWEEN '11-01' AND '12-15'
+                    THEN cp.cycle_days_new_peak_min
+                ELSE cp.cycle_days_new_off_min
+                END
+        ELSE
+            CASE
+                WHEN DATE_FORMAT(sl.first_stockout_date, '%m-%d') BETWEEN '06-10' AND '07-10'
+                    OR DATE_FORMAT(sl.first_stockout_date, '%m-%d') BETWEEN '09-10' AND '10-10'
+                    OR DATE_FORMAT(sl.first_stockout_date, '%m-%d') BETWEEN '11-01' AND '12-15'
+                    THEN cp.cycle_days_old_peak_min
+                ELSE cp.cycle_days_old_off_min
+                END
+        END as stockup_days,
+
+    CASE
+        WHEN sl.first_stockout_date IS NULL THEN NULL
+        ELSE ROUND((
+            CASE
+                WHEN ds.days_on_sale < 90 THEN
+                    CASE
+                        WHEN DATE_FORMAT(sl.first_stockout_date, '%m-%d') BETWEEN '06-10' AND '07-10'
+                            OR DATE_FORMAT(sl.first_stockout_date, '%m-%d') BETWEEN '09-10' AND '10-10'
+                            OR DATE_FORMAT(sl.first_stockout_date, '%m-%d') BETWEEN '11-01' AND '12-15'
+                            THEN cp.cycle_days_new_peak_min
+                        ELSE cp.cycle_days_new_off_min
+                        END
+                ELSE
+                    CASE
+                        WHEN DATE_FORMAT(sl.first_stockout_date, '%m-%d') BETWEEN '06-10' AND '07-10'
+                            OR DATE_FORMAT(sl.first_stockout_date, '%m-%d') BETWEEN '09-10' AND '10-10'
+                            OR DATE_FORMAT(sl.first_stockout_date, '%m-%d') BETWEEN '11-01' AND '12-15'
+                            THEN cp.cycle_days_old_peak_min
+                        ELSE cp.cycle_days_old_off_min
+                        END
+                END
+                * COALESCE(ds.weighted_sales, 0)
+            - (COALESCE(otw.real_on_the_way, 0) + COALESCE(inv.real_inventory, 0) + COALESCE(ds.quantity_receive, 0) + COALESCE(ds.overseas_warehouse_new_product, 0) + COALESCE(ds.overseas_warehouse_test_product, 0))
+        ), 0)
+        END as order_quantity,
+
+    CASE
+        WHEN sl.first_stockout_date IS NULL THEN NULL
+        ELSE DATE_SUB(
+                sl.first_stockout_date,
+                INTERVAL (
+                    CASE
+                        WHEN ds.days_on_sale < 90 THEN
+                            CASE
+                                WHEN DATE_FORMAT(sl.first_stockout_date, '%m-%d') BETWEEN '06-10' AND '07-10'
+                                    OR DATE_FORMAT(sl.first_stockout_date, '%m-%d') BETWEEN '09-10' AND '10-10'
+                                    OR DATE_FORMAT(sl.first_stockout_date, '%m-%d') BETWEEN '11-01' AND '12-15'
+                                    THEN cp.cycle_days_new_peak_min
+                                ELSE cp.cycle_days_new_off_min
+                                END
+                        ELSE
+                            CASE
+                                WHEN DATE_FORMAT(sl.first_stockout_date, '%m-%d') BETWEEN '06-10' AND '07-10'
+                                    OR DATE_FORMAT(sl.first_stockout_date, '%m-%d') BETWEEN '09-10' AND '10-10'
+                                    OR DATE_FORMAT(sl.first_stockout_date, '%m-%d') BETWEEN '11-01' AND '12-15'
+                                    THEN cp.cycle_days_old_peak_min
+                                ELSE cp.cycle_days_old_off_min
+                                END
+                        END
+                    ) DAY
+             )
+        END as suggest_order_date,
+
     ROUND(
             SUM(COALESCE(otw.real_on_the_way, 0) + COALESCE(inv.real_inventory, 0) + COALESCE(ds.quantity_receive, 0) + COALESCE(ds.overseas_warehouse_new_product, 0) + COALESCE(ds.overseas_warehouse_test_product, 0)) OVER (PARTITION BY a.sale_owner)
                 / NULLIF(SUM(ds.weighted_sales) OVER (PARTITION BY a.sale_owner), 0)
@@ -261,6 +346,7 @@ FROM base_target ds
          LEFT JOIN otw_agg otw ON ds.asin = otw.asin AND ds.country = otw.country
          LEFT JOIN inv_calc inv ON ds.asin = inv.asin AND ds.country = inv.country
          LEFT JOIN stockout_lookup sl ON ds.asin = sl.asin AND ds.country = sl.country
+         LEFT JOIN cycle_param cp ON ds.country = cp.site
          LEFT JOIN asin a ON CONCAT(ds.asin, '_', ds.country) = a.`unique`
          LEFT JOIN users u ON a.sale_owner = u.username
          LEFT JOIN users mgr ON mgr.username = u.manager

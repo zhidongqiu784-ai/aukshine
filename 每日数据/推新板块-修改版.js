@@ -6788,7 +6788,7 @@
     const primaryColorLegendItems = PRESET_COLORS.slice(0, 4);
     const extraColorLegendItems = PRESET_COLORS.slice(4);
     const renderColorLegendItem = (pc, index) => {
-      const label = index === 0 ? '基础' : pc.label;
+      const label = index === 0 ? '默认自动取，也可手动复核' : pc.label;
       return React.createElement('div', {
         key: pc.value,
         style: { display: 'flex', alignItems: 'center', gap: '2px' },

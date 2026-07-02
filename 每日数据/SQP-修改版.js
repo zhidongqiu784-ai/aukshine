@@ -128,7 +128,7 @@
   };
 
   const PRESET_COLORS = [
-    { label:'基础',      value:'#9DF29F' },
+    { label:'默认自动取，也可手动复核',      value:'#9DF29F' },
     { label:'必填',      value:'#EB6793' },
     { label:'选填',      value:'#F2BABA' },
     { label:'重要指标',  value:'#C5DFB4' },
