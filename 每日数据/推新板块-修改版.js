@@ -422,17 +422,30 @@
     keyword_screenshot: 'daily_keyword_tracking',
   };
 
+  const DAILY_SYNC_TOOLTIP_TEXT = [
+    '按站点分早晚场同步：',
+    'JP站点：早场 06/07/08 任一时间同步；晚场 18/19 任一时间同步。',
+    'US/CA站点：晚场 22/23 任一时间同步。',
+    '欧洲站点（DE/FR）：早场 13/14/15 任一时间同步；晚场 20/21 任一时间同步。',
+  ].join('\n');
+
+  const DAILY_SYNC_SOURCE_INFOS = [
+    { workflow: '每日生成类型、asin数据', schedule: '早场 06/07/08 任一时间；晚场 18/19 任一时间', scope: 'JP', node: '1更新 非US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
+    { workflow: '更新US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号', schedule: '晚场 22/23 任一时间', scope: 'US/CA', node: '1更新 US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
+    { workflow: '每日生成类型、asin数据', schedule: '早场 13/14/15 任一时间；晚场 20/21 任一时间', scope: 'DE/FR', node: '1更新 非US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
+  ];
+
   const DAILY_SQL_UPDATED_FIELD_TEXT = {
     country: '每天自动从 ASIN 表生成，只包含状态为「新品、重点、普通」的产品。',
     asin: '每天自动从 ASIN 表生成，只包含状态为「新品、重点、普通」的产品。',
     date: '每天自动生成从今天起未来 3 个月的日期。',
     model: '每天自动从 ASIN 表同步型号。',
     sale_owner: '每天自动从 ASIN 表同步销售负责人。',
-    activity_annotation: '每天 5:30 同步昨日活动标注。',
-    daily_price: '每天 5:30 同步昨日购物车价格。',
-    promotion_days: '每天 5:30 同步昨日推广天数。',
-    list_price: '每天 5:30 同步昨日 LP/WP/TP。',
-    selling_accounts: '每天 5:30 同步昨日售卖账号。',
+    activity_annotation: `活动标注\n${DAILY_SYNC_TOOLTIP_TEXT}`,
+    daily_price: `购物车价格\n${DAILY_SYNC_TOOLTIP_TEXT}`,
+    promotion_days: `推广天数\n${DAILY_SYNC_TOOLTIP_TEXT}`,
+    list_price: `LP/WP/TP\n${DAILY_SYNC_TOOLTIP_TEXT}`,
+    selling_accounts: `售卖账号\n${DAILY_SYNC_TOOLTIP_TEXT}`,
   };
 
   const DAILY_SQL_UPDATED_FIELD_SOURCE = {
@@ -441,23 +454,11 @@
     date: [{ workflow: '每日生成类型、asin数据', schedule: '每天早上 8:30', node: '每日asin主表-生成未来 3 个月的数据的asin数据' }],
     model: [{ workflow: '每日生成类型、asin数据', schedule: '每天早上 8:30', node: '每日asin主表-生成未来 3 个月的数据的asin数据' }],
     sale_owner: [{ workflow: '每日生成类型、asin数据', schedule: '每天早上 8:30', node: '每日asin主表-生成未来 3 个月的数据的asin数据' }],
-    activity_annotation: [{ workflow: '每日生成类型、asin数据', schedule: '每天 5:30', node: '3更新 活动标注' }],
-    daily_price: [
-      { workflow: '每日生成类型、asin数据', schedule: '每天 5:30', scope: '非 US/CA', node: '1更新 非US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
-      { workflow: '更新US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号', schedule: '每天 5:30', scope: 'US/CA', node: '1更新 US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
-    ],
-    promotion_days: [
-      { workflow: '每日生成类型、asin数据', schedule: '每天 5:30', scope: '非 US/CA', node: '1更新 非US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
-      { workflow: '更新US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号', schedule: '每天 5:30', scope: 'US/CA', node: '1更新 US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
-    ],
-    list_price: [
-      { workflow: '每日生成类型、asin数据', schedule: '每天 5:30', scope: '非 US/CA', node: '1更新 非US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
-      { workflow: '更新US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号', schedule: '每天 5:30', scope: 'US/CA', node: '1更新 US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
-    ],
-    selling_accounts: [
-      { workflow: '每日生成类型、asin数据', schedule: '每天 5:30', scope: '非 US/CA', node: '1更新 非US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
-      { workflow: '更新US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号', schedule: '每天 5:30', scope: 'US/CA', node: '1更新 US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
-    ],
+    activity_annotation: DAILY_SYNC_SOURCE_INFOS,
+    daily_price: DAILY_SYNC_SOURCE_INFOS,
+    promotion_days: DAILY_SYNC_SOURCE_INFOS,
+    list_price: DAILY_SYNC_SOURCE_INFOS,
+    selling_accounts: DAILY_SYNC_SOURCE_INFOS,
   };
 
   const DAILY_SQL_UPDATED_FIELDS = new Set(Object.keys(DAILY_SQL_UPDATED_FIELD_TEXT));
@@ -6591,6 +6592,17 @@
       ],
       writeBackField: `new_eval_words_daily.${sub.key}`,
     });
+    const renderTooltipFormula = (formula) => {
+      const lines = Array.isArray(formula)
+        ? (formula.length ? formula : ['直接展示该指标值'])
+        : String(formula || '直接展示该指标值').split(/\r?\n/);
+      return React.createElement('div', { style: { marginBottom: '6px' } }, lines.map((line, idx) =>
+        React.createElement('div', {
+          key: `formula_${idx}`,
+          style: { marginTop: idx === 0 ? 0 : '4px' },
+        }, line)
+      ));
+    };
     const renderTooltip = ({ title, formula, emptyTitle = '为空情况：', emptyRules = [], fields = [], writeBackField, hideEmptyRules = false, hideFieldMapping = false, sourceInfos = [] }) => React.createElement('div', {
       style: {
         maxWidth: '360px',
@@ -6600,7 +6612,7 @@
       },
     },
       React.createElement('div', { style: { fontWeight: 700, marginBottom: '6px' } }, title),
-      React.createElement('div', { style: { marginBottom: '6px' } }, formula || '直接展示该指标值'),
+      renderTooltipFormula(formula),
       !hideEmptyRules && React.createElement('div', { style: { marginBottom: '2px' } }, emptyTitle),
       !hideEmptyRules && React.createElement('ul', { style: { margin: '0 0 10px 18px', padding: 0 } },
         (emptyRules.length ? emptyRules : ['无特殊为空情况']).map((rule, idx) =>

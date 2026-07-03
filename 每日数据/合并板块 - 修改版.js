@@ -801,13 +801,13 @@
   const DAILY_SYNC_TOOLTIP_TEXT = [
     '按站点分早晚场同步：',
     'JP站点：早场 06/07/08 任一时间同步；晚场 18/19 任一时间同步。',
-    'US/CA站点：早场 10/11/12 任一时间同步；晚场 22/23 任一时间同步。',
+    'US/CA站点：晚场 22/23 任一时间同步。',
     '欧洲站点（DE/FR）：早场 13/14/15 任一时间同步；晚场 20/21 任一时间同步。',
   ].join('\n');
 
   const DAILY_SYNC_SOURCE_INFOS = [
     { workflow: '每日生成类型、asin数据', schedule: '早场 06/07/08 任一时间；晚场 18/19 任一时间', scope: 'JP', node: '1更新 非US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
-    { workflow: '更新US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号', schedule: '早场 10/11/12 任一时间；晚场 22/23 任一时间', scope: 'US/CA', node: '1更新 US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
+    { workflow: '更新US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号', schedule: '晚场 22/23 任一时间', scope: 'US/CA', node: '1更新 US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
     { workflow: '每日生成类型、asin数据', schedule: '早场 13/14/15 任一时间；晚场 20/21 任一时间', scope: 'DE/FR', node: '1更新 非US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
   ];
 
@@ -7770,16 +7770,15 @@
     };
 
     const renderFormula = (formula) => {
-      if (Array.isArray(formula)) {
-        const lines = formula.length ? formula : ['直接展示该指标值'];
-        return React.createElement('div', { style: { marginBottom: '6px' } }, lines.map((line, idx) =>
-          React.createElement('div', {
-            key: `formula_${idx}`,
-            style: { marginTop: idx === 0 ? 0 : '4px' },
-          }, line)
-        ));
-      }
-      return React.createElement('div', { style: { marginBottom: '6px' } }, formula || '直接展示该指标值');
+      const lines = Array.isArray(formula)
+        ? (formula.length ? formula : ['直接展示该指标值'])
+        : String(formula || '直接展示该指标值').split(/\r?\n/);
+      return React.createElement('div', { style: { marginBottom: '6px' } }, lines.map((line, idx) =>
+        React.createElement('div', {
+          key: `formula_${idx}`,
+          style: { marginTop: idx === 0 ? 0 : '4px' },
+        }, line)
+      ));
     };
 
     const renderTooltip = ({ title, formula, emptyRules = [], fields = [], writeBackField, hideEmptyRules = false, hideFieldMapping = false, sourceInfos = [], emptyRuleMode = '任意' }) => React.createElement('div', {
