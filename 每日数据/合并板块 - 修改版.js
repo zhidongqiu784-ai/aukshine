@@ -798,14 +798,27 @@
     category: '类别 = 从小类排名数组取第一个类别。\ncategory = small_cate_rank[0].category。',
   };
 
+  const DAILY_SYNC_TOOLTIP_TEXT = [
+    '按站点分早晚场同步：',
+    'JP站点：早场 06/07/08 任一时间同步；晚场 18/19 任一时间同步。',
+    'US/CA站点：早场 10/11/12 任一时间同步；晚场 22/23 任一时间同步。',
+    '欧洲站点（DE/FR）：早场 13/14/15 任一时间同步；晚场 20/21 任一时间同步。',
+  ].join('\n');
+
+  const DAILY_SYNC_SOURCE_INFOS = [
+    { workflow: '每日生成类型、asin数据', schedule: '早场 06/07/08 任一时间；晚场 18/19 任一时间', scope: 'JP', node: '1更新 非US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
+    { workflow: '更新US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号', schedule: '早场 10/11/12 任一时间；晚场 22/23 任一时间', scope: 'US/CA', node: '1更新 US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
+    { workflow: '每日生成类型、asin数据', schedule: '早场 13/14/15 任一时间；晚场 20/21 任一时间', scope: 'DE/FR', node: '1更新 非US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
+  ];
+
   const SQL_UPDATED_FIELD_TEXT = {
     'daily.date': '每天自动生成从今天起未来 3 个月的日期。',
     'daily.activity_annotation': '每天 5:30 同步昨日活动标注。',
-    'daily.daily_price': '每天 5:30 同步昨日购物车价格。',
-    'daily.list_price': '每天 5:30 同步昨日 LP/WP/TP。',
-    'daily.star_rating': '每天 5:30 同步昨日星级。',
-    'daily.number_of_comments': '每天 5:30 同步昨日 Review 数量。',
-    'daily.selling_accounts': '每天 5:30 同步昨日售卖账号。',
+    'daily.daily_price': `购物车价格\n${DAILY_SYNC_TOOLTIP_TEXT}`,
+    'daily.list_price': `LP/WP/TP\n${DAILY_SYNC_TOOLTIP_TEXT}`,
+    'daily.star_rating': `星级\n${DAILY_SYNC_TOOLTIP_TEXT}`,
+    'daily.number_of_comments': `Review 数量\n${DAILY_SYNC_TOOLTIP_TEXT}`,
+    'daily.selling_accounts': `售卖账号\n${DAILY_SYNC_TOOLTIP_TEXT}`,
     'daily.promotion_days': '每天 5:30 同步昨日推广天数。',
     'target.sales_mom_rate': '每天早上 8:30 自动对比当天和前一天实际总单量，计算销量环比变化。',
   };
@@ -813,26 +826,11 @@
   const SQL_UPDATED_FIELD_SOURCE = {
     'daily.date': [{ workflow: '每日生成类型、asin数据', schedule: '每天早上 8:30', node: '每日asin主表-生成未来 3 个月的数据的asin数据' }],
     'daily.activity_annotation': [{ workflow: '每日生成类型、asin数据', schedule: '每天 5:30', node: '3更新 活动标注' }],
-    'daily.daily_price': [
-      { workflow: '每日生成类型、asin数据', schedule: '每天 5:30', scope: '非 US/CA', node: '1更新 非US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
-      { workflow: '更新US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号', schedule: '每天 5:30', scope: 'US/CA', node: '1更新 US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
-    ],
-    'daily.list_price': [
-      { workflow: '每日生成类型、asin数据', schedule: '每天 5:30', scope: '非 US/CA', node: '1更新 非US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
-      { workflow: '更新US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号', schedule: '每天 5:30', scope: 'US/CA', node: '1更新 US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
-    ],
-    'daily.star_rating': [
-      { workflow: '每日生成类型、asin数据', schedule: '每天 5:30', scope: '非 US/CA', node: '1更新 非US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
-      { workflow: '更新US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号', schedule: '每天 5:30', scope: 'US/CA', node: '1更新 US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
-    ],
-    'daily.number_of_comments': [
-      { workflow: '每日生成类型、asin数据', schedule: '每天 5:30', scope: '非 US/CA', node: '1更新 非US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
-      { workflow: '更新US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号', schedule: '每天 5:30', scope: 'US/CA', node: '1更新 US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
-    ],
-    'daily.selling_accounts': [
-      { workflow: '每日生成类型、asin数据', schedule: '每天 5:30', scope: '非 US/CA', node: '1更新 非US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
-      { workflow: '更新US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号', schedule: '每天 5:30', scope: 'US/CA', node: '1更新 US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
-    ],
+    'daily.daily_price': DAILY_SYNC_SOURCE_INFOS,
+    'daily.list_price': DAILY_SYNC_SOURCE_INFOS,
+    'daily.star_rating': DAILY_SYNC_SOURCE_INFOS,
+    'daily.number_of_comments': DAILY_SYNC_SOURCE_INFOS,
+    'daily.selling_accounts': DAILY_SYNC_SOURCE_INFOS,
     'daily.promotion_days': [
       { workflow: '每日生成类型、asin数据', schedule: '每天 5:30', scope: '非 US/CA', node: '1更新 非US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
       { workflow: '更新US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号', schedule: '每天 5:30', scope: 'US/CA', node: '1更新 US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
@@ -841,6 +839,13 @@
   };
 
   const FIELD_TOOLTIP_DATA = {
+    page_screenshot: {
+      title: '自己页面截图',
+      formula: `自己页面截图\n${DAILY_SYNC_TOOLTIP_TEXT}`,
+      fields: [{ label: '字段来源（自己页面截图）', field: 'daily_order_link_tracking.page_screenshot' }],
+      writeBackField: 'daily_order_link_tracking.page_screenshot',
+      hideEmptyRules: true,
+    },
     target_gap: {
       title: '目标差距',
       formula: '实际总单量 - 目标拆解 - 单量。',
