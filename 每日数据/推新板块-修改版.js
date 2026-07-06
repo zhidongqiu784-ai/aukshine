@@ -1550,7 +1550,7 @@
         React.createElement('div', {
           key: sub.key,
           onMouseDown: (e) => onSubMouseDown?.(e, sub.key),
-          onMouseEnter: () => onSubMouseEnter?.(sub.key),
+          onMouseEnter: (e) => onSubMouseEnter?.(e, sub.key),
           style: {
             // ← 关键：用 flex 而不是固定 width
             flex: `0 0 ${sub.width}px`,
@@ -5532,8 +5532,12 @@
       e.preventDefault();
     }, [editingCell, isResizing, focusClipboardWithoutScroll]);
 
-    const handleCellMouseEnter = useCallback((r, c, subKey = null) => {
+    const handleCellMouseEnter = useCallback((e, r, c, subKey = null) => {
       if (!selectingRef.current) return;
+      if (e && typeof e.buttons === 'number' && (e.buttons & 1) !== 1) {
+        selectingRef.current = false;
+        return;
+      }
       setSelectedRange((prev) => prev ? { ...prev, end: { r, c, subKey: subKey || prev.end.subKey || null } } : prev);
     }, []);
 
@@ -6001,6 +6005,7 @@
       if (saving) return;
       const row = data.find((r) => (r.country_asin_date || r.id) === rowId);
       if (row?._isWeeklySummary) return;
+      selectingRef.current = false;
       setSelectedRange(null);
       setEditingCell({ rowId, colKey: col.key, field: col.field, src: col.src });
       if (col.field === 'promo_day') setEditValue(currentValue != null ? currentValue : 0);
@@ -7224,7 +7229,7 @@
                           readOnly: isWeeklySummaryRow,
                           cellBackground,
                           onSubMouseDown: (e, subKey) => handleCellMouseDown(e, rIdx, cIdx, subKey),
-                          onSubMouseEnter: (subKey) => handleCellMouseEnter(rIdx, cIdx, subKey),
+                          onSubMouseEnter: (e, subKey) => handleCellMouseEnter(e, rIdx, cIdx, subKey),
                           isSubSelected: (subKey) => isKeywordSubSelected(rIdx, cIdx, subKey)
                         }));
                       }
@@ -7235,6 +7240,8 @@
                           if (isWeeklySummaryRow || e.target?.closest?.('[data-rich-editor-panel="1"]')) return;
                           e.preventDefault();
                           e.stopPropagation();
+                          selectingRef.current = false;
+                          setSelectedRange(null);
                           const rect = e.currentTarget.getBoundingClientRect();
                           setRichEditOpenSignal({
                             cellKey: richCellKey,
@@ -7246,7 +7253,7 @@
                           key: col.key,
                           onMouseDown: (e) => handleCellMouseDown(e, rIdx, cIdx),
                           onDoubleClickCapture: openRichEditorFromCell,
-                          onMouseEnter: () => handleCellMouseEnter(rIdx, cIdx),
+                          onMouseEnter: (e) => handleCellMouseEnter(e, rIdx, cIdx),
                           style: {
                             position: isPinned ? 'sticky' : undefined,
                             left: isPinned ? `${leftOff}px` : undefined,
@@ -7311,7 +7318,7 @@
                             : pinnedBorderStyle.boxShadow
                         },
                         onMouseEnter: (e) => {
-                          handleCellMouseEnter(rIdx, cIdx);
+                          handleCellMouseEnter(e, rIdx, cIdx);
                           if (canEdit && !isEditing) e.currentTarget.style.outline = '1px dashed #1890ff';
                         },
                         onMouseLeave: canEdit && !isEditing ? (e) => { e.currentTarget.style.outline = '1px dashed transparent'; } : undefined,

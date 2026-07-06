@@ -2704,6 +2704,9 @@
       if (tempContent !== content) await saveToDatabase(tempContent);
       setIsEditing(false);
     };
+    const stopEditorClipboardEvent = (e) => {
+      e?.stopPropagation?.();
+    };
     const openEditor = (e) => {
       e?.preventDefault?.();
       e?.stopPropagation?.();
@@ -2748,6 +2751,7 @@
     };
     const handlePasteImage = (e) => {
       if (!isEditing) return;
+      e.stopPropagation();
       const items = e.clipboardData?.items;
       if (!items) return;
       for (const item of items) {
@@ -2815,6 +2819,10 @@
           style: { position: 'fixed', top: `${editorPos.top}px`, left: `${editorPos.left}px`, zIndex: 9996, width: 'min(520px, calc(100vw - 24px))', maxHeight: 'calc(100vh - 24px)', background: '#fff', borderRadius: '8px', boxShadow: '0 12px 32px rgba(15,23,42,0.24)', border: '1px solid #d8e3f0', display: 'flex', flexDirection: 'column', overflow: 'hidden' },
           onMouseDown: (e) => e.stopPropagation(),
           onClick: (e) => e.stopPropagation(),
+          onCopy: stopEditorClipboardEvent,
+          onCut: stopEditorClipboardEvent,
+          onPaste: stopEditorClipboardEvent,
+          onKeyDown: (e) => e.stopPropagation(),
         },
             React.createElement('div', {
               style: { padding: '9px 12px', borderBottom: '1px solid #edf2f7', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' },
@@ -2831,8 +2839,11 @@
               React.createElement('textarea', {
                 value: tempContent,
                 onChange: (e) => setTempContent(e.target.value),
+                onCopy: stopEditorClipboardEvent,
+                onCut: stopEditorClipboardEvent,
                 onPaste: handlePasteImage,
                 onKeyDown: (e) => {
+                  e.stopPropagation();
                   if (e.key === 'Escape') setIsEditing(false);
                   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                     e.preventDefault();
@@ -6682,6 +6693,11 @@
       }
     }, []);
 
+    const isTableClipboardEvent = useCallback((e) => {
+      const target = e?.target;
+      return target === clipboardRef.current || target === tableWrapRef.current;
+    }, []);
+
     const handleCellMouseDown = useCallback((e, r, c) => {
       if (e.button !== 0 || editingCell || isResizing) return;
 
@@ -6697,8 +6713,12 @@
       e.preventDefault();
     }, [editingCell, isResizing, focusClipboardWithoutScroll]);
 
-    const handleCellMouseEnter = useCallback((r, c) => {
+    const handleCellMouseEnter = useCallback((e, r, c) => {
       if (!selectingRef.current) return;
+      if (e && typeof e.buttons === 'number' && (e.buttons & 1) !== 1) {
+        selectingRef.current = false;
+        return;
+      }
       setSelectedRange((prev) => prev ? { ...prev, end: { r, c } } : prev);
     }, []);
 
@@ -6707,6 +6727,7 @@
     }, []);
 
     const handleCopy = useCallback((e) => {
+      if (!isTableClipboardEvent(e)) return;
       const rect = normalizeSelection(selectedRange);
       if (!rect) return;
       e.preventDefault();
@@ -6721,9 +6742,10 @@
         lines.push(cells.join('\t'));
       }
       e.clipboardData.setData('text/plain', lines.join('\n'));
-    }, [getClipboardValue, normalizeSelection, pagedData, selectedRange, visibleCols]);
+    }, [getClipboardValue, isTableClipboardEvent, normalizeSelection, pagedData, selectedRange, visibleCols]);
 
     const handlePaste = useCallback(async (e) => {
+      if (!isTableClipboardEvent(e)) return;
       const rect = normalizeSelection(selectedRange);
       if (!rect || saving) return;
       const text = e.clipboardData.getData('text/plain');
@@ -6921,7 +6943,7 @@
       } finally {
         setSaving(false);
       }
-    }, [finishFormulaProgress, getCellValue, isCellEditable, loadData, normalizeSelection, pagedData, parsePastedValue, pushUndoEntry, resetFormulaProgress, saving, selectedRange, showFormulaProgress, syncFormulasForChangedRows, updateDataLocalOnly, visibleCols]);
+    }, [finishFormulaProgress, getCellValue, isCellEditable, isTableClipboardEvent, loadData, normalizeSelection, pagedData, parsePastedValue, pushUndoEntry, resetFormulaProgress, saving, selectedRange, showFormulaProgress, syncFormulasForChangedRows, updateDataLocalOnly, visibleCols]);
 
     const fillSelectedCells = useCallback(async (rawValue) => {
       const rect = normalizeSelection(selectedRange);
@@ -7371,6 +7393,7 @@
 
     const startEdit = useCallback((rowId, col, currentValue) => {
       if (saving) return;
+      selectingRef.current = false;
       setSelectedRange(null);
       setSelectionInputValue('');
       setEditingCell({ rowId, colKey: col.key, field: col.field, src: col.src });
@@ -9078,6 +9101,9 @@
                             if (e.target?.closest?.('[data-rich-editor-panel="1"]')) return;
                             e.preventDefault();
                             e.stopPropagation();
+                            selectingRef.current = false;
+                            setSelectedRange(null);
+                            setSelectionInputValue('');
                             const rect = e.currentTarget.getBoundingClientRect();
                             setRichEditOpenSignal({
                               cellKey: richCellKey,
@@ -9097,7 +9123,7 @@
                             rowSpan: weeklyMergedCell?.rowSpan || undefined,
                             onMouseDown: (e) => handleCellMouseDown(e, rIdx, cIdx),
                             onDoubleClickCapture: openRichEditorFromCell,
-                            onMouseEnter: () => handleCellMouseEnter(rIdx, cIdx),
+                            onMouseEnter: (e) => handleCellMouseEnter(e, rIdx, cIdx),
                             style: {
                               position: isPinned ? 'sticky' : undefined,
                               left: isPinned ? `${leftOff}px` : undefined,
@@ -9155,7 +9181,7 @@
                             boxShadow: selected ? 'inset 0 0 0 2px #1677ff' : (isHighlighted ? 'inset 0 0 0 2px #faad14' : (isPinned ? '1px 0 0 rgba(0,0,0,0.05)' : undefined)),
                           },
                           onMouseEnter: (e) => {
-                            handleCellMouseEnter(rIdx, cIdx);
+                            handleCellMouseEnter(e, rIdx, cIdx);
                             if (canEdit && !isEditing) e.currentTarget.style.outline = '1px dashed #1890ff';
                           },
                           onMouseLeave: canEdit && !isEditing ? (e) => { e.currentTarget.style.outline = '1px dashed transparent'; } : undefined,
