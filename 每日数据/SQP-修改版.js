@@ -1754,9 +1754,9 @@
   };
 
   const TrendLineChart = ({ weeks, series }) => {
-    const width = 1460;
-    const height = 660;
-    const margin = { top: 52, right: 96, bottom: 132, left: 96 };
+    const width = 1640;
+    const height = 760;
+    const margin = { top: 64, right: 122, bottom: 156, left: 118 };
     const plotWidth = width - margin.left - margin.right;
     const plotHeight = height - margin.top - margin.bottom;
     const selectedWeeks = weeks || [];
@@ -1773,6 +1773,8 @@
           background: '#111827',
           border: '1px solid #1f2937',
           borderRadius: '8px',
+          fontSize: '16px',
+          fontVariantNumeric: 'tabular-nums',
         },
       }, '所选条件没有真实数据');
     }
@@ -1859,6 +1861,51 @@
     const tooltipTransform = hoverX != null && hoverX > width * 0.62
       ? 'translateX(-100%) translateX(-12px)'
       : 'translateX(12px)';
+    const labelFontSize = selectedWeeks.length > 16 ? 14 : 17;
+    const labelMinGap = labelFontSize + 8;
+    const labelTopLimit = margin.top + labelFontSize;
+    const labelBottomLimit = margin.top + plotHeight - 12;
+    const labelOffsets = [-18, 26, -34, 42];
+    const labelItems = selectedWeeks.flatMap((week, weekIndex) => {
+      const weekLabels = safeSeries.map((item, seriesIndex) => {
+        const scale = item.axis === 'right' ? rightScale : leftScale;
+        const value = item.data?.[weekIndex];
+        if (!scale || !isValidNumber(value)) return null;
+        const pointY = yFor(value, scale);
+        return {
+          key: `pt_label_${item.key}_${week.key}`,
+          x: xFor(weekIndex),
+          y: Math.min(labelBottomLimit, Math.max(labelTopLimit, pointY + labelOffsets[seriesIndex % labelOffsets.length])),
+          color: item.color,
+          value,
+          axis: item.axis,
+        };
+      }).filter(Boolean).sort((a, b) => a.y - b.y);
+      if (!weekLabels.length) return [];
+      for (let i = 1; i < weekLabels.length; i += 1) {
+        if (weekLabels[i].y - weekLabels[i - 1].y < labelMinGap) {
+          weekLabels[i].y = weekLabels[i - 1].y + labelMinGap;
+        }
+      }
+      const bottomOverflow = weekLabels[weekLabels.length - 1].y - labelBottomLimit;
+      if (bottomOverflow > 0) {
+        weekLabels.forEach((label) => { label.y -= bottomOverflow; });
+      }
+      for (let i = weekLabels.length - 2; i >= 0; i -= 1) {
+        if (weekLabels[i + 1].y - weekLabels[i].y < labelMinGap) {
+          weekLabels[i].y = weekLabels[i + 1].y - labelMinGap;
+        }
+      }
+      const topOverflow = labelTopLimit - weekLabels[0].y;
+      if (topOverflow > 0) {
+        weekLabels.forEach((label) => { label.y += topOverflow; });
+      }
+      const center = (weekLabels.length - 1) / 2;
+      return weekLabels.map((label, labelIndex) => ({
+        ...label,
+        x: label.x + (labelIndex - center) * 18,
+      }));
+    });
 
     return React.createElement('div', {
       style: {
@@ -1866,8 +1913,9 @@
         background: '#111827',
         border: '1px solid #1f2937',
         borderRadius: '8px',
-        padding: '16px',
+        padding: '18px',
         color: '#cbd5e1',
+        fontVariantNumeric: 'tabular-nums',
       },
       onMouseLeave: () => setHoverIndex(null),
     },
@@ -1876,36 +1924,37 @@
         width: '100%',
         height: 'auto',
         role: 'img',
-        style: { display: 'block' },
+        style: { display: 'block', fontVariantNumeric: 'tabular-nums' },
       },
         React.createElement('rect', { x: 0, y: 0, width, height, fill: '#111827' }),
         ticks(gridScale).map((tick, index) => {
           const y = yFor(tick, gridScale);
           return React.createElement('g', { key: `grid_${index}` },
             React.createElement('line', { x1: margin.left, y1: y, x2: margin.left + plotWidth, y2: y, stroke: '#243244', strokeWidth: 1 }),
-            leftScale && React.createElement('text', { x: margin.left - 12, y: y + 4, textAnchor: 'end', fill: '#94a3b8', fontSize: 13 }, formatChartNumber(tick, 'left')),
-            rightScale && React.createElement('text', { x: margin.left + plotWidth + 12, y: y + 4, textAnchor: 'start', fill: '#94a3b8', fontSize: 13 }, formatChartNumber(tick, 'right'))
+            leftScale && React.createElement('text', { x: margin.left - 14, y: y + 5, textAnchor: 'end', fill: '#94a3b8', fontSize: 16, fontWeight: 700 }, formatChartNumber(tick, 'left')),
+            rightScale && React.createElement('text', { x: margin.left + plotWidth + 14, y: y + 5, textAnchor: 'start', fill: '#94a3b8', fontSize: 16, fontWeight: 700 }, formatChartNumber(tick, 'right'))
           );
         }),
         React.createElement('line', { x1: margin.left, y1: margin.top, x2: margin.left, y2: margin.top + plotHeight, stroke: '#334155', strokeWidth: 1.5 }),
         React.createElement('line', { x1: margin.left + plotWidth, y1: margin.top, x2: margin.left + plotWidth, y2: margin.top + plotHeight, stroke: '#334155', strokeWidth: 1.5 }),
         React.createElement('line', { x1: margin.left, y1: margin.top + plotHeight, x2: margin.left + plotWidth, y2: margin.top + plotHeight, stroke: '#334155', strokeWidth: 1.5 }),
-        React.createElement('text', { x: 20, y: margin.top + plotHeight / 2, fill: '#94a3b8', fontSize: 14, transform: `rotate(-90 20 ${margin.top + plotHeight / 2})`, textAnchor: 'middle' }, '数值'),
-        React.createElement('text', { x: width - 20, y: margin.top + plotHeight / 2, fill: '#F59E0B', fontSize: 14, transform: `rotate(90 ${width - 20} ${margin.top + plotHeight / 2})`, textAnchor: 'middle' }, '百分比'),
+        React.createElement('text', { x: margin.left, y: margin.top - 22, fill: '#94a3b8', fontSize: 17, fontWeight: 800, textAnchor: 'middle' }, '数值'),
+        React.createElement('text', { x: margin.left + plotWidth, y: margin.top - 22, fill: '#F59E0B', fontSize: 17, fontWeight: 800, textAnchor: 'middle' }, '百分比'),
         selectedWeeks.map((week, index) => {
           const x = xFor(index);
           return React.createElement('g', { key: week.key },
             React.createElement('line', { x1: x, y1: margin.top, x2: x, y2: margin.top + plotHeight, stroke: '#1f2937', strokeWidth: 1 }),
             React.createElement('text', {
               x,
-              y: margin.top + plotHeight + 30,
+              y: margin.top + plotHeight + 36,
               fill: '#94a3b8',
-              fontSize: 12,
+              fontSize: 15,
+              fontWeight: 700,
               textAnchor: 'end',
-              transform: `rotate(-38 ${x} ${margin.top + plotHeight + 30})`,
+              transform: `rotate(-38 ${x} ${margin.top + plotHeight + 36})`,
             },
               React.createElement('tspan', { x, dy: 0 }, weekName(week)),
-              compactDateRange(week) && React.createElement('tspan', { x, dy: 15 }, compactDateRange(week))
+              compactDateRange(week) && React.createElement('tspan', { x, dy: 19 }, compactDateRange(week))
             )
           );
         }),
@@ -1917,7 +1966,7 @@
             d: pathFor(item, scale),
             fill: 'none',
             stroke: item.color,
-            strokeWidth: 2.5,
+            strokeWidth: 3.2,
             strokeLinejoin: 'round',
             strokeLinecap: 'round',
             opacity: index >= 12 ? 0.78 : 0.95,
@@ -1933,37 +1982,26 @@
               key: `pt_${item.key}_${week.key}`,
               cx: xFor(index),
               cy: yFor(value, scale),
-              r: 3.8,
+              r: 5,
               fill: item.color,
               stroke: '#111827',
-              strokeWidth: 1.5,
+              strokeWidth: 2,
             });
           }).filter(Boolean);
         }),
-        safeSeries.flatMap((item, seriesIndex) => {
-          const scale = item.axis === 'right' ? rightScale : leftScale;
-          if (!scale) return [];
-          const labelOffset = [-12, 18, -24, 30][seriesIndex % 4];
-          return item.data.map((value, index) => {
-            if (!isValidNumber(value)) return null;
-            const week = selectedWeeks[index];
-            const y = yFor(value, scale);
-            const nextY = Math.min(margin.top + plotHeight - 8, Math.max(margin.top + 10, y + labelOffset));
-            return React.createElement('text', {
-              key: `pt_label_${item.key}_${week.key}`,
-              x: xFor(index),
-              y: nextY,
-              fill: item.color,
-              fontSize: selectedWeeks.length > 16 ? 10 : 11,
-              fontWeight: 800,
-              textAnchor: 'middle',
-              stroke: '#111827',
-              strokeWidth: 4,
-              paintOrder: 'stroke',
-              pointerEvents: 'none',
-            }, formatChartNumber(value, item.axis));
-          }).filter(Boolean);
-        }),
+        labelItems.map((label) => React.createElement('text', {
+          key: label.key,
+          x: label.x,
+          y: label.y,
+          fill: label.color,
+          fontSize: labelFontSize,
+          fontWeight: 800,
+          textAnchor: 'middle',
+          stroke: '#111827',
+          strokeWidth: 5,
+          paintOrder: 'stroke',
+          pointerEvents: 'none',
+        }, formatChartNumber(label.value, label.axis))),
         selectedWeeks.map((week, index) => {
           const bounds = bandBounds(index);
           return React.createElement('rect', {
@@ -1997,10 +2035,10 @@
               key: `hover_pt_${row.key}`,
               cx: hoverX,
               cy: yFor(row.value, scale),
-              r: 6,
+              r: 7.4,
               fill: row.color,
               stroke: '#f8fafc',
-              strokeWidth: 2,
+              strokeWidth: 2.4,
             });
           }).filter(Boolean)
         )
@@ -2011,9 +2049,9 @@
           top: '54px',
           left: tooltipLeft,
           transform: tooltipTransform,
-          width: '360px',
+          width: '420px',
           maxWidth: 'calc(100% - 32px)',
-          padding: '10px 12px',
+          padding: '12px 14px',
           borderRadius: '8px',
           border: '1px solid rgba(148, 163, 184, 0.45)',
           background: 'rgba(15, 23, 42, 0.96)',
@@ -2021,22 +2059,23 @@
           boxShadow: '0 18px 42px rgba(15, 23, 42, 0.36)',
           pointerEvents: 'auto',
           zIndex: 2,
+          fontVariantNumeric: 'tabular-nums',
         },
       },
         React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '4px' } },
-          React.createElement('span', { style: { color: '#f8fafc', fontWeight: 800 } }, weekName(hoverWeek)),
-          React.createElement('span', { style: { color: '#94a3b8', fontSize: `${FONT_SIZE_XS}px` } }, hoverRows.filter((row) => row.hasValue).length, '/', hoverRows.length)
+          React.createElement('span', { style: { color: '#f8fafc', fontWeight: 800, fontSize: '16px' } }, weekName(hoverWeek)),
+          React.createElement('span', { style: { color: '#94a3b8', fontSize: '14px' } }, hoverRows.filter((row) => row.hasValue).length, '/', hoverRows.length)
         ),
-        React.createElement('div', { style: { color: '#94a3b8', fontSize: `${FONT_SIZE_XS}px`, marginBottom: '8px' } }, fullDateRange(hoverWeek) || hoverWeek.label),
-        React.createElement('div', { style: { display: 'grid', gap: '5px', maxHeight: '260px', overflowY: 'auto', paddingRight: '2px' } },
+        React.createElement('div', { style: { color: '#94a3b8', fontSize: '14px', marginBottom: '10px' } }, fullDateRange(hoverWeek) || hoverWeek.label),
+        React.createElement('div', { style: { display: 'grid', gap: '7px', maxHeight: '300px', overflowY: 'auto', paddingRight: '2px' } },
           hoverRows.map((row) => React.createElement('div', {
             key: `tooltip_${row.key}`,
             style: {
               display: 'grid',
               gridTemplateColumns: '10px minmax(0, 1fr) auto',
               alignItems: 'center',
-              gap: '8px',
-              fontSize: `${FONT_SIZE_XS}px`,
+              gap: '10px',
+              fontSize: '14px',
             },
           },
             React.createElement('span', { style: { width: '8px', height: '8px', borderRadius: '50%', background: row.color } }),
@@ -2051,7 +2090,7 @@
           flexWrap: 'wrap',
           gap: '8px 14px',
           padding: '4px 4px 0',
-          maxHeight: '104px',
+          maxHeight: '120px',
           overflowY: 'auto',
         },
       },
@@ -2062,9 +2101,10 @@
             display: 'inline-flex',
             alignItems: 'center',
             gap: '6px',
-            maxWidth: '320px',
+            maxWidth: '380px',
             color: '#cbd5e1',
-            fontSize: `${FONT_SIZE_XS}px`,
+            fontSize: '14px',
+            fontWeight: 700,
           },
         },
           React.createElement('span', { style: { width: '18px', height: '3px', borderRadius: '2px', background: item.color, flexShrink: 0 } }),
@@ -2259,9 +2299,9 @@
       visible,
       onCancel: onClose,
       footer: null,
-      width: 'min(1520px, calc(100vw - 64px))',
+      width: 'min(1740px, calc(100vw - 32px))',
       destroyOnClose: false,
-      bodyStyle: { padding: '16px 20px 20px', maxHeight: 'calc(100vh - 120px)', overflowY: 'auto' },
+      bodyStyle: { padding: '16px 20px 20px', maxHeight: 'calc(100vh - 96px)', overflowY: 'auto' },
     },
       !countryAsin
         ? React.createElement('div', { style: { padding: 24, color: '#999' } }, '请先通过 URL 或筛选进入具体 country + asin。')
