@@ -22,6 +22,13 @@
   const IS_ADMIN         = currentUserLevel === 3;
   const DEFAULT_TERM_COUNTRIES = ['US', 'CA', 'JP', 'DE', 'FR'];
   const DEFAULT_MARKET_BRAND = 'ONOAYO';
+  const MARKET_BRAND_BY_COUNTRY = {
+    US: 'ONOAYO',
+    CA: 'Lisowod',
+    JP: 'JIMVEO',
+    DE: 'Lisowod',
+    FR: 'Lisowod',
+  };
 
   const FONT_SIZE    = 15;
   const FONT_SIZE_SM = FONT_SIZE - 1;
@@ -221,7 +228,7 @@
   const MONEY_FIELDS = new Set([]);
   const RATE_FIELDS  = new Set([
     'market_ctr','asin_ctr','market_cart_rate','asin_cart_rate','market_cvr','asin_cvr',
-    'asin_click_share','asin_cart_share','asin_purchase_share','stage_target_share',
+    'impression_share','asin_click_share','asin_cart_share','asin_purchase_share','stage_target_share',
   ]);
   const NUM_FIELDS   = new Set([
     'search_query_volume','impressions_count','impressions_asin_count',
@@ -238,7 +245,7 @@
     'search_query_volume','impressions_count','impressions_asin_count','clicks_count','clicks_asin_count',
     'cart_additions_count','cart_additions_asin_count','purchases_count','purchases_asin_count',
     'market_ctr','asin_ctr','market_cart_rate','asin_cart_rate','market_cvr','asin_cvr',
-    'asin_click_share','asin_cart_share','asin_purchase_share','weekly_required_orders','daily_required_orders',
+    'impression_share','asin_click_share','asin_cart_share','asin_purchase_share','weekly_required_orders','daily_required_orders',
     'market_diagnosis','asin_diagnosis','compare_diagnosis',
   ]);
 
@@ -258,6 +265,7 @@
     asin_cart_rate: 'SQP-Asin加购量 / SQP-Asin点击量',
     market_cvr: 'SQP-市场购买量 / SQP-市场点击量',
     asin_cvr: 'SQP-Asin购买量 / SQP-Asin点击量',
+    impression_share: 'SQP-Asin曝光量 / SQP-市场曝光量',
     asin_click_share: 'SQP-Asin点击量 / SQP-市场点击量',
     asin_cart_share: 'SQP-Asin加购量 / SQP-市场加购量',
     asin_purchase_share: 'SQP-Asin购买量 / SQP-市场购买量',
@@ -270,11 +278,14 @@
     compare_diagnosis: 'Asin与市场数据同比分析：对比 SQP-Asin CTR/CVR/加购率 与 SQP-市场 CTR/CVR/加购率，并根据阶段目标份额计算的一周需出单判断当前 Asin 出单是否达标。',
   };
 
+  const MARKET_SOURCE_TOOLTIP = '按站点固定市场品牌取 SQP 明细：US=ONOAYO，CA/DE/FR=Lisowod，JP=JIMVEO。多个 ASIN 时，按 ASIN 排序取第一个有值 ASIN。关键词精确匹配，词根包含匹配。';
+  const marketSumTooltip = (label) => `${MARKET_SOURCE_TOOLTIP}${label} = 匹配行求和；无有效数字则为空。`;
+
   const FORMULA_TOOLTIPS = {
     search_query_volume: {
       title: '搜索查询数量',
-      formula: '按当前关键词/词根与当前周汇总 SQP 明细中的搜索查询数量',
-      emptyRules: ['没有匹配到当前周的 SQP 明细'],
+      formula: marketSumTooltip('搜索查询数量'),
+      emptyRules: ['当前周没有市场品牌 SQP 明细', '市场源 ASIN 没有匹配到当前关键词/词根', '匹配行的搜索查询数量没有有效数字'],
       fields: [
         { label: '搜索查询数量', field: 'sqp_detail.search_query_volume' },
       ],
@@ -282,8 +293,8 @@
     },
     impressions_count: {
       title: 'SQP-市场曝光量',
-      formula: '按当前关键词/词根与当前周汇总 SQP 明细中的市场曝光量',
-      emptyRules: ['没有匹配到当前周的 SQP 明细'],
+      formula: marketSumTooltip('SQP-市场曝光量'),
+      emptyRules: ['当前周没有市场品牌 SQP 明细', '市场源 ASIN 没有匹配到当前关键词/词根', '匹配行的市场曝光量没有有效数字'],
       fields: [
         { label: '市场曝光量', field: 'sqp_detail.impressions_count' },
       ],
@@ -291,8 +302,8 @@
     },
     clicks_count: {
       title: 'SQP-市场点击量',
-      formula: '按当前关键词/词根与当前周汇总 SQP 明细中的市场点击量',
-      emptyRules: ['没有匹配到当前周的 SQP 明细'],
+      formula: marketSumTooltip('SQP-市场点击量'),
+      emptyRules: ['当前周没有市场品牌 SQP 明细', '市场源 ASIN 没有匹配到当前关键词/词根', '匹配行的市场点击量没有有效数字'],
       fields: [
         { label: '市场点击量', field: 'sqp_detail.clicks_count' },
       ],
@@ -300,8 +311,8 @@
     },
     cart_additions_count: {
       title: 'SQP-市场加购量',
-      formula: '按当前关键词/词根与当前周汇总 SQP 明细中的市场加购量',
-      emptyRules: ['没有匹配到当前周的 SQP 明细'],
+      formula: marketSumTooltip('SQP-市场加购量'),
+      emptyRules: ['当前周没有市场品牌 SQP 明细', '市场源 ASIN 没有匹配到当前关键词/词根', '匹配行的市场加购量没有有效数字'],
       fields: [
         { label: '市场加购量', field: 'sqp_detail.cart_additions_count' },
       ],
@@ -309,8 +320,8 @@
     },
     purchases_count: {
       title: 'SQP-市场购买量',
-      formula: '按当前关键词/词根与当前周汇总 SQP 明细中的市场购买量',
-      emptyRules: ['没有匹配到当前周的 SQP 明细'],
+      formula: marketSumTooltip('SQP-市场购买量'),
+      emptyRules: ['当前周没有市场品牌 SQP 明细', '市场源 ASIN 没有匹配到当前关键词/词根', '匹配行的市场购买量没有有效数字'],
       fields: [
         { label: '市场购买量', field: 'sqp_detail.purchases_count' },
       ],
@@ -354,7 +365,7 @@
     },
     market_ctr: {
       title: 'SQP-市场 CTR',
-      formula: 'SQP-市场点击量 ÷ SQP-市场曝光量',
+      formula: `${MARKET_SOURCE_TOOLTIP}SQP-市场 CTR = SQP-市场点击量 ÷ SQP-市场曝光量。`,
       emptyRules: ['SQP-市场点击量为空', 'SQP-市场曝光量为空或为 0'],
       fields: [
         { label: '市场点击量', field: 'sqp_term_weekly.clicks_count' },
@@ -374,7 +385,7 @@
     },
     market_cart_rate: {
       title: 'SQP-市场 加购率',
-      formula: 'SQP-市场加购量 ÷ SQP-市场点击量',
+      formula: `${MARKET_SOURCE_TOOLTIP}SQP-市场加购率 = SQP-市场加购量 ÷ SQP-市场点击量。`,
       emptyRules: ['SQP-市场加购量为空', 'SQP-市场点击量为空或为 0'],
       fields: [
         { label: '市场加购量', field: 'sqp_term_weekly.cart_additions_count' },
@@ -394,7 +405,7 @@
     },
     market_cvr: {
       title: 'SQP-市场 CVR',
-      formula: 'SQP-市场购买量 ÷ SQP-市场点击量',
+      formula: `${MARKET_SOURCE_TOOLTIP}SQP-市场 CVR = SQP-市场购买量 ÷ SQP-市场点击量。`,
       emptyRules: ['SQP-市场购买量为空', 'SQP-市场点击量为空或为 0'],
       fields: [
         { label: '市场购买量', field: 'sqp_term_weekly.purchases_count' },
@@ -411,6 +422,16 @@
         { label: 'Asin点击量', field: 'sqp_term_weekly.clicks_asin_count' },
       ],
       writeBackField: 'sqp_term_weekly.asin_cvr',
+    },
+    impression_share: {
+      title: '曝光份额',
+      formula: 'SQP-Asin曝光量 ÷ SQP-市场曝光量',
+      emptyRules: ['SQP-Asin曝光量为空', 'SQP-市场曝光量为空或为 0'],
+      fields: [
+        { label: 'Asin曝光量', field: 'sqp_term_weekly.impressions_asin_count' },
+        { label: '市场曝光量', field: 'sqp_term_weekly.impressions_count' },
+      ],
+      writeBackField: 'sqp_term_weekly.impression_share',
     },
     asin_click_share: {
       title: 'SQP-Asin 点击份额',
@@ -481,7 +502,7 @@
     },
     market_diagnosis: {
       title: '市场数据环比分析',
-      formula: '对比当前周与上一周的市场查询、曝光、点击、加购、购买、CTR、加购率和 CVR，展示环比增减',
+      formula: `${MARKET_SOURCE_TOOLTIP}对比当前周与上一周的市场查询、曝光、点击、加购、购买、CTR、加购率和 CVR，展示环比增减。`,
       emptyRules: ['当前周市场数据缺失', '上一周市场数据缺失'],
       fields: [
         { label: '当前周市场指标', field: 'sqp_term_weekly.*（当前周）' },
@@ -549,6 +570,7 @@
     { key: 'cart_additions_count',      label: 'SQP-市场加购量',     type: 'number',    width: 146 },
     { key: 'purchases_count',           label: 'SQP-市场购买量',     type: 'number',    width: 146 },
     { key: 'impressions_asin_count',    label: 'SQP-Asin曝光量',     type: 'number',    width: 138 },
+    { key: 'impression_share',          label: '曝光份额',           type: 'rate',      width: 124 },
     { key: 'clicks_asin_count',         label: 'SQP-Asin点击量',     type: 'number',    width: 138 },
     { key: 'cart_additions_asin_count', label: 'SQP-Asin加购量',     type: 'number',    width: 138 },
     { key: 'purchases_asin_count',      label: 'SQP-Asin购买量',     type: 'number',    width: 138 },
@@ -653,6 +675,23 @@
       bodyColor: null,
     }])
   );
+  const getDefaultTermFieldOrder = () => TERM_SUB_FIELDS.map((sub) => sub.key);
+  const normalizeTermFieldOrder = (raw = []) => {
+    const validKeys = new Set(TERM_SUB_FIELDS.map((sub) => sub.key));
+    const result = [];
+    (Array.isArray(raw) ? raw : []).forEach((key) => {
+      if (!validKeys.has(key) || result.includes(key)) return;
+      result.push(key);
+    });
+    TERM_SUB_FIELDS.forEach((sub) => {
+      if (!result.includes(sub.key)) result.push(sub.key);
+    });
+    return result;
+  };
+  const getOrderedTermSubFields = (order = []) => {
+    const subMap = Object.fromEntries(TERM_SUB_FIELDS.map((sub) => [sub.key, sub]));
+    return normalizeTermFieldOrder(order).map((key) => subMap[key]).filter(Boolean);
+  };
 
   const normalizeTermFieldTemplate = (raw = {}) => {
     const defaults = getDefaultTermFieldTemplate();
@@ -671,6 +710,10 @@
   const getTermFieldTemplateFromPayload = (payload) => {
     const item = Array.isArray(payload) ? payload.find((entry) => entry?.key === TERM_FIELD_TEMPLATE_KEY) : null;
     return normalizeTermFieldTemplate(item?.fields || {});
+  };
+  const getTermFieldOrderFromPayload = (payload) => {
+    const item = Array.isArray(payload) ? payload.find((entry) => entry?.key === TERM_FIELD_TEMPLATE_KEY) : null;
+    return normalizeTermFieldOrder(item?.order || item?.fieldOrder || []);
   };
 
   const getTermFieldBodyColorsFromPayload = (payload) => {
@@ -695,11 +738,11 @@
     const nextPayload = targetPayload.map((item) => {
       if (item?.key !== TERM_FIELD_TEMPLATE_KEY) return item;
       replaced = true;
-      return { key: TERM_FIELD_TEMPLATE_KEY, fields: currentTemplate };
+      return { key: TERM_FIELD_TEMPLATE_KEY, fields: currentTemplate, order: getTermFieldOrderFromPayload(targetPayload) };
     });
     return replaced
       ? nextPayload
-      : [...nextPayload, { key: TERM_FIELD_TEMPLATE_KEY, fields: currentTemplate }];
+      : [...nextPayload, { key: TERM_FIELD_TEMPLATE_KEY, fields: currentTemplate, order: getDefaultTermFieldOrder() }];
   };
 
   const normalizeTermFieldColors = (raw = {}) => {
@@ -800,9 +843,43 @@
     });
     return template;
   };
+  const buildTermFieldOrderPayload = (cols, fallback = []) => {
+    const fieldOrder = [];
+    (cols || []).forEach((c) => {
+      if (!c?._isTermColumn || !c.field || fieldOrder.includes(c.field)) return;
+      fieldOrder.push(c.field);
+    });
+    return normalizeTermFieldOrder(fieldOrder.length ? fieldOrder : fallback);
+  };
+  const orderTermColumnsByField = (cols, order = []) => {
+    const rank = Object.fromEntries(normalizeTermFieldOrder(order).map((field, index) => [field, index]));
+    const groups = [];
+    const groupMap = {};
+    (cols || []).forEach((col) => {
+      const groupKey = col?._termGroupKey || col?._termColumnKey || col?.key;
+      if (!groupMap[groupKey]) {
+        groupMap[groupKey] = { key: groupKey, columns: [] };
+        groups.push(groupMap[groupKey]);
+      }
+      groupMap[groupKey].columns.push(col);
+    });
+    return groups.flatMap((group) =>
+      [...group.columns].sort((a, b) => (rank[a.field] ?? 9999) - (rank[b.field] ?? 9999))
+    );
+  };
+  const applyTermFieldOrderToColumnList = (cols, order = []) => {
+    const base = [];
+    const termCols = [];
+    (cols || []).forEach((col) => {
+      if (col?._isTermColumn) termCols.push(col);
+      else base.push(col);
+    });
+    return [...base, ...orderTermColumnsByField(termCols, order)];
+  };
 
   const buildColumnPayload = (cols, options = {}) => {
     const fallbackTemplate = options.termFieldTemplate || getTermFieldTemplateFromPayload(cols);
+    const fallbackOrder = options.termFieldOrder || getTermFieldOrderFromPayload(cols);
     const fallbackColors = options.termFieldColors || getTermFieldColorsFromPayload(cols);
     return [
       ...(cols || [])
@@ -824,7 +901,7 @@
           _termName: c._termName || null,
           _termSubType: c._termSubType || null,
         })),
-      { key: TERM_FIELD_TEMPLATE_KEY, fields: buildTermFieldTemplatePayload(cols, fallbackTemplate) },
+      { key: TERM_FIELD_TEMPLATE_KEY, fields: buildTermFieldTemplatePayload(cols, fallbackTemplate), order: buildTermFieldOrderPayload(cols, fallbackOrder) },
       { key: TERM_FIELD_COLORS_KEY, colors: buildTermFieldColorsPayload(cols, fallbackColors) },
     ];
   };
@@ -846,6 +923,7 @@
 
   const buildInitialViewPayload = () => buildColumnPayload(INITIAL_COLUMNS.map((c) => ({ ...c })), {
     termFieldTemplate: getDefaultTermFieldTemplate(),
+    termFieldOrder: getDefaultTermFieldOrder(),
     termFieldColors: {},
   });
 
@@ -1475,16 +1553,23 @@
     }, 0);
     return hasValue ? total : null;
   };
-  const getMarketSourceRows = (rows) => {
+  const getMarketBrandForCountry = (country) => {
+    const key = String(country || '').trim().toUpperCase();
+    return MARKET_BRAND_BY_COUNTRY[key] || DEFAULT_MARKET_BRAND;
+  };
+  const getMarketFieldValue = (rows, isMatchedTermRow, field) => {
     const byAsin = {};
     (rows || []).forEach((row) => {
+      if (isMatchedTermRow && !isMatchedTermRow(row)) return;
       const rowAsin = String(row?.asin || '').trim();
       if (!rowAsin) return;
       if (!byAsin[rowAsin]) byAsin[rowAsin] = [];
       byAsin[rowAsin].push(row);
     });
-    const sourceAsin = Object.keys(byAsin).sort((a, b) => byAsin[b].length - byAsin[a].length || a.localeCompare(b))[0];
-    return sourceAsin ? byAsin[sourceAsin] : (rows || []);
+    const sourceAsin = Object.keys(byAsin)
+      .sort((a, b) => a.localeCompare(b))
+      .find((asin) => isValidNumber(nullableSum(byAsin[asin], field)));
+    return sourceAsin ? nullableSum(byAsin[sourceAsin], field) : null;
   };
   const divNull = (a, b) => (isValidNumber(a) && isValidNumber(b) && Number(b) !== 0) ? roundRateValue(Number(a) / Number(b)) : null;
   const getMainWeekKey = (row) => row?.country_asin_week_date || row?.country_asin_weekDate || row?.country_asin_weekdate || row?.id;
@@ -1574,6 +1659,7 @@
       asin_cart_rate: divNull(term.cart_additions_asin_count, term.clicks_asin_count),
       market_cvr: divNull(term.purchases_count, term.clicks_count),
       asin_cvr: divNull(term.purchases_asin_count, term.clicks_asin_count),
+      impression_share: divNull(term.impressions_asin_count, term.impressions_count),
       asin_click_share: divNull(term.clicks_asin_count, term.clicks_count),
       asin_cart_share: divNull(term.cart_additions_asin_count, term.cart_additions_count),
       asin_purchase_share: divNull(term.purchases_asin_count, term.purchases_count),
@@ -1585,6 +1671,7 @@
       asin_cart_rate: cur.asin_cart_rate,
       market_cvr: cur.market_cvr,
       asin_cvr: cur.asin_cvr,
+      impression_share: cur.impression_share,
       asin_click_share: cur.asin_click_share,
       asin_cart_share: cur.asin_cart_share,
       asin_purchase_share: cur.asin_purchase_share,
@@ -2456,39 +2543,20 @@
         .map((week) => week.report_date ? String(week.report_date).slice(0, 10) : '')
         .filter(Boolean)
         .sort();
-      onProgress?.({ label: `正在读取当前 ASIN 品牌`, percent: 5 });
-      const asinRows = await fetchAll('asin:list', {
-        filter: JSON.stringify({ unique: { $eq: getAsinUniqueKey(country, asin) } }),
-      });
-      const asinRow = asinRows[0] || {};
-      const modelName = String(asinRow.model || '').trim();
-      let currentBrand = String(asinRow.brand || '').trim();
-      if (!currentBrand && modelName) {
-        const skuRows = await fetchAll('sku:list', {
-          sort: 'sku',
-          filter: JSON.stringify({
-            $and: [
-              { country: { $eq: country } },
-              { model: { $eq: modelName } },
-            ],
-          }),
-        });
-        currentBrand = String(skuRows[0]?.brand || '').trim();
-      }
-      if (!currentBrand) currentBrand = DEFAULT_MARKET_BRAND;
-      const sameBrandAsinRows = await fetchAll('asin:list', {
+      const marketBrand = getMarketBrandForCountry(country);
+      onProgress?.({ label: `正在读取${country}市场品牌 ${marketBrand} ASIN`, percent: 5 });
+      const marketBrandAsinRows = await fetchAll('asin:list', {
         filter: JSON.stringify({
           $and: [
             { country: { $eq: country } },
-            { brand: { $eq: currentBrand } },
+            { brand: { $eq: marketBrand } },
           ],
         }),
       });
-      const sameBrandAsins = new Set(
-        sameBrandAsinRows.map((item) => String(item?.asin || '').trim()).filter(Boolean)
+      const marketBrandAsins = new Set(
+        marketBrandAsinRows.map((item) => String(item?.asin || '').trim()).filter(Boolean)
       );
-      sameBrandAsins.add(String(asin || '').trim());
-      onProgress?.({ label: `正在批量读取${title} ${termName}同品牌明细`, percent: 6 });
+      onProgress?.({ label: `正在批量读取${title} ${termName}市场品牌明细`, percent: 6 });
       const [sqpRows, existingTermRows] = await Promise.all([
         reportDates.length ? fetchAll('sqp:list', {
           filter: JSON.stringify({
@@ -2518,7 +2586,7 @@
       sqpRows.forEach((row) => {
         const reportDate = row?.report_date ? String(row.report_date).slice(0, 10) : '';
         if (!reportDate || !reportDateSet.has(reportDate)) return;
-        if (!sameBrandAsins.has(String(row?.asin || '').trim())) return;
+        if (!marketBrandAsins.has(String(row?.asin || '').trim())) return;
         if (!sqpRowsByReportDate[reportDate]) sqpRowsByReportDate[reportDate] = [];
         sqpRowsByReportDate[reportDate].push(row);
       });
@@ -2544,14 +2612,13 @@
             : searchQuery === termName;
         };
         const currentAsinRows = sqpRows.filter((row) => String(row.asin || '').trim() === String(asin || '').trim());
-        const matchedMarketRows = getMarketSourceRows(sqpRows).filter(isMatchedTermRow);
         const matchedAsinRows = currentAsinRows.filter(isMatchedTermRow);
 
-        const searchQueryVolume = nullableSum(matchedMarketRows, 'search_query_volume');
-        const impressionsCount = nullableSum(matchedMarketRows, 'impressions_count');
-        const clicksCount = nullableSum(matchedMarketRows, 'clicks_count');
-        const cartAdditionsCount = nullableSum(matchedMarketRows, 'cart_additions_count');
-        const purchasesCount = nullableSum(matchedMarketRows, 'purchases_count');
+        const searchQueryVolume = getMarketFieldValue(sqpRows, isMatchedTermRow, 'search_query_volume');
+        const impressionsCount = getMarketFieldValue(sqpRows, isMatchedTermRow, 'impressions_count');
+        const clicksCount = getMarketFieldValue(sqpRows, isMatchedTermRow, 'clicks_count');
+        const cartAdditionsCount = getMarketFieldValue(sqpRows, isMatchedTermRow, 'cart_additions_count');
+        const purchasesCount = getMarketFieldValue(sqpRows, isMatchedTermRow, 'purchases_count');
         const impressionsAsinCount = nullableSum(matchedAsinRows, 'impressions_asin_count');
         const clicksAsinCount = nullableSum(matchedAsinRows, 'clicks_asin_count');
         const cartAdditionsAsinCount = nullableSum(matchedAsinRows, 'cart_additions_asin_count');
@@ -2589,6 +2656,7 @@
           asin_cart_rate: divNull(cartAdditionsAsinCount, clicksAsinCount),
           market_cvr: divNull(purchasesCount, clicksCount),
           asin_cvr: divNull(purchasesAsinCount, clicksAsinCount),
+          impression_share: divNull(impressionsAsinCount, impressionsCount),
           asin_click_share: divNull(clicksAsinCount, clicksCount),
           asin_cart_share: divNull(cartAdditionsAsinCount, cartAdditionsCount),
           asin_purchase_share: divNull(purchasesAsinCount, purchasesCount),
@@ -3342,6 +3410,7 @@
     const manuallyResizedRef = useRef(new Set());
     const termColumnPrefsRef = useRef({ byKey: {}, fieldColors: {}, groupColors: {}, groupColorsByName: {} });
     const termFieldTemplateRef = useRef(getDefaultTermFieldTemplate());
+    const termFieldOrderRef = useRef(getDefaultTermFieldOrder());
     const columnViewsRef = useRef([]);
     const activeColumnViewIdRef = useRef(DEFAULT_COLUMN_VIEW_ID);
     const columnLayoutSaveTimerRef = useRef(null);
@@ -3491,8 +3560,9 @@
       const baseColumns = mergeColumnsWithInitial(nextPayload);
       const nextFieldColors = getTermFieldColorsFromPayload(nextPayload);
       const nextTemplate = getTermFieldTemplateFromPayload(nextPayload);
+      const nextFieldOrder = getTermFieldOrderFromPayload(nextPayload);
       const currentTermColumns = columns.filter((col) => col?._isTermColumn);
-      const nextTermColumns = currentTermColumns.map((col) => {
+      const nextTermColumns = orderTermColumnsByField(currentTermColumns.map((col) => {
         const subDef = TERM_SUB_FIELDS.find((sub) => sub.key === col.field);
         const template = nextTemplate[col.field] || {};
         return {
@@ -3505,9 +3575,10 @@
           _termSubType: col._termSubType || subDef?.type,
           termFieldHeaderColor: nextFieldColors[col.field] || null,
         };
-      });
+      }), nextFieldOrder);
       const nextColumns = [...baseColumns.filter((col) => !col?._isTermColumn), ...nextTermColumns];
       termFieldTemplateRef.current = nextTemplate;
+      termFieldOrderRef.current = nextFieldOrder;
       setTermFieldColors(nextFieldColors);
       rememberTermColumnPrefs(nextColumns, nextFieldColors);
       setColumns(nextColumns);
@@ -3529,7 +3600,7 @@
     }, [activeColumnViewId]);
 
     const getCurrentColumnPayload = useCallback(() => {
-      return buildColumnPayload(columns, { termFieldTemplate: termFieldTemplateRef.current, termFieldColors });
+      return buildColumnPayload(columns, { termFieldTemplate: termFieldTemplateRef.current, termFieldOrder: termFieldOrderRef.current, termFieldColors });
     }, [columns, termFieldColors]);
 
     const saveCurrentCustomColumnView = useCallback(async () => {
@@ -3628,6 +3699,7 @@
         const cols = mergeColumnsWithInitial(payload);
         const payloadFieldColors = getTermFieldColorsFromPayload(payload);
         termFieldTemplateRef.current = getTermFieldTemplateFromPayload(payload);
+        termFieldOrderRef.current = getTermFieldOrderFromPayload(payload);
         setColumnViewsLocal(viewState.views);
         setActiveColumnViewLocal(viewState.activeViewId);
         setTermFieldColors(payloadFieldColors);
@@ -3645,6 +3717,7 @@
         const next = typeof updater === 'function' ? updater(prev) : updater;
         const nextTemplate = buildTermFieldTemplatePayload(next, termFieldTemplateRef.current);
         termFieldTemplateRef.current = nextTemplate;
+        termFieldOrderRef.current = buildTermFieldOrderPayload(next, termFieldOrderRef.current);
         rememberTermColumnPrefs(next);
         return next;
       });
@@ -3655,6 +3728,7 @@
       setColumns((prev) => {
         const next = typeof updater === 'function' ? updater(prev) : updater;
         termFieldTemplateRef.current = buildTermFieldTemplatePayload(next, termFieldTemplateRef.current);
+        termFieldOrderRef.current = buildTermFieldOrderPayload(next, termFieldOrderRef.current);
         rememberTermColumnPrefs(next);
         return next;
       });
@@ -3667,7 +3741,7 @@
     const saveCurrentAsDefaultColumns = useCallback(async () => {
       if (!IS_ADMIN) return;
       try {
-        const payload = buildColumnPayload(columns, { termFieldTemplate: termFieldTemplateRef.current, termFieldColors });
+        const payload = buildColumnPayload(columns, { termFieldTemplate: termFieldTemplateRef.current, termFieldOrder: termFieldOrderRef.current, termFieldColors });
         const defaultView = {
           id: DEFAULT_COLUMN_VIEW_ID,
           name: DEFAULT_COLUMN_VIEW_LABELS[DEFAULT_COLUMN_VIEW_ID],
@@ -3700,7 +3774,7 @@
     const pushDefaultViewToUsers = useCallback(async (targetUserIds = null) => {
       if (!IS_ADMIN) return { ok: false, total: 0, failCount: 0 };
       try {
-        const payload = buildColumnPayload(columns, { termFieldTemplate: termFieldTemplateRef.current, termFieldColors });
+        const payload = buildColumnPayload(columns, { termFieldTemplate: termFieldTemplateRef.current, termFieldOrder: termFieldOrderRef.current, termFieldColors });
         const defaultView = {
           id: DEFAULT_COLUMN_VIEW_ID,
           name: DEFAULT_COLUMN_VIEW_LABELS[DEFAULT_COLUMN_VIEW_ID],
@@ -3742,6 +3816,7 @@
       if (!currentUserId) {
         const nextColumns = INITIAL_COLUMNS.map((c) => ({ ...c }));
         termFieldTemplateRef.current = getDefaultTermFieldTemplate();
+        termFieldOrderRef.current = getDefaultTermFieldOrder();
         rememberTermColumnPrefs(nextColumns, termFieldColors);
         setColumns(nextColumns);
         return;
@@ -3756,6 +3831,7 @@
         const nextColumns = mergeColumnsWithInitial(defaultPayload);
         const nextFieldColors = getTermFieldColorsFromPayload(defaultPayload);
         termFieldTemplateRef.current = getTermFieldTemplateFromPayload(defaultPayload);
+        termFieldOrderRef.current = getTermFieldOrderFromPayload(defaultPayload);
         setColumnViewsLocal(nextViews);
         setActiveColumnViewLocal(DEFAULT_COLUMN_VIEW_ID);
         setTermFieldColors(nextFieldColors);
@@ -4141,7 +4217,7 @@
           groupOrder.set(groupKey, nextIndex);
           groupTypeCounts[typeKey] = nextIndex + 1;
         }
-        TERM_SUB_FIELDS.forEach((sub) => {
+        getOrderedTermSubFields(termFieldOrderRef.current).forEach((sub) => {
           const key = `${groupKey}_${sub.key}`;
           if (!seen.has(key)) {
             seen.set(key, {
@@ -4177,7 +4253,7 @@
         prev.filter((c) => c._isTermColumn && c.termGroupHeaderColor).forEach((c) => { groupColors[c._termGroupKey || c._termColumnKey] = c.termGroupHeaderColor; });
         const cachedPrefs = termColumnPrefsRef.current || { byKey: {}, fieldColors: {}, groupColors: {}, groupColorsByName: {} };
         const template = termFieldTemplateRef.current || getDefaultTermFieldTemplate();
-        const dynamic = Array.from(seen.values()).map((col) => {
+        const dynamic = orderTermColumnsByField(Array.from(seen.values()).map((col) => {
           const oldCol = old[col.key] || cachedPrefs.byKey[col.key] || {};
           const fieldTemplate = template[col.field] || {};
           const groupKey = col._termGroupKey || col._termColumnKey;
@@ -4202,7 +4278,7 @@
             termGroupHeaderColor: oldCol.termGroupHeaderColor || groupColors[groupKey] || cachedPrefs.groupColors[groupKey] || (groupNameKey ? cachedPrefs.groupColorsByName[groupNameKey] : null) || null,
             termFieldHeaderColor: oldCol.termFieldHeaderColor || fieldColors[col.field] || termFieldColors[col.field] || cachedPrefs.fieldColors[col.field] || null,
           };
-        });
+        }), termFieldOrderRef.current);
         rememberTermColumnPrefs(dynamic);
         return [...base, ...dynamic];
       });
@@ -4212,6 +4288,7 @@
       const page = options.page ?? curPageRef.current;
       const size = options.size ?? pageSizeRef.current;
       const skipFormula = options.skipFormula === true;
+      const activeSortConfig = options.sortConfig || sortConfig;
       const requestSeq = ++requestSeqRef.current;
       try {
         setLoading(true);
@@ -4230,10 +4307,10 @@
         }
 
         let sortStr = 'report_date';
-        if (sortConfig.key) {
-          const col = INITIAL_COLUMNS.find((c) => c.key === sortConfig.key);
-          const field = col ? col.field : sortConfig.key;
-          sortStr = sortConfig.dir === 'desc' ? `-${field}` : field;
+        if (activeSortConfig.key) {
+          const col = INITIAL_COLUMNS.find((c) => c.key === activeSortConfig.key);
+          const field = col ? col.field : activeSortConfig.key;
+          sortStr = activeSortConfig.dir === 'desc' ? `-${field}` : field;
         }
 
         const sqpParams = {
@@ -4519,11 +4596,18 @@
     const handleSort = useCallback((colKey) => {
       const col = columns.find((c) => c.key === colKey);
       if (col?._isTermColumn) return;
-      setSortConfig((prev) => ({
-        key: colKey,
-        dir: prev.key === colKey && prev.dir === 'asc' ? 'desc' : 'asc',
-      }));
-    }, [columns]);
+      let nextSortConfig;
+      if (sortConfig.key !== colKey) {
+        nextSortConfig = { key: colKey, dir: 'asc' };
+      } else if (sortConfig.dir === 'asc') {
+        nextSortConfig = { key: colKey, dir: 'desc' };
+      } else {
+        nextSortConfig = { key: null, dir: null };
+      }
+      setSortConfig(nextSortConfig);
+      setCurPage(1);
+      load({ page: 1, size: pageSizeRef.current, skipFormula: true, sortConfig: nextSortConfig });
+    }, [columns, load, sortConfig]);
 
     const toggleCol      = (key) => updateAndSave((p) => { const col = p.find((c) => c.key === key); if (!col) return p; if (!col.hidden) return p.map((c) => c.key === key ? { ...c, hidden: true } : c); return [...p.filter((c) => c.key !== key), { ...col, hidden: false }]; });
     const togglePin      = (key) => updateAndSave((p) => p.map((c) => c.key === key ? { ...c, pinned: !c.pinned } : c));
@@ -4671,7 +4755,34 @@
     }, [scrollToTermGroup, termQuickIndexMap]);
     const onDragStart = (e, key) => { if (isResizing) { e.preventDefault(); return; } dragColKey.current = key; e.dataTransfer.effectAllowed = 'move'; };
     const onDragOver  = (e) => e.preventDefault();
-    const onDrop      = (e, targetKey) => { e.preventDefault(); const fromKey = dragColKey.current; if (!fromKey || fromKey === targetKey) return; updateResizableColumns((prev) => { const next = [...prev]; const fi = next.findIndex((c) => c.key === fromKey); const ti = next.findIndex((c) => c.key === targetKey); const [moved] = next.splice(fi, 1); next.splice(ti, 0, moved); return next; }); dragColKey.current = null; };
+    const onDrop      = (e, targetKey) => {
+      e.preventDefault();
+      const fromKey = dragColKey.current;
+      dragColKey.current = null;
+      if (!fromKey || fromKey === targetKey) return;
+      updateResizableColumns((prev) => {
+        const fromCol = prev.find((c) => c.key === fromKey);
+        const targetCol = prev.find((c) => c.key === targetKey);
+        if (fromCol?._isTermColumn && targetCol?._isTermColumn) {
+          if (!fromCol.field || !targetCol.field || fromCol.field === targetCol.field) return prev;
+          const nextOrder = normalizeTermFieldOrder(termFieldOrderRef.current);
+          const fromIndex = nextOrder.indexOf(fromCol.field);
+          const targetIndex = nextOrder.indexOf(targetCol.field);
+          if (fromIndex < 0 || targetIndex < 0) return prev;
+          const [movedField] = nextOrder.splice(fromIndex, 1);
+          nextOrder.splice(targetIndex, 0, movedField);
+          termFieldOrderRef.current = nextOrder;
+          return applyTermFieldOrderToColumnList(prev, nextOrder);
+        }
+        const next = [...prev];
+        const fi = next.findIndex((c) => c.key === fromKey);
+        const ti = next.findIndex((c) => c.key === targetKey);
+        if (fi < 0 || ti < 0) return prev;
+        const [moved] = next.splice(fi, 1);
+        next.splice(ti, 0, moved);
+        return next;
+      });
+    };
 
     const onResizeStart = useCallback((e, colKey) => {
       e.preventDefault();
@@ -5208,14 +5319,13 @@
               : searchQuery === termName;
           };
           const currentAsinRows = sqpRows.filter((row) => String(row.asin || '').trim() === String(filterAsin || '').trim());
-          const matchedMarketRows = getMarketSourceRows(sqpRows).filter(isMatchedTermRow);
           const matchedAsinRows = currentAsinRows.filter(isMatchedTermRow);
 
-          const searchQueryVolume = nullableSum(matchedMarketRows, 'search_query_volume');
-          const impressionsCount = nullableSum(matchedMarketRows, 'impressions_count');
-          const clicksCount = nullableSum(matchedMarketRows, 'clicks_count');
-          const cartAdditionsCount = nullableSum(matchedMarketRows, 'cart_additions_count');
-          const purchasesCount = nullableSum(matchedMarketRows, 'purchases_count');
+          const searchQueryVolume = getMarketFieldValue(sqpRows, isMatchedTermRow, 'search_query_volume');
+          const impressionsCount = getMarketFieldValue(sqpRows, isMatchedTermRow, 'impressions_count');
+          const clicksCount = getMarketFieldValue(sqpRows, isMatchedTermRow, 'clicks_count');
+          const cartAdditionsCount = getMarketFieldValue(sqpRows, isMatchedTermRow, 'cart_additions_count');
+          const purchasesCount = getMarketFieldValue(sqpRows, isMatchedTermRow, 'purchases_count');
           const impressionsAsinCount = nullableSum(matchedAsinRows, 'impressions_asin_count');
           const clicksAsinCount = nullableSum(matchedAsinRows, 'clicks_asin_count');
           const cartAdditionsAsinCount = nullableSum(matchedAsinRows, 'cart_additions_asin_count');
@@ -5252,6 +5362,7 @@
             asin_cart_rate: divNull(cartAdditionsAsinCount, clicksAsinCount),
             market_cvr: divNull(purchasesCount, clicksCount),
             asin_cvr: divNull(purchasesAsinCount, clicksAsinCount),
+            impression_share: divNull(impressionsAsinCount, impressionsCount),
             asin_click_share: divNull(clicksAsinCount, clicksCount),
             asin_cart_share: divNull(cartAdditionsAsinCount, cartAdditionsCount),
             asin_purchase_share: divNull(purchasesAsinCount, purchasesCount),
@@ -5299,39 +5410,20 @@
           .map((week) => week.report_date ? String(week.report_date).slice(0, 10) : '')
           .filter(Boolean)
           .sort();
-        onProgress?.({ label: '正在读取当前 ASIN 品牌...', percent: 12 });
-        const asinRows = await fetchAll('asin:list', {
-          filter: JSON.stringify({ unique: { $eq: getAsinUniqueKey(filterCountry, filterAsin) } }),
-        });
-        const asinRow = asinRows[0] || {};
-        const modelName = String(filterModel || asinRow.model || '').trim();
-        let currentBrand = String(asinRow.brand || '').trim();
-        if (!currentBrand && modelName) {
-          const skuRows = await fetchAll('sku:list', {
-            sort: 'sku',
-            filter: JSON.stringify({
-              $and: [
-                { country: { $eq: filterCountry } },
-                { model: { $eq: modelName } },
-              ],
-            }),
-          });
-          currentBrand = String(skuRows[0]?.brand || '').trim();
-        }
-        if (!currentBrand) currentBrand = DEFAULT_MARKET_BRAND;
-        const sameBrandAsinRows = await fetchAll('asin:list', {
+        const marketBrand = getMarketBrandForCountry(filterCountry);
+        onProgress?.({ label: `正在读取${filterCountry}市场品牌 ${marketBrand} ASIN...`, percent: 12 });
+        const marketBrandAsinRows = await fetchAll('asin:list', {
           filter: JSON.stringify({
             $and: [
               { country: { $eq: filterCountry } },
-              { brand: { $eq: currentBrand } },
+              { brand: { $eq: marketBrand } },
             ],
           }),
         });
-        const sameBrandAsins = new Set(
-          sameBrandAsinRows.map((item) => String(item?.asin || '').trim()).filter(Boolean)
+        const marketBrandAsins = new Set(
+          marketBrandAsinRows.map((item) => String(item?.asin || '').trim()).filter(Boolean)
         );
-        sameBrandAsins.add(String(filterAsin || '').trim());
-        onProgress?.({ label: '正在批量读取同品牌 SQP 明细...', percent: 12 });
+        onProgress?.({ label: '正在批量读取市场品牌 SQP 明细...', percent: 12 });
         const [sqpRows, existingTermRows] = await Promise.all([
           reportDates.length ? fetchAll('sqp:list', {
             filter: JSON.stringify({
@@ -5355,7 +5447,7 @@
         sqpRows.forEach((row) => {
           const reportDate = row?.report_date ? String(row.report_date).slice(0, 10) : '';
           if (!reportDate || !reportDateSet.has(reportDate)) return;
-          if (!sameBrandAsins.has(String(row?.asin || '').trim())) return;
+          if (!marketBrandAsins.has(String(row?.asin || '').trim())) return;
           if (!sqpRowsByReportDate[reportDate]) sqpRowsByReportDate[reportDate] = [];
           sqpRowsByReportDate[reportDate].push(row);
         });
@@ -5783,7 +5875,7 @@
               }, '全取消')
             ),
             !isCollapsed && React.createElement('div', null,
-              TERM_SUB_FIELDS.map((sub) => {
+              getOrderedTermSubFields(termFieldOrderRef.current).map((sub) => {
                 const fixedColor = termFieldColors[sub.key] || null;
                 const sampleCol = columns.find((c) => c._isTermColumn && c.field === sub.key) || { src: 'keyword', field: sub.key, termFieldHeaderColor: fixedColor };
                 const currentColor = getTermFieldHeaderColor(sampleCol);
@@ -6620,7 +6712,7 @@
                     const headerTooltip = getHeaderTooltipData(col);
                     return React.createElement('th', {
                       key: `${col.key}_sub`,
-                      draggable: false,
+                      draggable: true,
                       onDragStart: (e) => onDragStart(e, col.key),
                       onDragOver,
                       onDrop: (e) => onDrop(e, col.key),
