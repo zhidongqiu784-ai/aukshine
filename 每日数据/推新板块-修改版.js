@@ -1617,7 +1617,7 @@
       openEditor({ rect: openSignal.rect, preventDefault: () => {}, stopPropagation: () => {} });
     }, [openSignal]);
 
-    const saveToDatabase = async (newContent) => {
+    const saveToDatabase = async (newContent, options = {}) => {
       if (!rowId) return ctx.message.error('记录ID不存在');
       const valueToSave = newContent || null;
 
@@ -1650,8 +1650,16 @@
           });
         }
 
+        const oldValue = content || null;
         setContent(valueToSave || '');
-        onSaved?.(rowId);
+        onSaved?.(rowId, {
+          oldValue,
+          newValue: valueToSave,
+          country: country || null,
+          asin: asin || null,
+          date: date || null,
+          restoreFocus: !!options.restoreFocus,
+        });
         return true;
       } catch (err) {
         console.error(err);
@@ -1662,7 +1670,7 @@
 
     const saveAndExit = async () => {
       if (tempContent !== content) {
-        await saveToDatabase(tempContent);
+        await saveToDatabase(tempContent, { restoreFocus: true });
       }
       setIsEditing(false);
     };
@@ -1695,7 +1703,7 @@
             : markdownImage;
 
           setTempContent(newContent);
-          await saveToDatabase(newContent);
+          await saveToDatabase(newContent, { restoreFocus: false });
         }
       } catch (err) {
         ctx.message.error('上传失败');
@@ -3019,6 +3027,7 @@
     const rootRef     = useRef(null);
     const tableWrapRef = useRef(null);
     const clipboardRef = useRef(null);
+    const undoStackRef = useRef([]);
     const autoRefreshRef = useRef({ lastAt: 0, wasVisible: null });
     const formulaProgressFinishTimerRef = useRef(null);
     const backgroundPushSummaryRef = useRef({ timer: null, running: false, pendingForce: false });
@@ -5496,6 +5505,17 @@
       return slots;
     }, [getClipboardSlots, getKwSubRangeKeys, visibleCols]);
 
+    const canPastePlainTextSlotAsSingleValue = useCallback((slot) => {
+      const col = slot?.col;
+      if (!slot || !col) return false;
+      if (slot.type === 'keyword') return slot.sub?.type === 'text' || slot.sub?.type === 'textarea';
+      if (slot.type === 'rich' || isActualKeywordPosColumn(col)) return true;
+      if (!isCellEditable(col)) return false;
+      if (col.field === 'promo_day') return false;
+      if (RATE_FIELDS.has(col.field) || MONEY_FIELDS.has(col.field) || NUM_FIELDS.has(col.field) || DATE_FIELDS.has(col.field)) return false;
+      return true;
+    }, [isCellEditable]);
+
     const getKeywordClipboardValue = useCallback((col, row, sub) => {
       const value = row?.[col.field]?.daily?.[sub.key];
       return value == null || value === '' ? '' : String(value);
@@ -5605,6 +5625,150 @@
       }
     }, [recalcKeywordTracking]);
 
+    const pushUndoEntry = useCallback((entry) => {
+      const items = Array.isArray(entry?.items)
+        ? entry.items.filter((item) => item && !Object.is(item.oldValue, item.newValue))
+        : [];
+      if (!items.length) return;
+      undoStackRef.current.push({ label: entry.label || '操作', items });
+      if (undoStackRef.current.length > 20) {
+        undoStackRef.current.splice(0, undoStackRef.current.length - 20);
+      }
+    }, []);
+
+    const undoLastEdit = useCallback(async () => {
+      if (saving) return;
+      const entry = undoStackRef.current.pop();
+      if (!entry) {
+        ctx.message.info('没有可撤回的操作');
+        return;
+      }
+
+      const localPatches = new Map();
+      const kwLocalPatches = [];
+      const recalcRows = new Set();
+      const dailyFormulaRows = new Set();
+      const changedRowIds = new Set();
+
+      try {
+        setSaving(true);
+        showFormulaProgress({ label: '正在撤回...', percent: 10 });
+
+        for (const item of entry.items) {
+          if (item.kind === 'normal') {
+            await ctx.request({
+              url: item.updateConfig.url,
+              method: 'post',
+              params: { filterByTk: item.pkValue },
+              data: { [item.field]: item.oldValue },
+            });
+            localPatches.set(item.rowId, { ...(localPatches.get(item.rowId) || {}), [item.field]: item.oldValue });
+            changedRowIds.add(item.rowId);
+            if (item.src === 'daily' && DAILY_PRICE_TRIGGER_FIELDS.has(item.field)) {
+              dailyFormulaRows.add(item.rowId);
+            }
+            if (
+              (item.src === 'keyword_tracking' && KT_TRIGGER_FIELDS.has(item.field)) ||
+              (item.src === 'weekly' && WEEKLY_ACTUAL_NATURAL_TRIGGER_FIELDS.has(item.field))
+            ) {
+              recalcRows.add(item.rowId);
+            }
+            continue;
+          }
+
+          if (item.kind === 'rich') {
+            const filterStr = JSON.stringify({ country_asin_date: { $eq: item.rowId } });
+            const existingRes = await ctx.request({
+              url: 'daily_keyword_tracking:list',
+              method: 'get',
+              params: { filter: filterStr, pageSize: 1 },
+            });
+            const existing = Array.isArray(existingRes?.data?.data) ? existingRes.data.data[0] : null;
+            if (existing) {
+              await ctx.request({
+                url: 'daily_keyword_tracking:update',
+                method: 'post',
+                params: { filterByTk: item.rowId },
+                data: { [item.field]: item.oldValue },
+              });
+            } else if (item.oldValue != null && item.oldValue !== '') {
+              await ctx.request({
+                url: 'daily_keyword_tracking:create',
+                method: 'post',
+                data: withCreateTimestamps({
+                  country_asin_date: item.rowId,
+                  country: item.country,
+                  asin: item.asin,
+                  date: item.date,
+                  [item.field]: item.oldValue,
+                }),
+              });
+            }
+            localPatches.set(item.rowId, { ...(localPatches.get(item.rowId) || {}), [item.field]: item.oldValue });
+            changedRowIds.add(item.rowId);
+            continue;
+          }
+
+          if (item.kind === 'keyword' && item.dailyId) {
+            await ctx.request({
+              url: 'new_eval_words_daily:update',
+              method: 'post',
+              params: { filterByTk: item.dailyId },
+              data: { [item.field]: item.oldValue },
+            });
+            kwLocalPatches.push({
+              rowId: item.rowId,
+              colField: item.colField,
+              field: item.field,
+              valueToSave: item.oldValue,
+            });
+            changedRowIds.add(item.rowId);
+            if (item.field === 'est_review_qty' || item.field === 'actual_review_qty') recalcRows.add(item.rowId);
+          }
+        }
+
+        setData((prev) => prev.map((row) => {
+          const rowId = row.country_asin_date || row.id;
+          const patch = localPatches.get(rowId);
+          let nextRow = patch ? { ...row, ...patch } : row;
+          const rowKwPatches = kwLocalPatches.filter((p) => p.rowId === rowId);
+          if (!rowKwPatches.length) return nextRow;
+          nextRow = nextRow === row ? { ...row } : nextRow;
+          rowKwPatches.forEach((p) => {
+            const kwData = nextRow[p.colField];
+            if (!kwData) return;
+            nextRow[p.colField] = {
+              ...kwData,
+              daily: {
+                ...(kwData.daily || {}),
+                [p.field]: p.valueToSave,
+              },
+            };
+          });
+          return nextRow;
+        }));
+
+        const formulaRows = new Set([...dailyFormulaRows, ...recalcRows]);
+        if (formulaRows.size) {
+          showFormulaProgress({ label: '正在同步日公式...', percent: 35 });
+          await runPostEditRecalcs(dailyFormulaRows, recalcRows, { onProgress: showFormulaProgress });
+        }
+
+        const changedRows = data.filter((row) => changedRowIds.has(row.country_asin_date || row.id));
+        if (changedRows.length) {
+          await persistWeeklySummariesForChangedRows(changedRows);
+        }
+
+        ctx.message.success(`已撤回：${entry.label}`);
+      } catch (err) {
+        undoStackRef.current.push(entry);
+        ctx.message.error(`撤回失败：${err?.message || '未知错误'}`);
+        resetFormulaProgress();
+      } finally {
+        setSaving(false);
+      }
+    }, [data, persistWeeklySummariesForChangedRows, resetFormulaProgress, runPostEditRecalcs, saving, showFormulaProgress]);
+
     const handlePaste = useCallback(async (e) => {
       if (editingCell || saving) return;
       const target = e.target;
@@ -5621,7 +5785,31 @@
       if (!text) return;
       e.preventDefault();
 
-      const matrix = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').map((line) => line.split('\t'));
+      const normalizedText = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+      const allSlots = getClipboardSlots(visibleCols);
+      const startSlotIndex = allSlots.findIndex((slot) => (
+        slot.colIndex === rect.c1 &&
+        (!rect.startSubKey || (slot.type === 'keyword' && slot.sub.key === rect.startSubKey))
+      ));
+      const startSlot = startSlotIndex >= 0 ? allSlots[startSlotIndex] : null;
+      const hasPlainMultilineText =
+        !normalizedText.includes('\t') &&
+        normalizedText.replace(/\n+$/g, '').includes('\n');
+      if (
+        hasPlainMultilineText &&
+        startSlot &&
+        !canPastePlainTextSlotAsSingleValue(startSlot)
+      ) {
+        ctx.message.warning('当前字段不支持粘贴多行文本，已取消粘贴');
+        return;
+      }
+      const isPlainTextCellPaste =
+        !normalizedText.includes('\t') &&
+        startSlot &&
+        canPastePlainTextSlotAsSingleValue(startSlot);
+      const matrix = isPlainTextCellPaste
+        ? [[normalizedText]]
+        : normalizedText.split('\n').map((line) => line.split('\t'));
       while (matrix.length && matrix[matrix.length - 1].length === 1 && matrix[matrix.length - 1][0] === '') matrix.pop();
       if (!matrix.length) return;
 
@@ -5632,11 +5820,6 @@
       const kwLocalPatches = [];
       const recalcRows = new Set();
       const dailyFormulaRows = new Set();
-      const allSlots = getClipboardSlots(visibleCols);
-      const startSlotIndex = allSlots.findIndex((slot) => (
-        slot.colIndex === rect.c1 &&
-        (!rect.startSubKey || (slot.type === 'keyword' && slot.sub.key === rect.startSubKey))
-      ));
       const isSingleValuePaste = matrix.length === 1 && matrix[0].length === 1;
 
       if (!isSingleValuePaste && startSlotIndex < 0) {
@@ -5663,6 +5846,7 @@
           const col = slot?.col;
           if (!row || !slot || !col) return;
           if (row._isWeeklySummary) return;
+          if (isPlainTextCellPaste && !canPastePlainTextSlotAsSingleValue(slot)) return;
           const rowId = row.country_asin_date || row.id;
 
           if (slot.type === 'keyword') {
@@ -5679,6 +5863,7 @@
               kwId: kw.id,
               date: row.date ? String(row.date).slice(0, 10) : null,
               field: slot.sub.key,
+              oldValue: daily[slot.sub.key] ?? null,
               valueToSave,
             });
             kwLocalPatches.push({ rowId, colField: col.field, field: slot.sub.key, valueToSave });
@@ -5694,6 +5879,7 @@
               country: row.country || null,
               asin: row.asin || null,
               date: row.date ? String(row.date).slice(0, 10) : null,
+              oldValue: row.actual_keyword_position ?? null,
               valueToSave,
             });
             localPatches.set(rowId, { ...(localPatches.get(rowId) || {}), actual_keyword_position: valueToSave });
@@ -5706,7 +5892,7 @@
           const pkValue = row[updateConfig.pkField];
           if (!pkValue) return;
           const valueToSave = parsePastedValue(col, cellText);
-          ops.push({ rowId, field: col.field, src: col.src, updateConfig, pkValue, valueToSave });
+          ops.push({ rowId, field: col.field, src: col.src, updateConfig, pkValue, oldValue: row[col.field] ?? null, valueToSave });
           localPatches.set(rowId, { ...(localPatches.get(rowId) || {}), [col.field]: valueToSave });
           if (col.src === 'daily' && DAILY_PRICE_TRIGGER_FIELDS.has(col.field)) {
             dailyFormulaRows.add(rowId);
@@ -5828,6 +6014,40 @@
           await persistWeeklySummariesForChangedRows(changedRows);
         }
 
+        pushUndoEntry({
+          label: '粘贴',
+          items: [
+            ...ops.map((op) => ({
+              kind: 'normal',
+              rowId: op.rowId,
+              field: op.field,
+              src: op.src,
+              updateConfig: op.updateConfig,
+              pkValue: op.pkValue,
+              oldValue: op.oldValue,
+              newValue: op.valueToSave,
+            })),
+            ...richOps.map((op) => ({
+              kind: 'rich',
+              rowId: op.rowId,
+              field: op.field,
+              country: op.country,
+              asin: op.asin,
+              date: op.date,
+              oldValue: op.oldValue,
+              newValue: op.valueToSave,
+            })),
+            ...kwOps.map((op) => ({
+              kind: 'keyword',
+              rowId: op.rowId,
+              colField: op.colField,
+              dailyId: op.daily.id && op.daily.id !== 'new' ? op.daily.id : op.dailyId,
+              field: op.field,
+              oldValue: op.oldValue,
+              newValue: op.valueToSave,
+            })),
+          ],
+        });
         ctx.message.success(`已粘贴 ${ops.length + kwOps.length + richOps.length} 个单元格`);
       } catch (err) {
         ctx.message.error(`粘贴失败：${err?.message || '未知错误'}`);
@@ -5835,7 +6055,7 @@
       } finally {
         setSaving(false);
       }
-    }, [editingCell, finishFormulaProgress, getClipboardSlots, getClipboardSlotsForRange, isCellEditable, normalizeSelection, pagedData, parseKeywordPastedValue, parsePastedValue, persistWeeklySummariesForChangedRows, resetFormulaProgress, runPostEditRecalcs, saving, selectedRange, showFormulaProgress, visibleCols]);
+    }, [canPastePlainTextSlotAsSingleValue, editingCell, finishFormulaProgress, getClipboardSlots, getClipboardSlotsForRange, isCellEditable, normalizeSelection, pagedData, parseKeywordPastedValue, parsePastedValue, persistWeeklySummariesForChangedRows, pushUndoEntry, resetFormulaProgress, runPostEditRecalcs, saving, selectedRange, showFormulaProgress, visibleCols]);
 
     const clearSelectedCells = useCallback(async () => {
       if (editingCell || saving) return;
@@ -5862,7 +6082,15 @@
           if (!rowId || !slot || !col) return;
 
           if (slot.type === 'rich' || isActualKeywordPosColumn(col)) {
-            richOps.push({ rowId, field: 'actual_keyword_position', valueToSave: null });
+            richOps.push({
+              rowId,
+              field: 'actual_keyword_position',
+              country: row.country || null,
+              asin: row.asin || null,
+              date: row.date ? String(row.date).slice(0, 10) : null,
+              oldValue: row.actual_keyword_position ?? null,
+              valueToSave: null,
+            });
             localPatches.set(rowId, { ...(localPatches.get(rowId) || {}), actual_keyword_position: null });
             return;
           }
@@ -5877,6 +6105,7 @@
               daily,
               dailyId: daily.id,
               field: slot.sub.key,
+              oldValue: daily[slot.sub.key] ?? null,
               valueToSave: null,
             });
             kwLocalPatches.push({ rowId, colField: col.field, field: slot.sub.key, valueToSave: null });
@@ -5889,7 +6118,7 @@
           if (!updateConfig) return;
           const pkValue = row[updateConfig.pkField];
           if (!pkValue) return;
-          ops.push({ rowId, field: col.field, src: col.src, updateConfig, pkValue, valueToSave: null });
+          ops.push({ rowId, field: col.field, src: col.src, updateConfig, pkValue, oldValue: row[col.field] ?? null, valueToSave: null });
           localPatches.set(rowId, { ...(localPatches.get(rowId) || {}), [col.field]: null });
           if (col.src === 'daily' && DAILY_PRICE_TRIGGER_FIELDS.has(col.field)) {
             dailyFormulaRows.add(rowId);
@@ -5974,6 +6203,40 @@
         if (changedRows.length) {
           await persistWeeklySummariesForChangedRows(changedRows);
         }
+        pushUndoEntry({
+          label: '清空',
+          items: [
+            ...ops.map((op) => ({
+              kind: 'normal',
+              rowId: op.rowId,
+              field: op.field,
+              src: op.src,
+              updateConfig: op.updateConfig,
+              pkValue: op.pkValue,
+              oldValue: op.oldValue,
+              newValue: op.valueToSave,
+            })),
+            ...richOps.map((op) => ({
+              kind: 'rich',
+              rowId: op.rowId,
+              field: op.field,
+              country: op.country,
+              asin: op.asin,
+              date: op.date,
+              oldValue: op.oldValue,
+              newValue: op.valueToSave,
+            })),
+            ...kwOps.map((op) => ({
+              kind: 'keyword',
+              rowId: op.rowId,
+              colField: op.colField,
+              dailyId: op.dailyId,
+              field: op.field,
+              oldValue: op.oldValue,
+              newValue: op.valueToSave,
+            })),
+          ],
+        });
         ctx.message.success(`\u5df2\u6e05\u7a7a ${ops.length + kwOps.length + richOps.length} \u4e2a\u5355\u5143\u683c`);
       } catch (err) {
         ctx.message.error(`\u6e05\u7a7a\u5931\u8d25\uff1a${err?.message || '\u672a\u77e5\u9519\u8bef'}`);
@@ -5981,11 +6244,13 @@
       } finally {
         setSaving(false);
       }
-    }, [editingCell, finishFormulaProgress, getClipboardSlotsForRange, isCellEditable, normalizeSelection, pagedData, persistWeeklySummariesForChangedRows, resetFormulaProgress, runPostEditRecalcs, saving, selectedRange, showFormulaProgress]);
+    }, [editingCell, finishFormulaProgress, getClipboardSlotsForRange, isCellEditable, normalizeSelection, pagedData, persistWeeklySummariesForChangedRows, pushUndoEntry, resetFormulaProgress, runPostEditRecalcs, saving, selectedRange, showFormulaProgress]);
 
     const handleSelectionKeyDown = useCallback((e) => {
       if (editingCell || saving) return;
-      if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+      const isUndo = (e.ctrlKey || e.metaKey) && String(e.key || '').toLowerCase() === 'z' && !e.shiftKey && !e.altKey;
+      const isClear = e.key === 'Delete' || e.key === 'Backspace';
+      if (!isUndo && !isClear) return;
       const target = e.target;
       const tag = String(target?.tagName || '').toLowerCase();
       const isClipboardTarget = target === clipboardRef.current;
@@ -5995,11 +6260,16 @@
           target?.isContentEditable ||
           target?.closest?.('[contenteditable="true"], .ant-input, .ant-input-number, .ant-select, .ant-picker'))
       ) return;
+      if (isUndo) {
+        e.preventDefault();
+        undoLastEdit();
+        return;
+      }
       const rect = normalizeSelection(selectedRange);
       if (!rect) return;
       e.preventDefault();
       clearSelectedCells();
-    }, [clearSelectedCells, editingCell, normalizeSelection, saving, selectedRange]);
+    }, [clearSelectedCells, editingCell, normalizeSelection, saving, selectedRange, undoLastEdit]);
 
     const startEdit = useCallback((rowId, col, currentValue) => {
       if (saving) return;
@@ -6049,6 +6319,7 @@
       else {
         valueToSave = editValue || null;
       }
+      const oldValue = row[field] ?? null;
 
       try {
         setSaving(true);
@@ -6080,10 +6351,23 @@
           }
         }
         await persistWeeklySummariesForChangedRows([{ ...row, [field]: valueToSave }]);
+        pushUndoEntry({
+          label: '编辑单元格',
+          items: [{
+            kind: 'normal',
+            rowId,
+            field,
+            src,
+            updateConfig,
+            pkValue,
+            oldValue,
+            newValue: valueToSave,
+          }],
+        });
         setEditingCell(null); setEditValue(null);
       } catch (err) { ctx.message.error(`保存失败：${err?.message || '未知错误'}`); }
       finally { setSaving(false); }
-    }, [editingCell, editValue, data, saving, recalcKeywordTracking, persistWeeklySummariesForChangedRows]);
+    }, [editingCell, editValue, data, saving, recalcKeywordTracking, persistWeeklySummariesForChangedRows, pushUndoEntry]);
 
     const refreshData  = useCallback(async () => {
       if (refreshingData || calcAllLoading || loading) return;
@@ -7274,7 +7558,31 @@
                             asin: row.asin || null,
                             date: row.date ? String(row.date).slice(0, 10) : null,
                             screenshot: row.actual_keyword_position,
-                            onSaved: recalcKeywordTracking,
+                            onSaved: async (savedRowId, savedInfo = {}) => {
+                              pushUndoEntry({
+                                label: '编辑实际关键词位',
+                                items: [{
+                                  kind: 'rich',
+                                  rowId: savedRowId,
+                                  field: 'actual_keyword_position',
+                                  country: savedInfo.country ?? row.country ?? null,
+                                  asin: savedInfo.asin ?? row.asin ?? null,
+                                  date: savedInfo.date ?? (row.date ? String(row.date).slice(0, 10) : null),
+                                  oldValue: savedInfo.oldValue ?? null,
+                                  newValue: savedInfo.newValue ?? null,
+                                }],
+                              });
+                              setData((prev) => prev.map((r) => (
+                                (r.country_asin_date || r.id) === savedRowId
+                                  ? { ...r, actual_keyword_position: savedInfo.newValue ?? null }
+                                  : r
+                              )));
+                              await recalcKeywordTracking(savedRowId);
+                              await persistWeeklySummariesForChangedRows([{ ...row, actual_keyword_position: savedInfo.newValue ?? null }]);
+                              if (savedInfo.restoreFocus) {
+                                focusClipboardWithoutScroll();
+                              }
+                            },
                             readOnly: isWeeklySummaryRow,
                             cellBackground,
                             cellKey: richCellKey,

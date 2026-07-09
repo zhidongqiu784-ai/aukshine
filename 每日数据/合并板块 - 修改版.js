@@ -2672,7 +2672,7 @@
     );
   };
 
-  const RichTextImageCell = ({ value, onSave, placeholder = '+', cellKey, openSignal, cellBackground = null }) => {
+  const RichTextImageCell = ({ value, onSave, placeholder = '+', cellKey, openSignal, cellBackground = null, onAfterSaveExit }) => {
     const [content, setContent] = useState(value || '');
     const [isEditing, setIsEditing] = useState(false);
     const [tempContent, setTempContent] = useState('');
@@ -2701,8 +2701,9 @@
       return ok !== false;
     };
     const saveAndExit = async () => {
-      if (tempContent !== content) await saveToDatabase(tempContent);
+      const saved = tempContent !== content ? await saveToDatabase(tempContent) : true;
       setIsEditing(false);
+      if (saved) onAfterSaveExit?.();
     };
     const stopEditorClipboardEvent = (e) => {
       e?.stopPropagation?.();
@@ -6567,6 +6568,27 @@
 
     const isCellEditable = useCallback((col) => { if (READONLY_FIELDS.has(col.field)) return false; return col.editable === true; }, []);
 
+    const supportsRichEdit = (col) => {
+      if (col?._dynamicKind === 'competitor' && col._competitorField === 'rank') return false;
+      if (col?._dynamicKind) return true;
+      if (!col || READONLY_FIELDS.has(col.field)) return false;
+      if (RATE_FIELDS.has(col.field) || MONEY_FIELDS.has(col.field) || NUM_FIELDS.has(col.field) || DATE_FIELDS.has(col.field)) return false;
+      if (col.field === 'promo_day' || col.field === 'order_structure_diagnostic') return false;
+      return true;
+    };
+
+    const shouldUseRichEdit = (col, canEdit = false) => {
+      if (!supportsRichEdit(col)) return false;
+      if (col?._dynamicKind) return col.richEdit !== false;
+      return canEdit && col.richEdit === true;
+    };
+
+    const canPastePlainTextAsSingleValue = (col) => {
+      if (!supportsRichEdit(col)) return false;
+      if (col?._dynamicKind) return true;
+      return isCellEditable(col);
+    };
+
     async function findCompetitorDailyRecord(rowId, competitorId) {
       if (!rowId || !competitorId) return null;
       const res = await ctx.request({
@@ -6751,7 +6773,31 @@
       const text = e.clipboardData.getData('text/plain');
       if (!text) return;
       e.preventDefault();
-      const matrix = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').map((line) => line.split('\t'));
+      const normalizedText = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+      const selectedCol = visibleCols[rect.c1];
+      const selectedRow = pagedData[rect.r1];
+      const hasPlainMultilineText =
+        !normalizedText.includes('\t') &&
+        normalizedText.replace(/\n+$/g, '').includes('\n');
+      if (
+        hasPlainMultilineText &&
+        selectedCol &&
+        selectedRow &&
+        selectedRow.__rowType !== WEEKLY_SUMMARY_ROW_TYPE &&
+        !canPastePlainTextAsSingleValue(selectedCol)
+      ) {
+        ctx.message.warning('当前字段不支持粘贴多行文本，已取消粘贴');
+        return;
+      }
+      const isPlainTextCellPaste =
+        selectedCol &&
+        selectedRow &&
+        selectedRow.__rowType !== WEEKLY_SUMMARY_ROW_TYPE &&
+        canPastePlainTextAsSingleValue(selectedCol) &&
+        !normalizedText.includes('\t');
+      const matrix = isPlainTextCellPaste
+        ? [[normalizedText]]
+        : normalizedText.split('\n').map((line) => line.split('\t'));
       while (matrix.length && matrix[matrix.length - 1].length === 1 && matrix[matrix.length - 1][0] === '') matrix.pop();
       if (!matrix.length) return;
       const patches = new Map();
@@ -6772,6 +6818,10 @@
           const targetRow = pagedData[rect.r1 + rowOffset];
           const col = visibleCols[rect.c1 + colOffset];
           if (!targetRow || !col) continue;
+          if (isPlainTextCellPaste) {
+            if (targetRow.__rowType === WEEKLY_SUMMARY_ROW_TYPE) continue;
+            if (!canPastePlainTextAsSingleValue(col)) continue;
+          }
           const rowId = targetRow.country_asin_date || targetRow.id;
 
           if (col._dynamicKind === 'keyword') {
@@ -6789,6 +6839,7 @@
               country: targetRow.country || null,
               asin: targetRow.asin || null,
               date: targetRow.date ? String(targetRow.date).slice(0, 10) : null,
+              oldValue: daily.actual_rank ?? null,
               valueToSave: String(cellText ?? '').trim() || null,
             });
             continue;
@@ -6808,6 +6859,7 @@
               competitorId: competitor.id,
               field: col._competitorField || 'notes',
               date: targetRow.date ? String(targetRow.date).slice(0, 10) : null,
+              oldValue: daily[col._competitorField || 'notes'] ?? null,
               valueToSave: String(cellText ?? '').trim() || null,
             });
             continue;
@@ -6881,7 +6933,7 @@
               });
               nextDaily = { ...nextDaily, ...(res?.data?.data || {}) };
             }
-            return { rowId: op.rowId, colField: op.colField, field: 'actual_rank', daily: nextDaily };
+            return { type: 'keyword', rowId: op.rowId, colField: op.colField, field: 'actual_rank', daily: nextDaily, dailyId: nextDaily.id || op.dailyId, oldValue: op.oldValue, newValue: op.valueToSave };
           }
 
           const nextDaily = await saveCompetitorDailyRecord({
@@ -6892,7 +6944,7 @@
             value: op.valueToSave,
             daily: { ...op.daily, id: op.dailyId || op.daily?.id },
           });
-          return { rowId: op.rowId, colField: op.colField, field: op.field, daily: nextDaily };
+          return { type: 'competitor', rowId: op.rowId, colField: op.colField, field: op.field, daily: nextDaily, dailyId: nextDaily.id || op.dailyId, oldValue: op.oldValue, newValue: op.valueToSave };
         }));
         const failCount =
           results.filter((r) => r.status === 'rejected').length +
@@ -6901,7 +6953,16 @@
           const richPatchItems = richResults
             .filter((r) => r.status === 'fulfilled')
             .map((r) => r.value);
-          pushUndoEntry({ label: '粘贴', items: undoItems });
+          const richUndoItems = richPatchItems.map((p) => ({
+            kind: p.type,
+            rowId: p.rowId,
+            colField: p.colField,
+            dailyId: p.dailyId,
+            field: p.field,
+            oldValue: p.oldValue ?? null,
+            newValue: p.newValue ?? null,
+          }));
+          pushUndoEntry({ label: '粘贴', items: [...undoItems, ...richUndoItems] });
           updateDataLocalOnly((prev) => prev.map((row) => {
             const rowId = row.country_asin_date || row.id;
             const patch = patches.get(rowId);
@@ -6943,7 +7004,7 @@
       } finally {
         setSaving(false);
       }
-    }, [finishFormulaProgress, getCellValue, isCellEditable, isTableClipboardEvent, loadData, normalizeSelection, pagedData, parsePastedValue, pushUndoEntry, resetFormulaProgress, saving, selectedRange, showFormulaProgress, syncFormulasForChangedRows, updateDataLocalOnly, visibleCols]);
+    }, [canPastePlainTextAsSingleValue, finishFormulaProgress, getCellValue, isCellEditable, isTableClipboardEvent, loadData, normalizeSelection, pagedData, parsePastedValue, pushUndoEntry, resetFormulaProgress, saving, selectedRange, showFormulaProgress, syncFormulasForChangedRows, updateDataLocalOnly, visibleCols]);
 
     const fillSelectedCells = useCallback(async (rawValue) => {
       const rect = normalizeSelection(selectedRange);
@@ -6980,6 +7041,7 @@
               country: targetRow.country || null,
               asin: targetRow.asin || null,
               date: targetRow.date ? String(targetRow.date).slice(0, 10) : null,
+              oldValue: daily.actual_rank ?? null,
               valueToSave: String(rawValue ?? '').trim() || null,
             });
             continue;
@@ -6999,6 +7061,7 @@
               competitorId: competitor.id,
               field: col._competitorField || 'notes',
               date: targetRow.date ? String(targetRow.date).slice(0, 10) : null,
+              oldValue: daily[col._competitorField || 'notes'] ?? null,
               valueToSave: String(rawValue ?? '').trim() || null,
             });
             continue;
@@ -7062,7 +7125,7 @@
               });
               nextDaily = { ...nextDaily, ...(res?.data?.data || {}) };
             }
-            return { rowId: op.rowId, colField: op.colField, daily: nextDaily };
+            return { type: 'keyword', rowId: op.rowId, colField: op.colField, field: 'actual_rank', daily: nextDaily, dailyId: nextDaily.id || op.dailyId, oldValue: op.oldValue, newValue: op.valueToSave };
           }
 
           const nextDaily = await saveCompetitorDailyRecord({
@@ -7073,7 +7136,7 @@
             value: op.valueToSave,
             daily: { ...op.daily, id: op.dailyId || op.daily?.id },
           });
-          return { rowId: op.rowId, colField: op.colField, daily: nextDaily };
+          return { type: 'competitor', rowId: op.rowId, colField: op.colField, field: op.field, daily: nextDaily, dailyId: nextDaily.id || op.dailyId, oldValue: op.oldValue, newValue: op.valueToSave };
         }));
         const failCount = results.filter((r) => r.status === 'rejected').length + richResults.filter((r) => r.status === 'rejected').length;
         if (failCount) {
@@ -7083,7 +7146,16 @@
         }
 
         const richPatchItems = richResults.filter((r) => r.status === 'fulfilled').map((r) => r.value);
-        pushUndoEntry({ label: '填充', items: undoItems });
+        const richUndoItems = richPatchItems.map((p) => ({
+          kind: p.type,
+          rowId: p.rowId,
+          colField: p.colField,
+          dailyId: p.dailyId,
+          field: p.field,
+          oldValue: p.oldValue ?? null,
+          newValue: p.newValue ?? null,
+        }));
+        pushUndoEntry({ label: '填充', items: [...undoItems, ...richUndoItems] });
         updateDataAndRefreshWeekly((prev) => prev.map((row) => {
           const rowId = row.country_asin_date || row.id;
           const patch = patches.get(rowId);
@@ -7715,21 +7787,6 @@
         return false;
       }
     }, [captureTableScroll, finishFormulaProgress, getCellValue, pushUndoEntry, resetFormulaProgress, restoreTableScroll, showFormulaProgress, syncFormulasForChangedRows, updateDataAndRefreshWeekly]);
-
-    const supportsRichEdit = (col) => {
-      if (col?._dynamicKind === 'competitor' && col._competitorField === 'rank') return false;
-      if (col?._dynamicKind) return true;
-      if (!col || READONLY_FIELDS.has(col.field)) return false;
-      if (RATE_FIELDS.has(col.field) || MONEY_FIELDS.has(col.field) || NUM_FIELDS.has(col.field) || DATE_FIELDS.has(col.field)) return false;
-      if (col.field === 'promo_day' || col.field === 'order_structure_diagnostic') return false;
-      return true;
-    };
-
-    const shouldUseRichEdit = (col, canEdit = false) => {
-      if (!supportsRichEdit(col)) return false;
-      if (col?._dynamicKind) return col.richEdit !== false;
-      return canEdit && col.richEdit === true;
-    };
 
     const btnStyle = (bg, color, border) => ({
       minHeight: '30px',
@@ -9145,6 +9202,7 @@
                             cellKey: richCellKey,
                             openSignal: richEditOpenSignal,
                             cellBackground,
+                            onAfterSaveExit: focusClipboardWithoutScroll,
                           }));
                         }
 

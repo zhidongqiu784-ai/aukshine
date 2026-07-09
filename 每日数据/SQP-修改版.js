@@ -3435,6 +3435,7 @@
     const rootRef     = useRef(null);
     const tableWrapRef = useRef(null);
     const clipboardRef = useRef(null);
+    const undoStackRef = useRef([]);
     const autoRefreshRef = useRef({ lastAt: 0, wasVisible: null });
     const autoDefaultTermsRef = useRef({ key: null, running: false });
     const calculateFormulasRef = useRef(null);
@@ -4926,6 +4927,12 @@
       return text;
     }, []);
 
+    const canPastePlainTextAsSingleValue = useCallback((col) => {
+      if (!col || !isCellEditable(col)) return false;
+      if (RATE_FIELDS.has(col.field) || MONEY_FIELDS.has(col.field) || NUM_FIELDS.has(col.field) || DATE_FIELDS.has(col.field)) return false;
+      return true;
+    }, [isCellEditable]);
+
     const buildUpdatePatch = useCallback((row, col, valueToSave) => {
       const updateConfig = SRC_UPDATE_CONFIG[col.src];
       if (!updateConfig) return null;
@@ -4984,6 +4991,48 @@
       };
     }, [asinStageDefaultState, getTermRecord]);
 
+    const getPatchFieldValue = useCallback((row, col, field) => {
+      if (col?._isTermColumn) {
+        return getTermRecord(col, row)?.[field] ?? null;
+      }
+      return row?.[field] ?? null;
+    }, [getTermRecord]);
+
+    const applyDataPatchToRow = useCallback((sourceRow, col, dataPatch) => {
+      if (col?._isTermColumn) {
+        const currentTerm = sourceRow.__terms?.[col._termColumnKey] || {};
+        return {
+          ...sourceRow,
+          __terms: {
+            ...sourceRow.__terms,
+            [col._termColumnKey]: { ...currentTerm, ...dataPatch },
+          },
+        };
+      }
+      return { ...sourceRow, ...dataPatch };
+    }, []);
+
+    const buildUndoItem = useCallback((row, col, patch, valueToSave) => {
+      if (!row || !col || !patch?.dataPatch) return null;
+      const oldDataPatch = {};
+      Object.keys(patch.dataPatch).forEach((field) => {
+        oldDataPatch[field] = getPatchFieldValue(row, col, field);
+      });
+      return {
+        rowId: getMainWeekKey(row),
+        colKey: col.key,
+        colField: col.field,
+        isTermColumn: !!col._isTermColumn,
+        termColumnKey: col._termColumnKey || null,
+        updateConfig: patch.updateConfig,
+        pkValue: patch.pkValue,
+        oldValue: getCellRawValue(col, row) ?? null,
+        newValue: valueToSave,
+        oldDataPatch,
+        newDataPatch: patch.dataPatch,
+      };
+    }, [getCellRawValue, getPatchFieldValue]);
+
     const focusClipboardWithoutScroll = useCallback(() => {
       const el = clipboardRef.current;
       if (!el) return;
@@ -5003,6 +5052,80 @@
         wrap.scrollLeft = scrollLeft;
       }
     }, []);
+
+    const pushUndoEntry = useCallback((entry) => {
+      const items = Array.isArray(entry?.items)
+        ? entry.items.filter((item) => item && !Object.is(item.oldValue, item.newValue))
+        : [];
+      if (!items.length) return;
+      undoStackRef.current.push({ label: entry.label || '操作', items });
+      if (undoStackRef.current.length > 20) {
+        undoStackRef.current.splice(0, undoStackRef.current.length - 20);
+      }
+    }, []);
+
+    const undoLastEdit = useCallback(async () => {
+      if (saving) return;
+      const entry = undoStackRef.current.pop();
+      if (!entry) {
+        ctx.message.info('没有可撤回的操作');
+        return;
+      }
+
+      const localPatches = new Map();
+      const derivedFormulaRows = new Set();
+
+      try {
+        setSaving(true);
+        for (const item of entry.items) {
+          await ctx.request({
+            url: item.updateConfig.url,
+            method: 'post',
+            params: { filterByTk: item.pkValue },
+            data: item.oldDataPatch,
+          });
+
+          const col = columns.find((c) => c.key === item.colKey) || {
+            key: item.colKey,
+            field: item.colField,
+            _isTermColumn: item.isTermColumn,
+            _termColumnKey: item.termColumnKey,
+          };
+          const prevPatch = localPatches.get(item.rowId);
+          localPatches.set(item.rowId, (sourceRow) => {
+            const baseRow = prevPatch ? prevPatch(sourceRow) : sourceRow;
+            return applyDataPatchToRow(baseRow, col, item.oldDataPatch);
+          });
+
+          if (
+            item.oldDataPatch &&
+            (Object.prototype.hasOwnProperty.call(item.oldDataPatch, 'weekly_required_orders') ||
+              Object.prototype.hasOwnProperty.call(item.oldDataPatch, 'daily_required_orders') ||
+              Object.prototype.hasOwnProperty.call(item.oldDataPatch, 'compare_diagnosis'))
+          ) {
+            derivedFormulaRows.add(item.rowId);
+          }
+        }
+
+        setData((prev) => prev.map((row) => {
+          const rowId = getMainWeekKey(row);
+          const applyLocal = localPatches.get(rowId);
+          return applyLocal ? applyLocal(row) : row;
+        }));
+
+        if (derivedFormulaRows.size) {
+          showFormulaProgress({ label: '撤回已保存，正在同步公式...', percent: 70 });
+          finishFormulaProgress('撤回公式同步完成');
+        }
+        ctx.message.success(`已撤回：${entry.label}`);
+      } catch (err) {
+        undoStackRef.current.push(entry);
+        ctx.message.error(`撤回失败：${err?.message || '未知错误'}`);
+        resetFormulaProgress();
+      } finally {
+        setSaving(false);
+      }
+    }, [applyDataPatchToRow, columns, finishFormulaProgress, resetFormulaProgress, saving, showFormulaProgress]);
 
     const handleCellMouseDown = useCallback((e, r, c) => {
       if (e.button !== 0 || isResizing || editingCell) return;
@@ -5057,24 +5180,55 @@
       if (!text) return;
       e.preventDefault();
 
-      const matrix = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').map((line) => line.split('\t'));
+      const normalizedText = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+      const selectedCol = visibleCols[rect.c1];
+      const selectedRow = data[rect.r1];
+      const hasPlainMultilineText =
+        !normalizedText.includes('\t') &&
+        normalizedText.replace(/\n+$/g, '').includes('\n');
+      if (
+        hasPlainMultilineText &&
+        selectedCol &&
+        selectedRow &&
+        !canPastePlainTextAsSingleValue(selectedCol)
+      ) {
+        ctx.message.warning('当前字段不支持粘贴多行文本，已取消粘贴');
+        return;
+      }
+      const isPlainTextCellPaste =
+        selectedCol &&
+        selectedRow &&
+        canPastePlainTextAsSingleValue(selectedCol) &&
+        !normalizedText.includes('\t');
+      const matrix = isPlainTextCellPaste
+        ? [[normalizedText]]
+        : normalizedText.split('\n').map((line) => line.split('\t'));
       while (matrix.length && matrix[matrix.length - 1].length === 1 && matrix[matrix.length - 1][0] === '') matrix.pop();
       if (!matrix.length) return;
 
       const ops = [];
+      const undoItems = [];
       const localPatches = new Map();
       const derivedFormulaRows = new Set();
+      const isSingleValuePaste = matrix.length === 1 && matrix[0].length === 1;
 
-      matrix.forEach((line, rr) => {
-        line.forEach((cellText, cc) => {
+      const rowCount = isSingleValuePaste ? rect.r2 - rect.r1 + 1 : matrix.length;
+      for (let rr = 0; rr < rowCount; rr += 1) {
+        const line = isSingleValuePaste ? matrix[0] : matrix[rr];
+        const colCount = isSingleValuePaste ? rect.c2 - rect.c1 + 1 : line.length;
+        for (let cc = 0; cc < colCount; cc += 1) {
+          const cellText = isSingleValuePaste ? matrix[0][0] : line[cc];
           const row = data[rect.r1 + rr];
           const col = visibleCols[rect.c1 + cc];
-          if (!row || !col || !isCellEditable(col)) return;
+          if (isPlainTextCellPaste && col && !canPastePlainTextAsSingleValue(col)) continue;
+          if (!row || !col || !isCellEditable(col)) continue;
           const rowId = getMainWeekKey(row);
           const valueToSave = parsePastedValue(col, cellText);
           const patch = buildUpdatePatch(row, col, valueToSave);
-          if (!patch) return;
+          if (!patch) continue;
           ops.push({ rowId, ...patch });
+          const undoItem = buildUndoItem(row, col, patch, valueToSave);
+          if (undoItem) undoItems.push(undoItem);
           if (
             patch.dataPatch &&
             (Object.prototype.hasOwnProperty.call(patch.dataPatch, 'weekly_required_orders') ||
@@ -5085,8 +5239,8 @@
           }
           const prevPatch = localPatches.get(rowId);
           localPatches.set(rowId, (sourceRow) => patch.applyLocal(prevPatch ? prevPatch(sourceRow) : sourceRow));
-        });
-      });
+        }
+      }
 
       if (!ops.length) {
         ctx.message.warning('粘贴区域没有可编辑单元格');
@@ -5114,6 +5268,7 @@
           showFormulaProgress({ label: '粘贴已保存，正在同步公式...', percent: 70 });
           finishFormulaProgress('粘贴公式同步完成');
         }
+        pushUndoEntry({ label: '粘贴', items: undoItems });
         ctx.message.success(`已粘贴 ${ops.length} 个单元格`);
       } catch (err) {
         ctx.message.error(`粘贴失败：${err?.message || '未知错误'}`);
@@ -5121,17 +5276,25 @@
       } finally {
         setSaving(false);
       }
-    }, [buildUpdatePatch, editingCell, finishFormulaProgress, isCellEditable, normalizeSelection, data, parsePastedValue, resetFormulaProgress, saving, selectedRange, showFormulaProgress, visibleCols]);
+    }, [buildUndoItem, buildUpdatePatch, canPastePlainTextAsSingleValue, editingCell, finishFormulaProgress, isCellEditable, normalizeSelection, data, parsePastedValue, pushUndoEntry, resetFormulaProgress, saving, selectedRange, showFormulaProgress, visibleCols]);
 
     const handleDeleteSelectedCells = useCallback(async (e) => {
-      if (e.key !== 'Backspace' && e.key !== 'Delete') return;
+      const isUndo = (e.ctrlKey || e.metaKey) && String(e.key || '').toLowerCase() === 'z' && !e.shiftKey && !e.altKey;
+      const isClear = e.key === 'Backspace' || e.key === 'Delete';
+      if (!isUndo && !isClear) return;
       if (editingCell || saving) return;
+      if (isUndo) {
+        e.preventDefault();
+        undoLastEdit();
+        return;
+      }
       const rect = normalizeSelection(selectedRange);
       if (!rect) return;
 
       e.preventDefault();
 
       const ops = [];
+      const undoItems = [];
       const localPatches = new Map();
       const derivedFormulaRows = new Set();
 
@@ -5145,6 +5308,8 @@
           const patch = buildUpdatePatch(row, col, null);
           if (!patch) continue;
           ops.push({ rowId, ...patch });
+          const undoItem = buildUndoItem(row, col, patch, null);
+          if (undoItem) undoItems.push(undoItem);
           if (
             patch.dataPatch &&
             (Object.prototype.hasOwnProperty.call(patch.dataPatch, 'weekly_required_orders') ||
@@ -5184,6 +5349,7 @@
           showFormulaProgress({ label: '删除已保存，正在同步公式...', percent: 70 });
           finishFormulaProgress('删除公式同步完成');
         }
+        pushUndoEntry({ label: '清空', items: undoItems });
         ctx.message.success(`已清空 ${ops.length} 个单元格`);
       } catch (err) {
         ctx.message.error(`删除失败：${err?.message || '未知错误'}`);
@@ -5191,7 +5357,7 @@
       } finally {
         setSaving(false);
       }
-    }, [buildUpdatePatch, editingCell, finishFormulaProgress, isCellEditable, normalizeSelection, data, resetFormulaProgress, saving, selectedRange, showFormulaProgress, visibleCols]);
+    }, [buildUndoItem, buildUpdatePatch, editingCell, finishFormulaProgress, isCellEditable, normalizeSelection, data, pushUndoEntry, resetFormulaProgress, saving, selectedRange, showFormulaProgress, undoLastEdit, visibleCols]);
 
     const startEdit = useCallback((rowId, col, currentValue) => {
       if (saving) return;
@@ -5221,6 +5387,7 @@
       }
       const patch = buildUpdatePatch(row, col, valueToSave);
       if (!patch) { ctx.message.error(`无法找到记录主键（${updateConfig.pkField}）`); cancelEdit(); return; }
+      const undoItem = buildUndoItem(row, col, patch, valueToSave);
       try {
         setSaving(true);
         await ctx.request({
@@ -5238,12 +5405,13 @@
           )
         );
 
+        pushUndoEntry({ label: '编辑单元格', items: undoItem ? [undoItem] : [] });
         ctx.message.success('保存成功');
         setEditingCell(null);
         setEditValue(null);
       } catch (err) { ctx.message.error(`保存失败：${err?.message || '未知错误'}`); }
       finally { setSaving(false); }
-    }, [buildUpdatePatch, cancelEdit, columns, editingCell, editValue, data, saving]);
+    }, [buildUndoItem, buildUpdatePatch, cancelEdit, columns, editingCell, editValue, data, pushUndoEntry, saving]);
 
     const calculateFormulas = useCallback(async (options = {}) => {
       const silent = options?.silent === true;
