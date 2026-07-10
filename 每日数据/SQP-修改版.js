@@ -29,6 +29,8 @@
     DE: 'Lisowod',
     FR: 'Lisowod',
   };
+  const PROJECTOR_BRANDS = new Set(['JIMVEO', 'LISOWOD', 'ONOAYO', 'SOVBOI']);
+  const CAMERA_MARKET_BRAND = 'LIYTIFOR';
 
   const FONT_SIZE    = 15;
   const FONT_SIZE_SM = FONT_SIZE - 1;
@@ -278,8 +280,10 @@
     compare_diagnosis: 'Asin与市场数据同比分析：对比 SQP-Asin CTR/CVR/加购率 与 SQP-市场 CTR/CVR/加购率，并根据阶段目标份额计算的一周需出单判断当前 Asin 出单是否达标。',
   };
 
-  const MARKET_SOURCE_TOOLTIP = '按站点固定市场品牌取 SQP 明细：US=ONOAYO，CA/DE/FR=Lisowod，JP=JIMVEO。多个 ASIN 时，按 ASIN 排序取第一个有值 ASIN。关键词精确匹配，词根包含匹配。';
+  const MARKET_SOURCE_TOOLTIP = '先按站点和当前 ASIN 在 ASIN 表确定品牌。投影仪品牌按站点固定市场品牌取 SQP 明细：US=ONOAYO，CA/DE/FR=Lisowod，JP=JIMVEO；LIYTIFOR 照相机取 LIYTIFOR。多个 ASIN 时，按 ASIN 排序取第一个有值 ASIN。关键词精确匹配，词根包含匹配。';
+  const ASIN_SOURCE_TOOLTIP = 'ASIN 类字段始终按当前页面的站点和 ASIN 取 SQP 明细，不受市场品牌筛选影响。关键词精确匹配，词根包含匹配。';
   const marketSumTooltip = (label) => `${MARKET_SOURCE_TOOLTIP}${label} = 匹配行求和；无有效数字则为空。`;
+  const asinSumTooltip = (label) => `${ASIN_SOURCE_TOOLTIP}${label} = 当前 ASIN 匹配行求和；无有效数字则为空。`;
 
   const FORMULA_TOOLTIPS = {
     search_query_volume: {
@@ -329,8 +333,8 @@
     },
     impressions_asin_count: {
       title: 'SQP-Asin曝光量',
-      formula: '按当前关键词/词根与当前周汇总 SQP 明细中的 Asin 曝光量',
-      emptyRules: ['没有匹配到当前周的 SQP 明细'],
+      formula: asinSumTooltip('SQP-Asin曝光量'),
+      emptyRules: ['当前 ASIN 没有当前周 SQP 明细', '当前 ASIN 没有匹配到当前关键词/词根', '匹配行的 Asin 曝光量没有有效数字'],
       fields: [
         { label: 'Asin曝光量', field: 'sqp_detail.impressions_asin_count' },
       ],
@@ -338,8 +342,8 @@
     },
     clicks_asin_count: {
       title: 'SQP-Asin点击量',
-      formula: '按当前关键词/词根与当前周汇总 SQP 明细中的 Asin 点击量',
-      emptyRules: ['没有匹配到当前周的 SQP 明细'],
+      formula: asinSumTooltip('SQP-Asin点击量'),
+      emptyRules: ['当前 ASIN 没有当前周 SQP 明细', '当前 ASIN 没有匹配到当前关键词/词根', '匹配行的 Asin 点击量没有有效数字'],
       fields: [
         { label: 'Asin点击量', field: 'sqp_detail.clicks_asin_count' },
       ],
@@ -347,8 +351,8 @@
     },
     cart_additions_asin_count: {
       title: 'SQP-Asin加购量',
-      formula: '按当前关键词/词根与当前周汇总 SQP 明细中的 Asin 加购量',
-      emptyRules: ['没有匹配到当前周的 SQP 明细'],
+      formula: asinSumTooltip('SQP-Asin加购量'),
+      emptyRules: ['当前 ASIN 没有当前周 SQP 明细', '当前 ASIN 没有匹配到当前关键词/词根', '匹配行的 Asin 加购量没有有效数字'],
       fields: [
         { label: 'Asin加购量', field: 'sqp_detail.cart_additions_asin_count' },
       ],
@@ -356,8 +360,8 @@
     },
     purchases_asin_count: {
       title: 'SQP-Asin购买量',
-      formula: '按当前关键词/词根与当前周汇总 SQP 明细中的 Asin 购买量',
-      emptyRules: ['没有匹配到当前周的 SQP 明细'],
+      formula: asinSumTooltip('SQP-Asin购买量'),
+      emptyRules: ['当前 ASIN 没有当前周 SQP 明细', '当前 ASIN 没有匹配到当前关键词/词根', '匹配行的 Asin 购买量没有有效数字'],
       fields: [
         { label: 'Asin购买量', field: 'sqp_detail.purchases_asin_count' },
       ],
@@ -375,7 +379,7 @@
     },
     asin_ctr: {
       title: 'SQP-Asin CTR',
-      formula: 'SQP-Asin点击量 ÷ SQP-Asin曝光量',
+      formula: `${ASIN_SOURCE_TOOLTIP}SQP-Asin CTR = SQP-Asin点击量 ÷ SQP-Asin曝光量。`,
       emptyRules: ['SQP-Asin点击量为空', 'SQP-Asin曝光量为空或为 0'],
       fields: [
         { label: 'Asin点击量', field: 'sqp_term_weekly.clicks_asin_count' },
@@ -395,7 +399,7 @@
     },
     asin_cart_rate: {
       title: 'SQP-Asin 加购率',
-      formula: 'SQP-Asin加购量 ÷ SQP-Asin点击量',
+      formula: `${ASIN_SOURCE_TOOLTIP}SQP-Asin加购率 = SQP-Asin加购量 ÷ SQP-Asin点击量。`,
       emptyRules: ['SQP-Asin加购量为空', 'SQP-Asin点击量为空或为 0'],
       fields: [
         { label: 'Asin加购量', field: 'sqp_term_weekly.cart_additions_asin_count' },
@@ -415,7 +419,7 @@
     },
     asin_cvr: {
       title: 'SQP-Asin CVR',
-      formula: 'SQP-Asin购买量 ÷ SQP-Asin点击量',
+      formula: `${ASIN_SOURCE_TOOLTIP}SQP-Asin CVR = SQP-Asin购买量 ÷ SQP-Asin点击量。`,
       emptyRules: ['SQP-Asin购买量为空', 'SQP-Asin点击量为空或为 0'],
       fields: [
         { label: 'Asin购买量', field: 'sqp_term_weekly.purchases_asin_count' },
@@ -425,7 +429,7 @@
     },
     impression_share: {
       title: '曝光份额',
-      formula: 'SQP-Asin曝光量 ÷ SQP-市场曝光量',
+      formula: `${ASIN_SOURCE_TOOLTIP}${MARKET_SOURCE_TOOLTIP}曝光份额 = SQP-Asin曝光量 ÷ SQP-市场曝光量。`,
       emptyRules: ['SQP-Asin曝光量为空', 'SQP-市场曝光量为空或为 0'],
       fields: [
         { label: 'Asin曝光量', field: 'sqp_term_weekly.impressions_asin_count' },
@@ -435,7 +439,7 @@
     },
     asin_click_share: {
       title: 'SQP-Asin 点击份额',
-      formula: 'SQP-Asin点击量 ÷ SQP-市场点击量',
+      formula: `${ASIN_SOURCE_TOOLTIP}${MARKET_SOURCE_TOOLTIP}SQP-Asin点击份额 = SQP-Asin点击量 ÷ SQP-市场点击量。`,
       emptyRules: ['SQP-Asin点击量为空', 'SQP-市场点击量为空或为 0'],
       fields: [
         { label: 'Asin点击量', field: 'sqp_term_weekly.clicks_asin_count' },
@@ -445,7 +449,7 @@
     },
     asin_cart_share: {
       title: 'SQP-Asin 加购份额',
-      formula: 'SQP-Asin加购量 ÷ SQP-市场加购量',
+      formula: `${ASIN_SOURCE_TOOLTIP}${MARKET_SOURCE_TOOLTIP}SQP-Asin加购份额 = SQP-Asin加购量 ÷ SQP-市场加购量。`,
       emptyRules: ['SQP-Asin加购量为空', 'SQP-市场加购量为空或为 0'],
       fields: [
         { label: 'Asin加购量', field: 'sqp_term_weekly.cart_additions_asin_count' },
@@ -455,7 +459,7 @@
     },
     asin_purchase_share: {
       title: 'SQP-Asin 出单份额',
-      formula: 'SQP-Asin购买量 ÷ SQP-市场购买量',
+      formula: `${ASIN_SOURCE_TOOLTIP}${MARKET_SOURCE_TOOLTIP}SQP-Asin出单份额 = SQP-Asin购买量 ÷ SQP-市场购买量。`,
       emptyRules: ['SQP-Asin购买量为空', 'SQP-市场购买量为空或为 0'],
       fields: [
         { label: 'Asin购买量', field: 'sqp_term_weekly.purchases_asin_count' },
@@ -465,10 +469,12 @@
     },
     stage_target_share: {
       title: '阶段目标份额',
-      formula: '用户手填当前关键词/词根的阶段目标出单份额',
-      emptyRules: ['未填写时显示为空，并不会计算需出单量'],
+      formula: '默认取当前 ASIN 表中的阶段目标份额。当前关键词/词根手动填写后，以手动值优先。清空手动值后，恢复使用当前 ASIN 默认值。',
+      emptyRules: ['当前 ASIN 未设置默认阶段目标份额，并且当前关键词/词根也未手动填写'],
       fields: [
-        { label: '阶段目标份额', field: 'sqp_term_weekly.stage_target_share' },
+        { label: 'ASIN 默认值', field: 'asin.default_stage_target_share' },
+        { label: '当前词目标份额', field: 'sqp_term_weekly.stage_target_share' },
+        { label: '是否手动填写', field: 'sqp_term_weekly.stage_target_share_is_manual' },
       ],
       writeBackField: 'sqp_term_weekly.stage_target_share',
     },
@@ -512,7 +518,7 @@
     },
     asin_diagnosis: {
       title: 'Asin数据环比分析',
-      formula: '对比当前周与上一周的 Asin 点击份额、点击量、加购份额、加购量、出单份额、购买量、CTR、加购率和 CVR，展示环比增减',
+      formula: `${ASIN_SOURCE_TOOLTIP}对比当前周与上一周的 Asin 点击份额、点击量、加购份额、加购量、出单份额、购买量、CTR、加购率和 CVR，展示环比增减。`,
       emptyRules: ['当前周 Asin 数据缺失', '上一周 Asin 数据缺失'],
       fields: [
         { label: '当前周 Asin 指标', field: 'sqp_term_weekly.*（当前周）' },
@@ -522,7 +528,7 @@
     },
     compare_diagnosis: {
       title: 'Asin与市场数据同比分析',
-      formula: '对比 Asin 与市场的 CTR、CVR、加购率，并结合一周需出单判断当前 Asin 出单是否达标',
+      formula: `${ASIN_SOURCE_TOOLTIP}${MARKET_SOURCE_TOOLTIP}对比 Asin 与市场的 CTR、CVR、加购率，并结合一周需出单判断当前 Asin 出单是否达标。`,
       emptyRules: ['Asin 指标缺失', '市场指标缺失', '阶段目标份额或一周需出单缺失'],
       fields: [
         { label: 'Asin 指标', field: 'sqp_term_weekly.asin_ctr / asin_cvr / asin_cart_rate' },
@@ -1557,6 +1563,13 @@
     const key = String(country || '').trim().toUpperCase();
     return MARKET_BRAND_BY_COUNTRY[key] || DEFAULT_MARKET_BRAND;
   };
+  const normalizeBrand = (brand) => String(brand || '').trim().toUpperCase();
+  const getMarketBrandForCurrentAsin = (country, currentBrand) => {
+    const normalizedBrand = normalizeBrand(currentBrand);
+    if (PROJECTOR_BRANDS.has(normalizedBrand)) return getMarketBrandForCountry(country);
+    if (normalizedBrand === CAMERA_MARKET_BRAND) return CAMERA_MARKET_BRAND;
+    return null;
+  };
   const getMarketFieldValue = (rows, isMatchedTermRow, field) => {
     const byAsin = {};
     (rows || []).forEach((row) => {
@@ -2543,19 +2556,24 @@
         .map((week) => week.report_date ? String(week.report_date).slice(0, 10) : '')
         .filter(Boolean)
         .sort();
-      const marketBrand = getMarketBrandForCountry(country);
-      onProgress?.({ label: `正在读取${country}市场品牌 ${marketBrand} ASIN`, percent: 5 });
-      const marketBrandAsinRows = await fetchAll('asin:list', {
-        filter: JSON.stringify({
-          $and: [
-            { country: { $eq: country } },
-            { brand: { $eq: marketBrand } },
-          ],
-        }),
+      const countryAsinRows = await fetchAll('asin:list', {
+        filter: JSON.stringify({ country: { $eq: country } }),
       });
-      const marketBrandAsins = new Set(
-        marketBrandAsinRows.map((item) => String(item?.asin || '').trim()).filter(Boolean)
-      );
+      const currentAsinRow = countryAsinRows.find(
+        (item) => String(item?.asin || '').trim() === String(asin || '').trim()
+      ) || null;
+      const currentBrand = String(currentAsinRow?.brand || '').trim();
+      const marketBrand = getMarketBrandForCurrentAsin(country, currentBrand);
+      const marketSourceLabel = marketBrand || currentBrand || '当前 ASIN';
+      onProgress?.({ label: `正在读取${country}市场品牌 ${marketSourceLabel} ASIN`, percent: 5 });
+      const marketBrandAsins = marketBrand
+        ? new Set(
+          countryAsinRows
+            .filter((item) => normalizeBrand(item?.brand) === normalizeBrand(marketBrand))
+            .map((item) => String(item?.asin || '').trim())
+            .filter(Boolean)
+        )
+        : new Set([String(asin || '').trim()].filter(Boolean));
       onProgress?.({ label: `正在批量读取${title} ${termName}市场品牌明细`, percent: 6 });
       const [sqpRows, existingTermRows] = await Promise.all([
         reportDates.length ? fetchAll('sqp:list', {
@@ -2581,14 +2599,21 @@
       existingTermRows.forEach((row) => {
         if (row?.term_week_key) existingTermMap[row.term_week_key] = row;
       });
-      const sqpRowsByReportDate = {};
+      const marketRowsByReportDate = {};
+      const currentAsinRowsByReportDate = {};
       const reportDateSet = new Set(reportDates);
       sqpRows.forEach((row) => {
         const reportDate = row?.report_date ? String(row.report_date).slice(0, 10) : '';
         if (!reportDate || !reportDateSet.has(reportDate)) return;
-        if (!marketBrandAsins.has(String(row?.asin || '').trim())) return;
-        if (!sqpRowsByReportDate[reportDate]) sqpRowsByReportDate[reportDate] = [];
-        sqpRowsByReportDate[reportDate].push(row);
+        const rowAsin = String(row?.asin || '').trim();
+        if (marketBrandAsins.has(rowAsin)) {
+          if (!marketRowsByReportDate[reportDate]) marketRowsByReportDate[reportDate] = [];
+          marketRowsByReportDate[reportDate].push(row);
+        }
+        if (rowAsin === String(asin || '').trim()) {
+          if (!currentAsinRowsByReportDate[reportDate]) currentAsinRowsByReportDate[reportDate] = [];
+          currentAsinRowsByReportDate[reportDate].push(row);
+        }
       });
       let count = 0;
       let prevPayload = null;
@@ -2602,7 +2627,8 @@
           label: `正在重算${title} ${termName}：${count + 1}/${weeks.length}`,
           percent: 8 + (weeks.length ? (count / weeks.length) * 86 : 0),
         });
-        const sqpRows = sqpRowsByReportDate[reportDate] || [];
+        const marketRows = marketRowsByReportDate[reportDate] || [];
+        const currentAsinRows = currentAsinRowsByReportDate[reportDate] || [];
         const termType = tab === 'keyword' ? 'keyword' : 'root';
         const isMatchedTermRow = (row) => {
           const searchQuery = String(row.search_query || '').trim();
@@ -2611,14 +2637,13 @@
             ? searchQuery.includes(termName)
             : searchQuery === termName;
         };
-        const currentAsinRows = sqpRows.filter((row) => String(row.asin || '').trim() === String(asin || '').trim());
         const matchedAsinRows = currentAsinRows.filter(isMatchedTermRow);
 
-        const searchQueryVolume = getMarketFieldValue(sqpRows, isMatchedTermRow, 'search_query_volume');
-        const impressionsCount = getMarketFieldValue(sqpRows, isMatchedTermRow, 'impressions_count');
-        const clicksCount = getMarketFieldValue(sqpRows, isMatchedTermRow, 'clicks_count');
-        const cartAdditionsCount = getMarketFieldValue(sqpRows, isMatchedTermRow, 'cart_additions_count');
-        const purchasesCount = getMarketFieldValue(sqpRows, isMatchedTermRow, 'purchases_count');
+        const searchQueryVolume = getMarketFieldValue(marketRows, isMatchedTermRow, 'search_query_volume');
+        const impressionsCount = getMarketFieldValue(marketRows, isMatchedTermRow, 'impressions_count');
+        const clicksCount = getMarketFieldValue(marketRows, isMatchedTermRow, 'clicks_count');
+        const cartAdditionsCount = getMarketFieldValue(marketRows, isMatchedTermRow, 'cart_additions_count');
+        const purchasesCount = getMarketFieldValue(marketRows, isMatchedTermRow, 'purchases_count');
         const impressionsAsinCount = nullableSum(matchedAsinRows, 'impressions_asin_count');
         const clicksAsinCount = nullableSum(matchedAsinRows, 'clicks_asin_count');
         const cartAdditionsAsinCount = nullableSum(matchedAsinRows, 'cart_additions_asin_count');
@@ -5449,7 +5474,8 @@
       const termPatchRows = [];
       const termWriteJobs = [];
       let existingTermMap = {};
-      let sqpRowsByReportDate = {};
+      let marketRowsByReportDate = {};
+      let currentAsinRowsByReportDate = {};
       let stageDefaultState = { loaded: false, value: null };
       const queueTermWeeklySave = (payload, weekLabel) => {
         const rec = existingTermMap[payload.term_week_key] || null;
@@ -5478,7 +5504,8 @@
         for (const week of weeks) {
           const reportDate = week.report_date ? String(week.report_date).slice(0, 10) : null;
           if (!reportDate) continue;
-          const sqpRows = sqpRowsByReportDate[reportDate] || [];
+          const marketRows = marketRowsByReportDate[reportDate] || [];
+          const currentAsinRows = currentAsinRowsByReportDate[reportDate] || [];
           const isMatchedTermRow = (row) => {
             const searchQuery = String(row.search_query || '').trim();
             if (!searchQuery) return false;
@@ -5486,14 +5513,13 @@
               ? searchQuery.includes(termName)
               : searchQuery === termName;
           };
-          const currentAsinRows = sqpRows.filter((row) => String(row.asin || '').trim() === String(filterAsin || '').trim());
           const matchedAsinRows = currentAsinRows.filter(isMatchedTermRow);
 
-          const searchQueryVolume = getMarketFieldValue(sqpRows, isMatchedTermRow, 'search_query_volume');
-          const impressionsCount = getMarketFieldValue(sqpRows, isMatchedTermRow, 'impressions_count');
-          const clicksCount = getMarketFieldValue(sqpRows, isMatchedTermRow, 'clicks_count');
-          const cartAdditionsCount = getMarketFieldValue(sqpRows, isMatchedTermRow, 'cart_additions_count');
-          const purchasesCount = getMarketFieldValue(sqpRows, isMatchedTermRow, 'purchases_count');
+          const searchQueryVolume = getMarketFieldValue(marketRows, isMatchedTermRow, 'search_query_volume');
+          const impressionsCount = getMarketFieldValue(marketRows, isMatchedTermRow, 'impressions_count');
+          const clicksCount = getMarketFieldValue(marketRows, isMatchedTermRow, 'clicks_count');
+          const cartAdditionsCount = getMarketFieldValue(marketRows, isMatchedTermRow, 'cart_additions_count');
+          const purchasesCount = getMarketFieldValue(marketRows, isMatchedTermRow, 'purchases_count');
           const impressionsAsinCount = nullableSum(matchedAsinRows, 'impressions_asin_count');
           const clicksAsinCount = nullableSum(matchedAsinRows, 'clicks_asin_count');
           const cartAdditionsAsinCount = nullableSum(matchedAsinRows, 'cart_additions_asin_count');
@@ -5578,19 +5604,24 @@
           .map((week) => week.report_date ? String(week.report_date).slice(0, 10) : '')
           .filter(Boolean)
           .sort();
-        const marketBrand = getMarketBrandForCountry(filterCountry);
-        onProgress?.({ label: `正在读取${filterCountry}市场品牌 ${marketBrand} ASIN...`, percent: 12 });
-        const marketBrandAsinRows = await fetchAll('asin:list', {
-          filter: JSON.stringify({
-            $and: [
-              { country: { $eq: filterCountry } },
-              { brand: { $eq: marketBrand } },
-            ],
-          }),
+        const countryAsinRows = await fetchAll('asin:list', {
+          filter: JSON.stringify({ country: { $eq: filterCountry } }),
         });
-        const marketBrandAsins = new Set(
-          marketBrandAsinRows.map((item) => String(item?.asin || '').trim()).filter(Boolean)
-        );
+        const currentAsinRow = countryAsinRows.find(
+          (item) => String(item?.asin || '').trim() === String(filterAsin || '').trim()
+        ) || null;
+        const currentBrand = String(currentAsinRow?.brand || '').trim();
+        const marketBrand = getMarketBrandForCurrentAsin(filterCountry, currentBrand);
+        const marketSourceLabel = marketBrand || currentBrand || '当前 ASIN';
+        onProgress?.({ label: `正在读取${filterCountry}市场品牌 ${marketSourceLabel} ASIN...`, percent: 12 });
+        const marketBrandAsins = marketBrand
+          ? new Set(
+            countryAsinRows
+              .filter((item) => normalizeBrand(item?.brand) === normalizeBrand(marketBrand))
+              .map((item) => String(item?.asin || '').trim())
+              .filter(Boolean)
+          )
+          : new Set([String(filterAsin || '').trim()].filter(Boolean));
         onProgress?.({ label: '正在批量读取市场品牌 SQP 明细...', percent: 12 });
         const [sqpRows, existingTermRows] = await Promise.all([
           reportDates.length ? fetchAll('sqp:list', {
@@ -5610,14 +5641,21 @@
         existingTermRows.forEach((row) => {
           if (row?.term_week_key) existingTermMap[row.term_week_key] = row;
         });
-        sqpRowsByReportDate = {};
+        marketRowsByReportDate = {};
+        currentAsinRowsByReportDate = {};
         const reportDateSet = new Set(reportDates);
         sqpRows.forEach((row) => {
           const reportDate = row?.report_date ? String(row.report_date).slice(0, 10) : '';
           if (!reportDate || !reportDateSet.has(reportDate)) return;
-          if (!marketBrandAsins.has(String(row?.asin || '').trim())) return;
-          if (!sqpRowsByReportDate[reportDate]) sqpRowsByReportDate[reportDate] = [];
-          sqpRowsByReportDate[reportDate].push(row);
+          const rowAsin = String(row?.asin || '').trim();
+          if (marketBrandAsins.has(rowAsin)) {
+            if (!marketRowsByReportDate[reportDate]) marketRowsByReportDate[reportDate] = [];
+            marketRowsByReportDate[reportDate].push(row);
+          }
+          if (rowAsin === String(filterAsin || '').trim()) {
+            if (!currentAsinRowsByReportDate[reportDate]) currentAsinRowsByReportDate[reportDate] = [];
+            currentAsinRowsByReportDate[reportDate].push(row);
+          }
         });
         let doneTerms = 0;
         let totalWeeks = 0;
@@ -6292,41 +6330,136 @@
         writeBackField: 'sqp_term_weekly.*',
       };
     };
-    const renderTooltip = ({ title, formula, emptyRules = [], emptyRuleMode = '满足任意', fields = [], writeBackField }) => React.createElement('div', {
-      style: {
-        maxWidth: '360px',
-        fontSize: '13px',
-        lineHeight: 1.6,
-        color: 'inherit',
+    const splitTooltipText = (value) => {
+      const text = String(value || '').trim();
+      if (!text) return [];
+      const lines = text.match(/[^。；！？\n]+[。；！？]?/g) || [text];
+      return lines.map((line) => line.trim()).filter(Boolean);
+    };
+    const tooltipSectionTitleStyle = {
+      marginBottom: '5px',
+      color: '#bae0ff',
+      fontSize: '12px',
+      fontWeight: 800,
+      letterSpacing: '0.02em',
+    };
+    const tooltipBodyStyle = {
+      color: 'rgba(255,255,255,0.92)',
+      fontSize: '13px',
+      lineHeight: 1.7,
+      whiteSpace: 'normal',
+      wordBreak: 'break-word',
+      overflowWrap: 'anywhere',
+      textWrap: 'pretty',
+    };
+    const renderTooltip = ({ title, formula, emptyRules = [], emptyRuleMode = '满足任意', fields = [], writeBackField }) => {
+      const formulaLines = splitTooltipText(formula || '直接展示该指标值');
+      const resolvedEmptyRules = emptyRules.length ? emptyRules : ['无特殊为空条件'];
+      const resolvedFields = fields.length ? fields : [{ label: '字段', field: '无' }];
+      return React.createElement('div', {
+        style: {
+          width: '440px',
+          maxWidth: 'calc(100vw - 56px)',
+          color: 'inherit',
+          WebkitFontSmoothing: 'antialiased',
+        },
       },
-    },
-      React.createElement('div', { style: { fontWeight: 700, marginBottom: '6px' } }, title),
-      React.createElement('div', { style: { marginBottom: '6px' } }, formula || '直接展示该指标值'),
-      React.createElement('div', { style: { marginBottom: '2px' } }, `为空情况（${emptyRuleMode}）：`),
-      React.createElement('ul', { style: { margin: '0 0 10px 18px', padding: 0 } },
-        (emptyRules.length ? emptyRules : ['无特殊为空条件']).map((rule, idx) =>
-          React.createElement('li', { key: `empty_${idx}` }, rule)
-        )
-      ),
-      IS_ADMIN && React.createElement(React.Fragment, null,
-        React.createElement('hr', { style: { border: 0, borderTop: '1px solid rgba(255,255,255,0.22)', margin: '8px 0' } }),
-        React.createElement('div', { style: { fontSize: '12px', opacity: 0.75, lineHeight: 1.55 } },
-          React.createElement('div', { style: { fontWeight: 700, marginBottom: '4px' } }, '🔧 字段说明（开发用）'),
-          (fields.length ? fields : [{ label: '字段', field: '无' }]).map((item, idx) => React.createElement('div', { key: `field_${idx}` },
-            React.createElement('span', null, `${item.label}：`),
-            React.createElement('code', { style: { fontFamily: 'monospace', whiteSpace: 'normal', wordBreak: 'break-all' } }, item.field)
-          )),
-          React.createElement('div', { style: { marginTop: '4px' } },
-            React.createElement('span', null, '写回字段：'),
-            React.createElement('code', { style: { fontFamily: 'monospace', whiteSpace: 'normal', wordBreak: 'break-all' } }, writeBackField || '无')
+        React.createElement('div', {
+          style: {
+            paddingBottom: '9px',
+            borderBottom: '1px solid rgba(255,255,255,0.2)',
+            color: '#fff',
+            fontSize: '14px',
+            fontWeight: 800,
+            lineHeight: 1.45,
+            textWrap: 'balance',
+          },
+        }, title),
+        React.createElement('div', { style: { paddingTop: '10px' } },
+          React.createElement('div', { style: tooltipSectionTitleStyle }, '取值与计算规则'),
+          React.createElement('div', { style: { display: 'grid', gap: '4px' } },
+            formulaLines.map((line, idx) => React.createElement('div', {
+              key: `formula_${idx}`,
+              style: tooltipBodyStyle,
+            }, line))
+          )
+        ),
+        React.createElement('div', {
+          style: {
+            marginTop: '10px',
+            padding: '8px 10px',
+            borderRadius: '6px',
+            background: 'rgba(255,255,255,0.08)',
+          },
+        },
+          React.createElement('div', { style: { ...tooltipSectionTitleStyle, color: '#ffd591' } }, `为空情况（${emptyRuleMode}）`),
+          React.createElement('ul', {
+            style: {
+              ...tooltipBodyStyle,
+              margin: '0 0 0 18px',
+              padding: 0,
+            },
+          },
+            resolvedEmptyRules.map((rule, idx) => React.createElement('li', {
+              key: `empty_${idx}`,
+              style: { marginTop: idx === 0 ? 0 : '3px', paddingLeft: '2px' },
+            }, rule))
+          )
+        ),
+        IS_ADMIN && React.createElement('div', {
+          style: {
+            marginTop: '10px',
+            paddingTop: '9px',
+            borderTop: '1px solid rgba(255,255,255,0.2)',
+            color: 'rgba(255,255,255,0.72)',
+            fontSize: '12px',
+            lineHeight: 1.65,
+          },
+        },
+          React.createElement('div', { style: { ...tooltipSectionTitleStyle, color: '#b7eb8f' } }, '🔧 字段说明（开发用）'),
+          React.createElement('div', { style: { display: 'grid', gap: '5px' } },
+            ...resolvedFields.map((item, idx) => React.createElement('div', {
+              key: `field_${idx}`,
+              style: { display: 'grid', gridTemplateColumns: '92px minmax(0, 1fr)', gap: '7px', alignItems: 'start' },
+            },
+              React.createElement('span', { style: { color: 'rgba(255,255,255,0.62)' } }, item.label),
+              React.createElement('code', {
+                style: {
+                  padding: '1px 5px',
+                  borderRadius: '4px',
+                  background: 'rgba(255,255,255,0.08)',
+                  color: 'rgba(255,255,255,0.9)',
+                  fontFamily: 'monospace',
+                  whiteSpace: 'normal',
+                  wordBreak: 'break-all',
+                },
+              }, item.field)
+            )),
+            React.createElement('div', {
+              style: { display: 'grid', gridTemplateColumns: '92px minmax(0, 1fr)', gap: '7px', alignItems: 'start' },
+            },
+              React.createElement('span', { style: { color: 'rgba(255,255,255,0.62)' } }, '写回字段'),
+              React.createElement('code', {
+                style: {
+                  padding: '1px 5px',
+                  borderRadius: '4px',
+                  background: 'rgba(255,255,255,0.08)',
+                  color: 'rgba(255,255,255,0.9)',
+                  fontFamily: 'monospace',
+                  whiteSpace: 'normal',
+                  wordBreak: 'break-all',
+                },
+              }, writeBackField || '无')
+            )
           )
         )
-      )
-    );
+      );
+    };
     const renderHeaderLabel = (label, tooltipData, style = {}) => React.createElement(Tooltip, {
       title: tooltipData ? renderTooltip(tooltipData) : label,
       placement: 'top',
-      overlayStyle: { maxWidth: '360px' },
+      overlayStyle: { maxWidth: '480px' },
+      overlayInnerStyle: { padding: '12px 14px', borderRadius: '8px' },
       mouseEnterDelay: 0.15,
     }, React.createElement('span', {
       onClick: tooltipData ? (e) => e.stopPropagation() : undefined,
