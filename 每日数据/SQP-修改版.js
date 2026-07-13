@@ -4952,12 +4952,6 @@
       return text;
     }, []);
 
-    const canPastePlainTextAsSingleValue = useCallback((col) => {
-      if (!col || !isCellEditable(col)) return false;
-      if (RATE_FIELDS.has(col.field) || MONEY_FIELDS.has(col.field) || NUM_FIELDS.has(col.field) || DATE_FIELDS.has(col.field)) return false;
-      return true;
-    }, [isCellEditable]);
-
     const buildUpdatePatch = useCallback((row, col, valueToSave) => {
       const updateConfig = SRC_UPDATE_CONFIG[col.src];
       if (!updateConfig) return null;
@@ -5206,28 +5200,7 @@
       e.preventDefault();
 
       const normalizedText = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-      const selectedCol = visibleCols[rect.c1];
-      const selectedRow = data[rect.r1];
-      const hasPlainMultilineText =
-        !normalizedText.includes('\t') &&
-        normalizedText.replace(/\n+$/g, '').includes('\n');
-      if (
-        hasPlainMultilineText &&
-        selectedCol &&
-        selectedRow &&
-        !canPastePlainTextAsSingleValue(selectedCol)
-      ) {
-        ctx.message.warning('当前字段不支持粘贴多行文本，已取消粘贴');
-        return;
-      }
-      const isPlainTextCellPaste =
-        selectedCol &&
-        selectedRow &&
-        canPastePlainTextAsSingleValue(selectedCol) &&
-        !normalizedText.includes('\t');
-      const matrix = isPlainTextCellPaste
-        ? [[normalizedText]]
-        : normalizedText.split('\n').map((line) => line.split('\t'));
+      const matrix = normalizedText.split('\n').map((line) => line.split('\t'));
       while (matrix.length && matrix[matrix.length - 1].length === 1 && matrix[matrix.length - 1][0] === '') matrix.pop();
       if (!matrix.length) return;
 
@@ -5245,7 +5218,6 @@
           const cellText = isSingleValuePaste ? matrix[0][0] : line[cc];
           const row = data[rect.r1 + rr];
           const col = visibleCols[rect.c1 + cc];
-          if (isPlainTextCellPaste && col && !canPastePlainTextAsSingleValue(col)) continue;
           if (!row || !col || !isCellEditable(col)) continue;
           const rowId = getMainWeekKey(row);
           const valueToSave = parsePastedValue(col, cellText);
@@ -5301,7 +5273,7 @@
       } finally {
         setSaving(false);
       }
-    }, [buildUndoItem, buildUpdatePatch, canPastePlainTextAsSingleValue, editingCell, finishFormulaProgress, isCellEditable, normalizeSelection, data, parsePastedValue, pushUndoEntry, resetFormulaProgress, saving, selectedRange, showFormulaProgress, visibleCols]);
+    }, [buildUndoItem, buildUpdatePatch, editingCell, finishFormulaProgress, isCellEditable, normalizeSelection, data, parsePastedValue, pushUndoEntry, resetFormulaProgress, saving, selectedRange, showFormulaProgress, visibleCols]);
 
     const handleDeleteSelectedCells = useCallback(async (e) => {
       const isUndo = (e.ctrlKey || e.metaKey) && String(e.key || '').toLowerCase() === 'z' && !e.shiftKey && !e.altKey;

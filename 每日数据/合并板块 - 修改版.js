@@ -6584,9 +6584,7 @@
     };
 
     const canPastePlainTextAsSingleValue = (col) => {
-      if (!supportsRichEdit(col)) return false;
-      if (col?._dynamicKind) return true;
-      return isCellEditable(col);
+      return shouldUseRichEdit(col, isCellEditable(col));
     };
 
     async function findCompetitorDailyRecord(rowId, competitorId) {
@@ -6776,19 +6774,6 @@
       const normalizedText = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
       const selectedCol = visibleCols[rect.c1];
       const selectedRow = pagedData[rect.r1];
-      const hasPlainMultilineText =
-        !normalizedText.includes('\t') &&
-        normalizedText.replace(/\n+$/g, '').includes('\n');
-      if (
-        hasPlainMultilineText &&
-        selectedCol &&
-        selectedRow &&
-        selectedRow.__rowType !== WEEKLY_SUMMARY_ROW_TYPE &&
-        !canPastePlainTextAsSingleValue(selectedCol)
-      ) {
-        ctx.message.warning('当前字段不支持粘贴多行文本，已取消粘贴');
-        return;
-      }
       const isPlainTextCellPaste =
         selectedCol &&
         selectedRow &&

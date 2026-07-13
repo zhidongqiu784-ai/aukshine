@@ -5508,13 +5508,8 @@
     const canPastePlainTextSlotAsSingleValue = useCallback((slot) => {
       const col = slot?.col;
       if (!slot || !col) return false;
-      if (slot.type === 'keyword') return slot.sub?.type === 'text' || slot.sub?.type === 'textarea';
-      if (slot.type === 'rich' || isActualKeywordPosColumn(col)) return true;
-      if (!isCellEditable(col)) return false;
-      if (col.field === 'promo_day') return false;
-      if (RATE_FIELDS.has(col.field) || MONEY_FIELDS.has(col.field) || NUM_FIELDS.has(col.field) || DATE_FIELDS.has(col.field)) return false;
-      return true;
-    }, [isCellEditable]);
+      return slot.type === 'rich' || isActualKeywordPosColumn(col);
+    }, []);
 
     const getKeywordClipboardValue = useCallback((col, row, sub) => {
       const value = row?.[col.field]?.daily?.[sub.key];
@@ -5792,17 +5787,6 @@
         (!rect.startSubKey || (slot.type === 'keyword' && slot.sub.key === rect.startSubKey))
       ));
       const startSlot = startSlotIndex >= 0 ? allSlots[startSlotIndex] : null;
-      const hasPlainMultilineText =
-        !normalizedText.includes('\t') &&
-        normalizedText.replace(/\n+$/g, '').includes('\n');
-      if (
-        hasPlainMultilineText &&
-        startSlot &&
-        !canPastePlainTextSlotAsSingleValue(startSlot)
-      ) {
-        ctx.message.warning('当前字段不支持粘贴多行文本，已取消粘贴');
-        return;
-      }
       const isPlainTextCellPaste =
         !normalizedText.includes('\t') &&
         startSlot &&
