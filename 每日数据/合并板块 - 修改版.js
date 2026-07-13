@@ -1,6 +1,6 @@
 ﻿async function run() {
   const React = ctx.libs.React;
-  const { useState, useRef, useMemo, useCallback, useEffect } = React;
+  const { useState, useRef, useMemo, useCallback, useEffect, useSyncExternalStore } = React;
   const { Pagination, Input, InputNumber, Select, DatePicker, Drawer, Table, Button, Popconfirm, ConfigProvider, Tooltip, Modal } = ctx.libs.antd;
 
   const currentUserId    = await ctx.getVar('ctx.user.id') || null;
@@ -2452,8 +2452,10 @@
     return String(v);
   };
 
-  const renderCellDisplay = (col, row) => {
-    const displayContent = formatCell(col, row);
+  const renderCellDisplay = (col, row, cachedDisplayContent) => {
+    const displayContent = cachedDisplayContent === undefined
+      ? formatCell(col, row)
+      : cachedDisplayContent;
     const formulaMissingHint = getFormulaMissingHint(col, row);
     if (formulaMissingHint) return formulaMissingHint;
     const flashSaleMissingMessage = getFlashSaleMissingMessage(col, row);
@@ -2517,6 +2519,94 @@
     }, [open]);
     return pos;
   };
+
+  const useExternalSelection = typeof useSyncExternalStore === 'function'
+    ? useSyncExternalStore
+    : function useExternalSelectionFallback(subscribe, getSnapshot) {
+      const [snapshot, setSnapshot] = useState(getSnapshot);
+      useEffect(() => subscribe(() => setSnapshot(getSnapshot())), [subscribe, getSnapshot]);
+      return snapshot;
+    };
+
+  const createSelectionStore = () => {
+    let range = null;
+    let rect = null;
+    const entries = new Map();
+    const normalize = (value) => {
+      if (!value) return null;
+      return {
+        r1: Math.min(value.start.r, value.end.r),
+        r2: Math.max(value.start.r, value.end.r),
+        c1: Math.min(value.start.c, value.end.c),
+        c2: Math.max(value.start.c, value.end.c),
+      };
+    };
+    const contains = (rect, r, c) => !!rect
+      && r >= rect.r1
+      && r <= rect.r2
+      && c >= rect.c1
+      && c <= rect.c2;
+    const isSameRange = (left, right) => {
+      if (left === right) return true;
+      if (!left || !right) return false;
+      return left.start.r === right.start.r
+        && left.start.c === right.start.c
+        && left.end.r === right.end.r
+        && left.end.c === right.end.c;
+    };
+    return {
+      subscribe(r, c, listener) {
+        const key = `${r}:${c}`;
+        let entry = entries.get(key);
+        if (!entry) {
+          entry = { r, c, listeners: new Set() };
+          entries.set(key, entry);
+        }
+        entry.listeners.add(listener);
+        return () => {
+          entry.listeners.delete(listener);
+          if (!entry.listeners.size) entries.delete(key);
+        };
+      },
+      isSelected(r, c) {
+        return contains(rect, r, c);
+      },
+      setRange(nextRange) {
+        if (isSameRange(range, nextRange)) return;
+        const previousRect = rect;
+        const nextRect = normalize(nextRange);
+        range = nextRange;
+        rect = nextRect;
+        entries.forEach((entry) => {
+          if (contains(previousRect, entry.r, entry.c) === contains(nextRect, entry.r, entry.c)) return;
+          entry.listeners.forEach((listener) => listener());
+        });
+      },
+    };
+  };
+
+  const SelectionOverlay = React.memo(({ store, rowIndex, columnIndex }) => {
+    const subscribe = useCallback(
+      (listener) => store.subscribe(rowIndex, columnIndex, listener),
+      [columnIndex, rowIndex, store]
+    );
+    const getSnapshot = useCallback(
+      () => store.isSelected(rowIndex, columnIndex),
+      [columnIndex, rowIndex, store]
+    );
+    const selected = useExternalSelection(subscribe, getSnapshot, () => false);
+    if (!selected) return null;
+    return React.createElement('span', {
+      'aria-hidden': true,
+      style: {
+        position: 'absolute',
+        inset: 0,
+        zIndex: 3,
+        pointerEvents: 'none',
+        boxShadow: 'inset 0 0 0 2px #1677ff',
+      },
+    });
+  });
 
   // 推送配置面板
   // 推送配置面板
@@ -3005,6 +3095,10 @@
     const backgroundMergeSummaryRef = useRef({ timer: null, running: false, pendingForce: false });
     const currentPageMergeSummaryRef = useRef({ timer: null, running: false, pendingKeys: new Set() });
     const selectingRef = useRef(false);
+    const selectionDraftRef = useRef(null);
+    const selectionStoreRef = useRef(null);
+    if (!selectionStoreRef.current) selectionStoreRef.current = createSelectionStore();
+    const selectionStore = selectionStoreRef.current;
     const undoStackRef = useRef([]);
     const columnHighlightTimerRef = useRef(null);
     const columnViewSwitchSeqRef = useRef(0);
@@ -6587,6 +6681,16 @@
       return shouldUseRichEdit(col, isCellEditable(col));
     };
 
+    const cellDisplayCache = useMemo(() => pagedData.map((row) =>
+      visibleCols.map((col) => {
+        const displayContent = formatCell(col, row);
+        return {
+          displayContent,
+          renderedContent: renderCellDisplay(col, row, displayContent),
+        };
+      })
+    ), [pagedData, visibleCols]);
+
     async function findCompetitorDailyRecord(rowId, competitorId) {
       if (!rowId || !competitorId) return null;
       const res = await ctx.request({
@@ -6653,10 +6757,18 @@
       return { r1, r2, c1, c2 };
     }, []);
 
+    const selectionRect = useMemo(
+      () => normalizeSelection(selectedRange),
+      [normalizeSelection, selectedRange]
+    );
+
     const isCellSelected = useCallback((r, c) => {
-      const rect = normalizeSelection(selectedRange);
-      return !!rect && r >= rect.r1 && r <= rect.r2 && c >= rect.c1 && c <= rect.c2;
-    }, [normalizeSelection, selectedRange]);
+      return !!selectionRect
+        && r >= selectionRect.r1
+        && r <= selectionRect.r2
+        && c >= selectionRect.c1
+        && c <= selectionRect.c2;
+    }, [selectionRect]);
 
     const isActiveCrossCell = useCallback((r, c) => {
       if (!crossHighlightEnabled || !activeCell) return false;
@@ -6725,26 +6837,50 @@
       const closestEl = e.target?.closest?.('.ant-picker, .ant-select, .ant-input-number');
       if (['input', 'textarea', 'select', 'button'].includes(tag) || closestEl) return;
 
+      const nextRange = { start: { r, c }, end: { r, c } };
       selectingRef.current = true;
+      selectionDraftRef.current = nextRange;
+      selectionStore.setRange(nextRange);
       setActiveCell({ r, c });
-      setSelectedRange({ start: { r, c }, end: { r, c } });
+      setSelectedRange(nextRange);
       setSelectionInputValue('');
       focusClipboardWithoutScroll();
       e.preventDefault();
-    }, [editingCell, isResizing, focusClipboardWithoutScroll]);
+    }, [editingCell, focusClipboardWithoutScroll, isResizing, selectionStore]);
+
+    const commitSelectionDraft = useCallback(() => {
+      const draft = selectionDraftRef.current;
+      if (draft) {
+        selectionStore.setRange(draft);
+        setSelectedRange((prev) => {
+          if (prev
+            && prev.start.r === draft.start.r
+            && prev.start.c === draft.start.c
+            && prev.end.r === draft.end.r
+            && prev.end.c === draft.end.c) return prev;
+          return draft;
+        });
+      }
+    }, [selectionStore]);
 
     const handleCellMouseEnter = useCallback((e, r, c) => {
       if (!selectingRef.current) return;
       if (e && typeof e.buttons === 'number' && (e.buttons & 1) !== 1) {
         selectingRef.current = false;
+        commitSelectionDraft();
         return;
       }
-      setSelectedRange((prev) => prev ? { ...prev, end: { r, c } } : prev);
-    }, []);
+      const draft = selectionDraftRef.current;
+      if (!draft || (draft.end.r === r && draft.end.c === c)) return;
+      const nextRange = { ...draft, end: { r, c } };
+      selectionDraftRef.current = nextRange;
+      selectionStore.setRange(nextRange);
+    }, [commitSelectionDraft, selectionStore]);
 
     const stopSelecting = useCallback(() => {
       selectingRef.current = false;
-    }, []);
+      commitSelectionDraft();
+    }, [commitSelectionDraft]);
 
     const handleCopy = useCallback((e) => {
       if (!isTableClipboardEvent(e)) return;
@@ -7451,6 +7587,8 @@
     const startEdit = useCallback((rowId, col, currentValue) => {
       if (saving) return;
       selectingRef.current = false;
+      selectionDraftRef.current = null;
+      selectionStore.setRange(null);
       setSelectedRange(null);
       setSelectionInputValue('');
       setEditingCell({ rowId, colKey: col.key, field: col.field, src: col.src });
@@ -7464,7 +7602,7 @@
       else if (col.field === 'order_structure_diagnostic') setEditValue(currentValue || '');
       else if (RATE_FIELDS.has(col.field)) setEditValue(currentValue != null && currentValue !== '' ? Number(currentValue) * 100 : '');
       else setEditValue(currentValue != null && currentValue !== '' ? currentValue : '');
-    }, [saving]);
+    }, [saving, selectionStore]);
 
     const cancelEdit = useCallback(() => { setEditingCell(null); setEditValue(null); }, []);
 
@@ -9111,7 +9249,7 @@
                     const rowId = row.country_asin_date || row.country_asin_week_range || row.id;
                     const isSummaryRow = row.__rowType === WEEKLY_SUMMARY_ROW_TYPE;
                     return React.createElement('tr', { key: rowId || rIdx, style: { background: isSummaryRow ? WEEKLY_SUMMARY_BG : (rIdx % 2 === 0 ? '#fff' : '#fafafa') } },
-                      visibleCols.map((col) => {
+                      visibleCols.map((col, cIdx) => {
                         const isPinned  = col.pinned;
                         const leftOff   = isPinned ? pinnedLeftMap[col.key] : undefined;
                         const dynFn     = DYNAMIC_COLOR[col.field] || DYNAMIC_COLOR[col.key];
@@ -9119,7 +9257,6 @@
                         const isNum     = ALL_NUMERIC.has(col.field) || col.field === 'promo_day';
                         const canEdit   = !isSummaryRow && isCellEditable(col);
                         const isEditing = editingCell && editingCell.rowId === rowId && editingCell.colKey === col.key;
-                        const cIdx      = visibleCols.findIndex((c) => c.key === col.key);
                         const selected  = isCellSelected(rIdx, cIdx);
                         const isSelectionInputCell = selectionInputValue !== '' && selected && canEdit;
                         const isHighlighted = highlightColumnKey === col.key;
@@ -9144,6 +9281,8 @@
                             e.preventDefault();
                             e.stopPropagation();
                             selectingRef.current = false;
+                            selectionDraftRef.current = null;
+                            selectionStore.setRange(null);
                             setSelectedRange(null);
                             setSelectionInputValue('');
                             const rect = e.currentTarget.getBoundingClientRect();
@@ -9167,7 +9306,7 @@
                             onDoubleClickCapture: openRichEditorFromCell,
                             onMouseEnter: (e) => handleCellMouseEnter(e, rIdx, cIdx),
                             style: {
-                              position: isPinned ? 'sticky' : undefined,
+                              position: isPinned ? 'sticky' : 'relative',
                               left: isPinned ? `${leftOff}px` : undefined,
                               zIndex: isPinned ? 1 : undefined,
                               background: cellBackground,
@@ -9180,19 +9319,31 @@
                               userSelect: 'none',
                               boxShadow: selected ? 'inset 0 0 0 2px #1677ff' : (isHighlighted ? 'inset 0 0 0 2px #faad14' : (isPinned ? '1px 0 0 rgba(0,0,0,0.05)' : undefined)),
                             },
-                          }, React.createElement(RichTextImageCell, {
-                            value: richValue,
-                            onSave: saveRich,
-                            placeholder: '+',
-                            cellKey: richCellKey,
-                            openSignal: richEditOpenSignal,
-                            cellBackground,
-                            onAfterSaveExit: focusClipboardWithoutScroll,
-                          }));
+                          },
+                            React.createElement(RichTextImageCell, {
+                              value: richValue,
+                              onSave: saveRich,
+                              placeholder: '+',
+                              cellKey: richCellKey,
+                              openSignal: richEditOpenSignal,
+                              cellBackground,
+                              onAfterSaveExit: focusClipboardWithoutScroll,
+                            }),
+                            React.createElement(SelectionOverlay, {
+                              store: selectionStore,
+                              rowIndex: rIdx,
+                              columnIndex: cIdx,
+                            })
+                          );
                         }
 
-                        const displayContent = isSelectionInputCell ? selectionInputValue : formatCell(col, row);
-                        const renderedContent = isSelectionInputCell ? selectionInputValue : renderCellDisplay(col, row);
+                        const cachedCellDisplay = cellDisplayCache[rIdx]?.[cIdx];
+                        const displayContent = isSelectionInputCell
+                          ? selectionInputValue
+                          : cachedCellDisplay?.displayContent;
+                        const renderedContent = isSelectionInputCell
+                          ? selectionInputValue
+                          : cachedCellDisplay?.renderedContent;
 
                         return React.createElement('td', {
                           key: col.key,
@@ -9201,7 +9352,7 @@
                           onMouseDown: (e) => handleCellMouseDown(e, rIdx, cIdx),
                           onDoubleClick: () => { if (canEdit && !isEditing) startEdit(rowId, col, getCellValue(col, row)); },
                           style: {
-                            position: isPinned ? 'sticky' : undefined,
+                            position: isPinned ? 'sticky' : 'relative',
                             left: isPinned ? `${leftOff}px` : undefined,
                             zIndex: isPinned ? 1 : undefined,
                             background: cellBackground,
@@ -9228,7 +9379,14 @@
                             if (canEdit && !isEditing) e.currentTarget.style.outline = '1px dashed #1890ff';
                           },
                           onMouseLeave: canEdit && !isEditing ? (e) => { e.currentTarget.style.outline = '1px dashed transparent'; } : undefined,
-                        }, isEditing ? renderEditInput(col) : renderedContent);
+                        },
+                          isEditing ? renderEditInput(col) : renderedContent,
+                          React.createElement(SelectionOverlay, {
+                            store: selectionStore,
+                            rowIndex: rIdx,
+                            columnIndex: cIdx,
+                          })
+                        );
                       })
                     );
                   })
