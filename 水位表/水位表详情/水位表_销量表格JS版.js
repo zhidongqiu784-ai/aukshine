@@ -142,10 +142,19 @@ async function run() {
     '黑五网一(专享)': { bg: '#fce7f3', border: '#f472b6', text: '#9d174d' },
     woot: { bg: '#eef2ff', border: '#c7d2fe', text: '#3730a3' },
     旺季: { bg: '#f5f3ff', border: '#c4b5fd', text: '#6d28d9' },
+    大旺季: { bg: '#fff1f2', border: '#fda4af', text: '#be123c' },
+    '2026世界杯': { bg: '#fffbeb', border: '#fcd34d', text: '#92400e' },
   };
 
   function getTypeStyle(type) {
-    return TYPE_STYLES[type] || { bg: '#f8fafc', border: '#e2e8f0', text: '#475467' };
+    return TYPE_STYLES[type] || { bg: '#eef2ff', border: '#c7d2fe', text: '#4338ca' };
+  }
+
+  function splitDailyTypes(value) {
+    return String(value || '')
+      .split('、')
+      .map((item) => item.trim())
+      .filter(Boolean);
   }
 
   const FUTURE_COLUMNS = [
@@ -397,25 +406,34 @@ async function run() {
     }
     if (field === 'type') {
       if (!value) return '';
-      const style = getTypeStyle(value);
+      const types = splitDailyTypes(value);
       return React.createElement('span', {
         style: {
           display: 'inline-flex',
           alignItems: 'center',
-          maxWidth: '100%',
-          padding: '1px 7px',
-          borderRadius: 4,
-          border: `1px solid ${style.border}`,
-          background: style.bg,
-          color: style.text,
-          fontWeight: 600,
-          fontSize: 12,
-          lineHeight: 1.6,
+          flexWrap: 'nowrap',
+          gap: 4,
           whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
         },
-      }, String(value));
+      }, types.map((type) => {
+        const style = getTypeStyle(type);
+        return React.createElement('span', {
+          key: type,
+          style: {
+            display: 'inline-flex',
+            alignItems: 'center',
+            padding: '1px 7px',
+            borderRadius: 4,
+            border: `1px solid ${style.border}`,
+            background: style.bg,
+            color: style.text,
+            fontWeight: 600,
+            fontSize: 12,
+            lineHeight: 1.6,
+            whiteSpace: 'nowrap',
+          },
+        }, type);
+      }));
     }
     if (
       field.includes('sales')
@@ -475,15 +493,6 @@ async function run() {
 
   function estimateTextWidth(text, fontSize = FONT_SIZE) {
     if (text == null) return 0;
-    if (typeof document !== 'undefined') {
-      const canvas = estimateTextWidth._canvas || document.createElement('canvas');
-      estimateTextWidth._canvas = canvas;
-      const context = canvas.getContext?.('2d');
-      if (context) {
-        context.font = `${fontSize}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
-        return Math.ceil(context.measureText(String(text)).width);
-      }
-    }
     let width = 0;
     String(text).split('').forEach((char) => {
       if (/[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]/.test(char)) width += 1.05;
@@ -494,10 +503,18 @@ async function run() {
     return Math.ceil(width * fontSize);
   }
 
+  function estimateTypeCellWidth(value) {
+    const types = splitDailyTypes(value);
+    if (!types.length) return 0;
+    const tagsWidth = types.reduce((sum, type) => sum + estimateTextWidth(type, FONT_SIZE) + 16, 0);
+    const gapsWidth = Math.max(0, types.length - 1) * 4;
+    return tagsWidth + gapsWidth + 14;
+  }
+
   function getAutoWidthBounds(col) {
     const field = col.field;
     if (field === 'date') return { min: 108, max: 150 };
-    if (field === 'type') return { min: 58, max: 150 };
+    if (field === 'type') return { min: 58, max: 220 };
     if (field === 'shop' || field === 'sales_store') return { min: 50, max: 180 };
     if (field === 'model') return { min: 58, max: 200 };
     if (field === 'asin') return { min: 104, max: 180 };
@@ -951,7 +968,8 @@ async function run() {
         skippedStats.missingSaleMaybeSales += 1;
         continue;
       }
-      if (!salesStoreRaw) {
+      const saleValue = parseInt(saleMaybeSalesRaw, 10) || 0;
+      if (!salesStoreRaw && saleValue !== 0) {
         skippedStats.missingSalesStore += 1;
         continue;
       }
@@ -960,19 +978,22 @@ async function run() {
         continue;
       }
 
-      const saleValue = parseInt(saleMaybeSalesRaw, 10) || 0;
       const comboKey = `${countryRaw}_${asinRaw}_${dateKey}`;
-      if (!mainStoreMap[comboKey]) mainStoreMap[comboKey] = salesStoreRaw;
+      if (!Object.prototype.hasOwnProperty.call(mainStoreMap, comboKey)) {
+        mainStoreMap[comboKey] = salesStoreRaw;
+      }
 
       updatesHeji.push({
         shop_country_asin_date: `${TOTAL_SHOP_NAME}_${countryRaw}_${asinRaw}_${dateKey}`,
-        sales_store: salesStoreRaw,
+        sales_store: salesStoreRaw || null,
         sale_maybe_sales: saleValue,
       });
-      updatesSalesStore.push({
-        shop_country_asin_date: `${salesStoreRaw}_${countryRaw}_${asinRaw}_${dateKey}`,
-        sale_maybe_sales: saleValue,
-      });
+      if (salesStoreRaw) {
+        updatesSalesStore.push({
+          shop_country_asin_date: `${salesStoreRaw}_${countryRaw}_${asinRaw}_${dateKey}`,
+          sale_maybe_sales: saleValue,
+        });
+      }
     }
 
     if (!updatesHeji.length) {
@@ -1177,8 +1198,10 @@ async function run() {
       const headerWidth = estimateTextWidth(headerText, FONT_SIZE) + headerPadding;
       const contentWidth = (sampleRows || []).reduce((max, row) => {
         const text = getAutoWidthText(col.field, row?.[col.field]);
-        const extra = col.field === 'type' ? 18 : cellPadding;
-        return Math.max(max, estimateTextWidth(text, FONT_SIZE) + extra);
+        const width = col.field === 'type'
+          ? estimateTypeCellWidth(row?.[col.field])
+          : estimateTextWidth(text, FONT_SIZE) + cellPadding;
+        return Math.max(max, width);
       }, 0);
       return { ...col, width: clampWidth(Math.ceil(Math.max(headerWidth, contentWidth)), bounds) };
     }), []);
@@ -1243,6 +1266,25 @@ async function run() {
       setColumnDefs(normalizeColumnDefs(columns));
     }, [columns, mode]);
 
+    const typeColumnWidth = useMemo(() => {
+      const headerPadding = IS_ADMIN ? 28 : 18;
+      const headerWidth = estimateTextWidth(FIELD_TITLES.type, FONT_SIZE) + headerPadding;
+      const contentWidth = rows.reduce(
+        (max, row) => Math.max(max, estimateTypeCellWidth(row?.type)),
+        0,
+      );
+      return clampWidth(Math.ceil(Math.max(headerWidth, contentWidth)), { min: 72, max: 220 });
+    }, [rows]);
+
+    useEffect(() => {
+      if (!rows.length) return;
+      updateColumns((prev) => prev.map((col) => (
+        col.field === 'type' && !manuallyResizedRef.current.has(col.key)
+          ? { ...col, width: typeColumnWidth }
+          : col
+      )));
+    }, [rows, typeColumnWidth, updateColumns]);
+
     const onResizeStart = useCallback((event, key) => {
       event.preventDefault();
       event.stopPropagation();
@@ -1278,7 +1320,10 @@ async function run() {
       return visible.length ? visible : columnDefs;
     }, [columnDefs]);
 
-    const scrollX = useMemo(() => visibleColumnDefs.reduce((sum, col) => sum + (col.width || 100), 0), [visibleColumnDefs]);
+    const scrollX = useMemo(
+      () => visibleColumnDefs.reduce((sum, col) => sum + (col.width || 100), 0),
+      [visibleColumnDefs],
+    );
     const rowKeyOf = useCallback((row, index) => (
       row.shop_country_asin_date || row.country_asin_date || row.id || `${mode}-${index}`
     ), [mode]);
@@ -1472,7 +1517,7 @@ async function run() {
                     textAlign: col.align || 'left',
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',
-                    textOverflow: 'ellipsis',
+                    textOverflow: col.field === 'type' ? 'clip' : 'ellipsis',
                     boxSizing: 'border-box',
                   },
                   title: typeof row[col.field] === 'object' ? '' : String(row[col.field] ?? ''),

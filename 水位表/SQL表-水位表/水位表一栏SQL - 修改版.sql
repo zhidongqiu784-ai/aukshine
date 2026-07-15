@@ -136,21 +136,7 @@ shop_pivot AS (
     SELECT
         asin,
         country,
-        MAX(CASE WHEN rn = 1 THEN shop_raw END) as shop1,
-        MAX(CASE WHEN rn = 2 THEN shop_raw END) as shop2,
-        MAX(CASE WHEN rn = 3 THEN shop_raw END) as shop3,
-        MAX(CASE WHEN rn = 4 THEN shop_raw END) as shop4,
-        MAX(CASE WHEN rn = 5 THEN shop_raw END) as shop5,
-        MAX(CASE WHEN rn = 6 THEN shop_raw END) as shop6,
-        MAX(CASE WHEN rn = 7 THEN shop_raw END) as shop7,
-        MAX(CASE WHEN rn = 8 THEN shop_raw END) as shop8,
-        MAX(CASE WHEN rn = 2 THEN shop_display END) as shop_display2,
-        MAX(CASE WHEN rn = 3 THEN shop_display END) as shop_display3,
-        MAX(CASE WHEN rn = 4 THEN shop_display END) as shop_display4,
-        MAX(CASE WHEN rn = 5 THEN shop_display END) as shop_display5,
-        MAX(CASE WHEN rn = 6 THEN shop_display END) as shop_display6,
-        MAX(CASE WHEN rn = 7 THEN shop_display END) as shop_display7,
-        MAX(CASE WHEN rn = 8 THEN shop_display END) as shop_display8
+        MAX(CASE WHEN rn = 1 THEN shop_raw END) as shop1
     FROM shop_data
     WHERE rn <= 20
     GROUP BY asin, country
@@ -163,6 +149,7 @@ inv_calc AS (
     SELECT
         ib.asin,
         ib.country,
+        SUM(COALESCE(ib.afn_fulfillable_quantity, 0)) as afn_fulfillable_quantity,
         SUM(COALESCE(ib.afn_fulfillable_quantity, 0) + COALESCE(ib.reserved_fc_transfers, 0)) as real_inventory
     FROM inventory_base ib
              INNER JOIN base_keys bk ON ib.asin = bk.asin AND ib.country = bk.country
@@ -184,11 +171,19 @@ stockout_lookup AS (
 cycle_param AS (
     SELECT
         site,
-        cycle_days_new_off_min,
-        cycle_days_new_peak_min,
-        cycle_days_old_off_min,
-        cycle_days_old_peak_min
+        cycle_days_off_min,
+        cycle_days_peak_min
     FROM v3_cfg_cycle_param
+),
+product_label_cfg_dedup AS (
+    SELECT
+        country,
+        model,
+        MAX(label) AS label
+    FROM product_label_cfg
+    WHERE label IS NOT NULL
+      AND TRIM(label) <> ''
+    GROUP BY country, model
 )
 
 -- ====================================================================
@@ -199,13 +194,35 @@ SELECT
     ds.country,
     ds.model,
     COALESCE(inv.real_inventory, 0) as inventory,
+    COALESCE(inv.afn_fulfillable_quantity, 0) as afn_fulfillable_quantity,
     ds.weighted_sales,
     ds.maybe_sales,
     CASE
-        WHEN sl.first_stockout_date IS NULL THEN '大于180天'
-        ELSE DATEDIFF(sl.first_stockout_date, ds.date)
+        WHEN NULLIF(ds.weighted_sales, 0) IS NULL THEN NULL
+        ELSE ROUND(
+                (
+                    COALESCE(otw.real_on_the_way, 0)
+                        + COALESCE(inv.real_inventory, 0)
+                        + COALESCE(ds.quantity_receive, 0)
+                        + COALESCE(ds.overseas_warehouse_test_product, 0)
+                        + COALESCE(ds.overseas_warehouse_new_product, 0)
+                    ) / NULLIF(ds.weighted_sales, 0),
+                0
+             )
         END as days_for_sale,
-    sl.first_stockout_date as expected_stockout_date,
+    DATE_ADD(
+            ds.date,
+            INTERVAL ROUND(
+            (
+                COALESCE(otw.real_on_the_way, 0)
+                    + COALESCE(inv.real_inventory, 0)
+                    + COALESCE(ds.quantity_receive, 0)
+                    + COALESCE(ds.overseas_warehouse_test_product, 0)
+                    + COALESCE(ds.overseas_warehouse_new_product, 0)
+                ) / NULLIF(ds.weighted_sales, 0),
+            0
+            ) DAY
+    ) as expected_stockout_date,
     COALESCE(otw.real_on_the_way, 0) as on_the_way,
     ds.type,
     ds.coefficient,
@@ -214,13 +231,16 @@ SELECT
     ds.quantity_receive,
     ds.days_on_sale,
 
-    CASE
-        WHEN ds.days_on_sale IS NULL THEN NULL
-        WHEN ds.days_on_sale < 90 THEN '新品期'
-        WHEN ds.days_on_sale >= 90 AND ds.days_on_sale < 365 THEN '成长期'
-        WHEN ds.days_on_sale >= 365 THEN '成熟期'
-        ELSE NULL
-        END AS product_label,
+    COALESCE(
+        plc.label,
+        CASE
+            WHEN ds.days_on_sale IS NULL THEN NULL
+            WHEN ds.days_on_sale < 90 THEN '新品期'
+            WHEN ds.days_on_sale >= 90 AND ds.days_on_sale < 365 THEN '成长期'
+            WHEN ds.days_on_sale >= 365 THEN '成熟期'
+            ELSE NULL
+            END
+    ) AS product_label,
 
     ROUND(
             (
@@ -234,13 +254,6 @@ SELECT
     ) as inv_sales_ratio,
 
     sp.shop1,
-    sp.shop2, sp.shop_display2,
-    sp.shop3, sp.shop_display3,
-    sp.shop4, sp.shop_display4,
-    sp.shop5, sp.shop_display5,
-    sp.shop6, sp.shop_display6,
-    sp.shop7, sp.shop_display7,
-    sp.shop8, sp.shop_display8,
     CONCAT(ds.asin, '_', ds.country) as asin_country,
     a.sale_owner as sale_owner,
     u.manager as manager,
@@ -260,73 +273,43 @@ SELECT
     (COALESCE(otw.real_on_the_way, 0) + COALESCE(inv.real_inventory, 0) + COALESCE(ds.quantity_receive, 0) + COALESCE(ds.overseas_warehouse_new_product, 0) + COALESCE(ds.overseas_warehouse_test_product, 0)) as total_instock,
 
     CASE
-        WHEN sl.first_stockout_date IS NULL THEN NULL
-        WHEN ds.days_on_sale < 90 THEN
-            CASE
-                WHEN DATE_FORMAT(sl.first_stockout_date, '%m-%d') BETWEEN '06-10' AND '07-10'
-                    OR DATE_FORMAT(sl.first_stockout_date, '%m-%d') BETWEEN '09-10' AND '10-10'
-                    OR DATE_FORMAT(sl.first_stockout_date, '%m-%d') BETWEEN '11-01' AND '12-15'
-                    THEN cp.cycle_days_new_peak_min
-                ELSE cp.cycle_days_new_off_min
-                END
+        WHEN NULLIF(ds.weighted_sales, 0) IS NULL THEN NULL
         ELSE
             CASE
-                WHEN DATE_FORMAT(sl.first_stockout_date, '%m-%d') BETWEEN '06-10' AND '07-10'
-                    OR DATE_FORMAT(sl.first_stockout_date, '%m-%d') BETWEEN '09-10' AND '10-10'
-                    OR DATE_FORMAT(sl.first_stockout_date, '%m-%d') BETWEEN '11-01' AND '12-15'
-                    THEN cp.cycle_days_old_peak_min
-                ELSE cp.cycle_days_old_off_min
+                WHEN DATE_FORMAT(DATE_ADD(ds.date, INTERVAL ROUND((COALESCE(otw.real_on_the_way, 0) + COALESCE(inv.real_inventory, 0) + COALESCE(ds.quantity_receive, 0) + COALESCE(ds.overseas_warehouse_test_product, 0) + COALESCE(ds.overseas_warehouse_new_product, 0)) / NULLIF(ds.weighted_sales, 0), 0) DAY), '%m-%d') BETWEEN '06-10' AND '07-10'
+                    OR DATE_FORMAT(DATE_ADD(ds.date, INTERVAL ROUND((COALESCE(otw.real_on_the_way, 0) + COALESCE(inv.real_inventory, 0) + COALESCE(ds.quantity_receive, 0) + COALESCE(ds.overseas_warehouse_test_product, 0) + COALESCE(ds.overseas_warehouse_new_product, 0)) / NULLIF(ds.weighted_sales, 0), 0) DAY), '%m-%d') BETWEEN '09-10' AND '10-10'
+                    OR DATE_FORMAT(DATE_ADD(ds.date, INTERVAL ROUND((COALESCE(otw.real_on_the_way, 0) + COALESCE(inv.real_inventory, 0) + COALESCE(ds.quantity_receive, 0) + COALESCE(ds.overseas_warehouse_test_product, 0) + COALESCE(ds.overseas_warehouse_new_product, 0)) / NULLIF(ds.weighted_sales, 0), 0) DAY), '%m-%d') BETWEEN '11-01' AND '12-15'
+                    THEN cp.cycle_days_peak_min
+                ELSE cp.cycle_days_off_min
                 END
         END as stockup_days,
 
     CASE
-        WHEN sl.first_stockout_date IS NULL THEN NULL
+        WHEN NULLIF(ds.weighted_sales, 0) IS NULL THEN NULL
         ELSE ROUND((
             CASE
-                WHEN ds.days_on_sale < 90 THEN
-                    CASE
-                        WHEN DATE_FORMAT(sl.first_stockout_date, '%m-%d') BETWEEN '06-10' AND '07-10'
-                            OR DATE_FORMAT(sl.first_stockout_date, '%m-%d') BETWEEN '09-10' AND '10-10'
-                            OR DATE_FORMAT(sl.first_stockout_date, '%m-%d') BETWEEN '11-01' AND '12-15'
-                            THEN cp.cycle_days_new_peak_min
-                        ELSE cp.cycle_days_new_off_min
-                        END
-                ELSE
-                    CASE
-                        WHEN DATE_FORMAT(sl.first_stockout_date, '%m-%d') BETWEEN '06-10' AND '07-10'
-                            OR DATE_FORMAT(sl.first_stockout_date, '%m-%d') BETWEEN '09-10' AND '10-10'
-                            OR DATE_FORMAT(sl.first_stockout_date, '%m-%d') BETWEEN '11-01' AND '12-15'
-                            THEN cp.cycle_days_old_peak_min
-                        ELSE cp.cycle_days_old_off_min
-                        END
+                WHEN DATE_FORMAT(DATE_ADD(ds.date, INTERVAL ROUND((COALESCE(otw.real_on_the_way, 0) + COALESCE(inv.real_inventory, 0) + COALESCE(ds.quantity_receive, 0) + COALESCE(ds.overseas_warehouse_test_product, 0) + COALESCE(ds.overseas_warehouse_new_product, 0)) / NULLIF(ds.weighted_sales, 0), 0) DAY), '%m-%d') BETWEEN '06-10' AND '07-10'
+                    OR DATE_FORMAT(DATE_ADD(ds.date, INTERVAL ROUND((COALESCE(otw.real_on_the_way, 0) + COALESCE(inv.real_inventory, 0) + COALESCE(ds.quantity_receive, 0) + COALESCE(ds.overseas_warehouse_test_product, 0) + COALESCE(ds.overseas_warehouse_new_product, 0)) / NULLIF(ds.weighted_sales, 0), 0) DAY), '%m-%d') BETWEEN '09-10' AND '10-10'
+                    OR DATE_FORMAT(DATE_ADD(ds.date, INTERVAL ROUND((COALESCE(otw.real_on_the_way, 0) + COALESCE(inv.real_inventory, 0) + COALESCE(ds.quantity_receive, 0) + COALESCE(ds.overseas_warehouse_test_product, 0) + COALESCE(ds.overseas_warehouse_new_product, 0)) / NULLIF(ds.weighted_sales, 0), 0) DAY), '%m-%d') BETWEEN '11-01' AND '12-15'
+                    THEN cp.cycle_days_peak_min
+                ELSE cp.cycle_days_off_min
                 END
                 * COALESCE(ds.weighted_sales, 0)
-            - (COALESCE(otw.real_on_the_way, 0) + COALESCE(inv.real_inventory, 0) + COALESCE(ds.quantity_receive, 0) + COALESCE(ds.overseas_warehouse_new_product, 0) + COALESCE(ds.overseas_warehouse_test_product, 0))
+            - ((COALESCE(otw.real_on_the_way, 0) + COALESCE(inv.real_inventory, 0) + COALESCE(ds.quantity_receive, 0) + COALESCE(ds.overseas_warehouse_new_product, 0) + COALESCE(ds.overseas_warehouse_test_product, 0)) + COALESCE(ds.quantity_receive, 0))
         ), 0)
         END as order_quantity,
 
     CASE
-        WHEN sl.first_stockout_date IS NULL THEN NULL
+        WHEN NULLIF(ds.weighted_sales, 0) IS NULL THEN NULL
         ELSE DATE_SUB(
-                sl.first_stockout_date,
+                DATE_ADD(ds.date, INTERVAL ROUND((COALESCE(otw.real_on_the_way, 0) + COALESCE(inv.real_inventory, 0) + COALESCE(ds.quantity_receive, 0) + COALESCE(ds.overseas_warehouse_test_product, 0) + COALESCE(ds.overseas_warehouse_new_product, 0)) / NULLIF(ds.weighted_sales, 0), 0) DAY),
                 INTERVAL (
                     CASE
-                        WHEN ds.days_on_sale < 90 THEN
-                            CASE
-                                WHEN DATE_FORMAT(sl.first_stockout_date, '%m-%d') BETWEEN '06-10' AND '07-10'
-                                    OR DATE_FORMAT(sl.first_stockout_date, '%m-%d') BETWEEN '09-10' AND '10-10'
-                                    OR DATE_FORMAT(sl.first_stockout_date, '%m-%d') BETWEEN '11-01' AND '12-15'
-                                    THEN cp.cycle_days_new_peak_min
-                                ELSE cp.cycle_days_new_off_min
-                                END
-                        ELSE
-                            CASE
-                                WHEN DATE_FORMAT(sl.first_stockout_date, '%m-%d') BETWEEN '06-10' AND '07-10'
-                                    OR DATE_FORMAT(sl.first_stockout_date, '%m-%d') BETWEEN '09-10' AND '10-10'
-                                    OR DATE_FORMAT(sl.first_stockout_date, '%m-%d') BETWEEN '11-01' AND '12-15'
-                                    THEN cp.cycle_days_old_peak_min
-                                ELSE cp.cycle_days_old_off_min
-                                END
+                        WHEN DATE_FORMAT(DATE_ADD(ds.date, INTERVAL ROUND((COALESCE(otw.real_on_the_way, 0) + COALESCE(inv.real_inventory, 0) + COALESCE(ds.quantity_receive, 0) + COALESCE(ds.overseas_warehouse_test_product, 0) + COALESCE(ds.overseas_warehouse_new_product, 0)) / NULLIF(ds.weighted_sales, 0), 0) DAY), '%m-%d') BETWEEN '06-10' AND '07-10'
+                            OR DATE_FORMAT(DATE_ADD(ds.date, INTERVAL ROUND((COALESCE(otw.real_on_the_way, 0) + COALESCE(inv.real_inventory, 0) + COALESCE(ds.quantity_receive, 0) + COALESCE(ds.overseas_warehouse_test_product, 0) + COALESCE(ds.overseas_warehouse_new_product, 0)) / NULLIF(ds.weighted_sales, 0), 0) DAY), '%m-%d') BETWEEN '09-10' AND '10-10'
+                            OR DATE_FORMAT(DATE_ADD(ds.date, INTERVAL ROUND((COALESCE(otw.real_on_the_way, 0) + COALESCE(inv.real_inventory, 0) + COALESCE(ds.quantity_receive, 0) + COALESCE(ds.overseas_warehouse_test_product, 0) + COALESCE(ds.overseas_warehouse_new_product, 0)) / NULLIF(ds.weighted_sales, 0), 0) DAY), '%m-%d') BETWEEN '11-01' AND '12-15'
+                            THEN cp.cycle_days_peak_min
+                        ELSE cp.cycle_days_off_min
                         END
                     ) DAY
              )
@@ -347,6 +330,7 @@ FROM base_target ds
          LEFT JOIN inv_calc inv ON ds.asin = inv.asin AND ds.country = inv.country
          LEFT JOIN stockout_lookup sl ON ds.asin = sl.asin AND ds.country = sl.country
          LEFT JOIN cycle_param cp ON ds.country = cp.site
+         LEFT JOIN product_label_cfg_dedup plc ON ds.country = plc.country AND ds.model = plc.model
          LEFT JOIN asin a ON CONCAT(ds.asin, '_', ds.country) = a.`unique`
          LEFT JOIN users u ON a.sale_owner = u.username
          LEFT JOIN users mgr ON mgr.username = u.manager

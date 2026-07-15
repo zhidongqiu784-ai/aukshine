@@ -90,7 +90,8 @@ WITH base AS (
              0 AS received,
              sim.number AS sim_qty
          FROM simulate_shipment sim
-         WHERE (
+         WHERE COALESCE(sim.plan_source, '') <> 'shipment_plan_v2'
+           AND (
                    (
                        sim.shippment_id IS NOT NULL
                            AND sim.shippment_id <> ''
@@ -122,7 +123,7 @@ WITH base AS (
                            OR sim.shippment_id = ''
                        )
                    )
-     ),
+      ),
 
      final AS (
          /* 3. 最终汇总 */

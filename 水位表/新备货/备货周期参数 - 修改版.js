@@ -71,13 +71,11 @@ async function run() {
     : React.createElement('span', { style: num }, `${fmt(draft[a])}/${fmt(draft[b])}`);
   const sums = r => {
     const offRigid = n(r.product_lead) + n(r.transit_days) + n(r.warehouse_off);
-    const peakRigid = n(r.product_lead) + n(r.transit_days) + n(r.warehouse_peak) + n(r.peak_buffer);
+    const peakRigid = n(r.product_lead) + n(r.transit_days) + n(r.warehouse_peak);
     const pair = (base, min, max) => [base + n(r[min]), base + n(r[max])];
     return {
-      newOff: pair(offRigid, 'safety_new_min', 'safety_new_max'),
-      newPeak: pair(peakRigid, 'safety_new_min', 'safety_new_max'),
-      oldOff: pair(offRigid, 'safety_old_min', 'safety_old_max'),
-      oldPeak: pair(peakRigid, 'safety_old_min', 'safety_old_max'),
+      off: pair(offRigid, 'safety_stock_min', 'safety_stock_max'),
+      peak: pair(peakRigid, 'safety_stock_min', 'safety_stock_max'),
     };
   };
   const sumText = p => React.createElement('span', { style: num }, `${p[0]}/${p[1]}`);
@@ -86,22 +84,14 @@ async function run() {
   const derivedPayload = r => {
     const s = sums(r);
     return {
-      cycle_days_new_off_min: s.newOff[0],
-      cycle_days_new_off_max: s.newOff[1],
-      cycle_days_new_peak_min: s.newPeak[0],
-      cycle_days_new_peak_max: s.newPeak[1],
-      cycle_days_old_off_min: s.oldOff[0],
-      cycle_days_old_off_max: s.oldOff[1],
-      cycle_days_old_peak_min: s.oldPeak[0],
-      cycle_days_old_peak_max: s.oldPeak[1],
-      stock_sales_ratio_new_off_min: ratioValue(s.newOff[0]),
-      stock_sales_ratio_new_off_max: ratioValue(s.newOff[1]),
-      stock_sales_ratio_new_peak_min: ratioValue(s.newPeak[0]),
-      stock_sales_ratio_new_peak_max: ratioValue(s.newPeak[1]),
-      stock_sales_ratio_old_off_min: ratioValue(s.oldOff[0]),
-      stock_sales_ratio_old_off_max: ratioValue(s.oldOff[1]),
-      stock_sales_ratio_old_peak_min: ratioValue(s.oldPeak[0]),
-      stock_sales_ratio_old_peak_max: ratioValue(s.oldPeak[1]),
+      cycle_days_off_min: s.off[0],
+      cycle_days_off_max: s.off[1],
+      cycle_days_peak_min: s.peak[0],
+      cycle_days_peak_max: s.peak[1],
+      stock_sales_ratio_off_min: ratioValue(s.off[0]),
+      stock_sales_ratio_off_max: ratioValue(s.off[1]),
+      stock_sales_ratio_peak_min: ratioValue(s.peak[0]),
+      stock_sales_ratio_peak_max: ratioValue(s.peak[1]),
     };
   };
   const infoBox = (text, bg, border) => React.createElement('div', { style: { background: bg || '#eff6ff', borderLeft: `3px solid ${border || '#2563eb'}`, borderRadius: 6, padding: '10px 14px', fontSize: 12, lineHeight: 1.7, marginBottom: 12, color: C.text } }, text);
@@ -121,8 +111,7 @@ async function run() {
     async function save(row) {
       const payload = Object.assign({
         product_lead: draft.product_lead, transit_days: draft.transit_days, warehouse_off: draft.warehouse_off, warehouse_peak: draft.warehouse_peak,
-        peak_buffer: draft.peak_buffer, safety_new_min: draft.safety_new_min, safety_new_max: draft.safety_new_max,
-        safety_old_min: draft.safety_old_min, safety_old_max: draft.safety_old_max,
+        safety_stock_min: draft.safety_stock_min, safety_stock_max: draft.safety_stock_max,
       }, derivedPayload(draft));
       try { await writeApi('v3_cfg_cycle_param', 'update', row, payload); message.success('已保存'); setEditingId(null); await reload(); }
       catch (e) { message.error('保存失败:' + (e?.message || e)); }
@@ -137,21 +126,15 @@ async function run() {
         { title: '旺季入仓', dataIndex: 'warehouse_peak', width: 66, onHeaderCell: lh('red'), render: (_, r) => cellInput(editingId === r.id, editingId === r.id ? draft : r, 'warehouse_peak', setDraft) },
       ] },
       { title: '弹性预留时间(天)', onHeaderCell: gh('amber'), children: [
-        { title: '旺季异常', dataIndex: 'peak_buffer', width: 66, onHeaderCell: lh('amber'), render: (_, r) => cellInput(editingId === r.id, editingId === r.id ? draft : r, 'peak_buffer', setDraft) },
-        { title: '新品安全库存(min/max)', width: 92, onHeaderCell: lh('amber'), render: (_, r) => pairInput(editingId === r.id, editingId === r.id ? draft : r, 'safety_new_min', 'safety_new_max', setDraft) },
-        { title: '老品安全库存(min/max)', width: 92, onHeaderCell: lh('amber'), render: (_, r) => pairInput(editingId === r.id, editingId === r.id ? draft : r, 'safety_old_min', 'safety_old_max', setDraft) },
+        { title: '安全库存(min/max)', width: 92, onHeaderCell: lh('amber'), render: (_, r) => pairInput(editingId === r.id, editingId === r.id ? draft : r, 'safety_stock_min', 'safety_stock_max', setDraft) },
       ] },
       { title: '合计时间(天)=刚性+弹性', onHeaderCell: gh('green'), children: [
-        { title: '新淡(min/max)', width: 68, onHeaderCell: lh('green'), render: (_, r) => sumText(sums(editingId === r.id ? draft : r).newOff) },
-        { title: '新旺(min/max)', width: 68, onHeaderCell: lh('green'), render: (_, r) => sumText(sums(editingId === r.id ? draft : r).newPeak) },
-        { title: '老淡(min/max)', width: 68, onHeaderCell: lh('green'), render: (_, r) => sumText(sums(editingId === r.id ? draft : r).oldOff) },
-        { title: '老旺(min/max)', width: 68, onHeaderCell: lh('green'), render: (_, r) => sumText(sums(editingId === r.id ? draft : r).oldPeak) },
+        { title: '淡季(min/max)', width: 76, onHeaderCell: lh('green'), render: (_, r) => sumText(sums(editingId === r.id ? draft : r).off) },
+        { title: '旺季(min/max)', width: 76, onHeaderCell: lh('green'), render: (_, r) => sumText(sums(editingId === r.id ? draft : r).peak) },
       ] },
       { title: '库销比阈值=合计/30', onHeaderCell: gh('blue'), children: [
-        { title: '新淡', width: 62, onHeaderCell: lh('blue'), render: (_, r) => ratioText(sums(editingId === r.id ? draft : r).newOff) },
-        { title: '新旺', width: 62, onHeaderCell: lh('blue'), render: (_, r) => ratioText(sums(editingId === r.id ? draft : r).newPeak) },
-        { title: '老淡', width: 62, onHeaderCell: lh('blue'), render: (_, r) => ratioText(sums(editingId === r.id ? draft : r).oldOff) },
-        { title: '老旺', width: 62, onHeaderCell: lh('blue'), render: (_, r) => ratioText(sums(editingId === r.id ? draft : r).oldPeak) },
+        { title: '淡季', width: 68, onHeaderCell: lh('blue'), render: (_, r) => ratioText(sums(editingId === r.id ? draft : r).off) },
+        { title: '旺季', width: 68, onHeaderCell: lh('blue'), render: (_, r) => ratioText(sums(editingId === r.id ? draft : r).peak) },
       ] },
       { title: '操作', width: 110, fixed: 'right', onHeaderCell: lh('pink'), render: (_, r) => editingId === r.id
         ? React.createElement('span', { style: { display: 'inline-flex', gap: 6 } },
@@ -167,10 +150,10 @@ async function run() {
           React.createElement('span', { style: { fontSize: 18, fontWeight: 800, color: C.text } }, '📐 备货周期参数'),
           React.createElement('span', { style: { fontSize: 12, fontWeight: 700, color: '#9a6512', background: '#fdf1da', padding: '1px 8px', borderRadius: 8 } }, 'V4'),
           React.createElement('span', { style: { fontSize: 12, color: C.subtle } }, '影子配置 · 采运部维护 · 改动将生效于后续联动板块')),
-        infoBox('这是 V4 算法的核心参数表。刚性需求时间:产品交期 + 运输 + 入仓(物理上必须的);弹性预留时间:旺季异常预留 + 安全库存(对抗不确定性);合计时间 = 刚性 + 弹性 = 备货周期总长 → 决定库销比阈值;库销比下限 = 合计时间(用安全库存最小值)/ 30 → 跌破即"短缺预警";库销比上限 = 合计时间(用安全库存最大值)/ 30 → 超过即"滞销预警"'),
+        infoBox('这是 V4 算法的核心参数表。刚性需求时间:产品交期 + 运输 + 入仓(物理上必须的);弹性预留时间:安全库存(对抗不确定性);合计时间 = 刚性 + 弹性 = 备货周期总长 → 决定库销比阈值;库销比下限 = 合计时间(用安全库存最小值)/ 30 → 跌破即"短缺预警";库销比上限 = 合计时间(用安全库存最大值)/ 30 → 超过即"滞销预警"'),
         React.createElement('div', { style: { display: 'flex', justifyContent: 'flex-end', marginBottom: 8 } }, pill(C.blueBg, C.blue, '全部站点 7 行')),
-        loading ? React.createElement(Spin, null) : React.createElement(Table, { size: 'small', columns, dataSource: rows, rowKey: 'id', pagination: false, scroll: { x: 1180 }, bordered: true, rowClassName: (r, i) => i % 2 ? 'aok-row-odd' : 'aok-row-even' }),
-        infoBox('① 安全库存不区分淡旺季(销量波动已被 ERP 预估销量数组吸收;安全库存只防"非预期波动") ② 旺季异常预留 3-5 天,仅旺季计入 ③ 新品安全库存 ≥ 老品 ④ 大站点(US)安全库存 ≥ 小站点 ⑤ 库销比阈值不需要单独配置——从安全库存最小/最大值表 + 时效表自动反推', '#f0f9ff', '#2563eb'),
+        loading ? React.createElement(Spin, null) : React.createElement(Table, { size: 'small', columns, dataSource: rows, rowKey: 'id', pagination: false, scroll: { x: 820 }, bordered: true, rowClassName: (r, i) => i % 2 ? 'aok-row-odd' : 'aok-row-even' }),
+        infoBox('① 安全库存不区分淡旺季，统一下限 7 天、上限 14 天 ② 库销比阈值不需要单独配置——从安全库存最小/最大值与时效参数自动反推', '#f0f9ff', '#2563eb'),
         infoBox('看"到 FBA 日"(= 今天 + 产品交期 45 + 运输时效)是否落在旺季活动窗口。旺季活动节点(中心 ± 14 天):7 月 PD:6/30 前后;10 月秋促:10/15 前后;黑五网一:11/28 前后。原因:旺季入仓延迟的根源是 FBA 仓库爆仓,只有"货到 FBA 那天"在旺季前后才会受影响。', '#eff6ff', '#2563eb'),
         React.createElement(Tooltip, { title: tipTitle }, React.createElement('span', { style: { display: 'none' } }, '—'))));
   }

@@ -1,0 +1,1806 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>样板 v2 · 发货计划演变 · 销售发货工作台（分册）</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:#eef1f5;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;color:#1f2329;padding:22px;}
+  .page{max-width:1760px;margin:0 auto;}
+
+  .ttl{display:flex;align-items:center;gap:12px;font-size:21px;font-weight:800;margin-bottom:14px;}
+  .ttl .ico{font-size:22px;}
+  .ttl .badge{font-size:12px;font-weight:700;color:#1a5fb4;background:#e7f0fd;border:1px solid #b9d4f5;border-radius:11px;padding:2px 10px;}
+
+  /* 分册 Tab */
+  .tabs{display:flex;gap:10px;margin-bottom:14px;}
+  .tab{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700;border-radius:11px;padding:10px 20px;cursor:pointer;
+    background:#e7ebf2;color:#5a6169;border:1px solid #e0e5ec;transition:all .12s;user-select:none;}
+  .tab:hover{background:#dfe5ee;}
+  .tab.active{background:#3370ff;color:#fff;border-color:#3370ff;box-shadow:0 3px 10px rgba(51,112,255,.28);}
+  .tab .ic{font-size:15px;}
+  .tab .ct{font-size:11.5px;font-weight:600;opacity:.85;}
+  .tab.active .ct{opacity:.9;}
+
+  .card{background:#fff;border:1px solid #e6e9ee;border-radius:9px;box-shadow:0 1px 8px rgba(0,0,0,.05);padding:16px 18px;}
+  .desc{font-size:12.5px;color:#5a6169;line-height:1.7;margin-bottom:10px;}
+  .desc b{color:#1f2329;}
+  .jobs{display:flex;gap:10px;margin-bottom:11px;flex-wrap:wrap;}
+  .job{flex:1;min-width:260px;background:#f6f9ff;border:1px solid #d6e4fb;border-radius:7px;padding:9px 13px;font-size:12.5px;color:#26405f;line-height:1.6;}
+  .job b{color:#1a5fb4;}
+  .kj{font-size:12px;color:#36507e;background:#eef4ff;border-left:3px solid #3370ff;border-radius:5px;padding:9px 12px;line-height:1.7;margin-bottom:12px;}
+  .kj b{color:#1f2329;}
+
+  .bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px;}
+  .bar .lbl{font-size:12.5px;font-weight:700;color:#3a4763;}
+  select,.chk{font-size:12.5px;border:1px solid #cfd6e0;border-radius:6px;padding:5px 9px;background:#fff;color:#1f2329;}
+  .chk{display:inline-flex;align-items:center;gap:6px;cursor:default;}
+  .count{margin-left:auto;font-size:12.5px;color:#5a6169;}
+  .count b{color:#1f2329;}
+
+  .legend{display:flex;flex-direction:column;gap:5px;font-size:12px;color:#5a6169;
+    background:#fafbfc;border:1px dashed #d7dce4;border-radius:7px;padding:8px 12px;margin-bottom:14px;}
+  .legend .ln{display:flex;align-items:center;gap:15px;flex-wrap:wrap;}
+  .legend .li{display:inline-flex;align-items:center;gap:6px;}
+  .legend b{color:#1f2329;font-weight:700;}
+  .sw{display:inline-block;width:13px;height:13px;border-radius:3px;}
+
+  .wrap{overflow-x:auto;border:1px solid #e3e7ee;border-radius:8px;}
+  table.grid{border-collapse:separate;border-spacing:0;font-size:12.5px;white-space:nowrap;min-width:100%;}
+  table.grid th,table.grid td{border-bottom:1px solid #edf0f4;border-right:1px solid #edf0f4;padding:8px 11px;text-align:center;}
+
+  thead .grp-info{background:#dcefe3;color:#1a6d49;font-weight:800;font-size:13px;letter-spacing:.5px;}
+  thead .grp-week{background:#d8b072;color:#6b4a17;font-weight:800;font-size:13px;letter-spacing:.5px;}
+  thead .sub-info{background:#eaf5ee;color:#2c6a4c;font-weight:700;}
+  thead .sub-week{background:#f3e6cf;color:#7a5a24;font-weight:700;}
+  thead .sub-week .d{display:block;font-size:10.5px;font-weight:500;color:#9c7c44;margin-top:1px;}
+
+  td.c-site{font-weight:700;}
+  td.c-site .stk{display:block;font-size:10.5px;font-weight:700;color:#c0392b;margin-top:2px;}
+  td.c-model{text-align:left;font-weight:700;}
+  td.c-asin{font-family:"SF Mono",Consolas,monospace;color:#3a4763;font-size:11.5px;}
+  td.c-daily{font-weight:800;color:#1f2329;}
+
+  .gr{display:inline-block;font-size:11.5px;font-weight:800;border-radius:5px;padding:1px 8px;}
+  .gr-S{background:#fde6c0;color:#946206;}
+  .gr-A{background:#e3e9f3;color:#3a4763;}
+  .gr-B{background:#edf0f3;color:#6a727d;}
+
+  td.c-isr{font-weight:800;}
+  td.c-isr .isr-tag{display:block;font-size:10px;font-weight:700;margin-top:1px;}
+  .tag-low{color:#c0392b;} .tag-ok{color:#1a6d49;} .tag-high{color:#b06a1e;}
+
+  .life{display:inline-block;font-size:11px;font-weight:700;border-radius:9px;padding:1px 9px;}
+  .life-new{background:#e6efff;color:#1d5fc4;}
+  .life-grow{background:#e2f6eb;color:#147a43;}
+  .life-mature{background:#e6efec;color:#3a6657;}
+  .life-drop{background:#f3e2e1;color:#9c3b32;}
+
+  tbody tr:nth-child(even) td:not(.lock){background:#fafbfc;}
+  tbody tr:hover td:not(.lock){background:#f3f7ff;}
+  td.dash{color:#c2c8d0;}
+  td.fillable{cursor:cell;}
+  td.fillable:hover{background:#eafaf1 !important;color:#2ba471;font-weight:700;}
+
+  td.lock{background:#ededf0;color:#8a9099;font-weight:600;}
+  td.lock .lk{font-size:10px;opacity:.8;margin-left:2px;}
+
+  td.chg{position:relative;cursor:pointer;font-weight:800;}
+  td.chg .mk{position:absolute;top:2px;right:3px;font-size:10.5px;font-weight:900;line-height:1;}
+  td.chg.up .mk{color:#1f9d57;} td.chg.up{color:#147a43;}
+  td.chg.down .mk{color:#2563d6;} td.chg.down{color:#1d5fc4;}
+  td.chg.air .mk{color:#c0392b;} td.chg.air{color:#c0392b;}
+  td.chg.sys .mk{color:#9333ea;} td.chg.sys{color:#7c3aed;}
+  td.chg.pending{box-shadow:inset 0 0 0 2px #e8912a;border-radius:4px;background:#fff8ee !important;}
+  td.chg.pending .wait{position:absolute;top:1px;left:3px;font-size:10px;}
+
+  #tip{position:fixed;z-index:60;display:none;max-width:280px;background:#1f2329;color:#eef1f5;
+    border-radius:7px;padding:9px 11px;font-size:11.5px;line-height:1.6;box-shadow:0 6px 22px rgba(0,0,0,.28);pointer-events:none;}
+  #tip .h{font-weight:800;font-size:12px;margin-bottom:4px;display:flex;align-items:center;gap:6px;}
+  #tip .arrow{font-family:"SF Mono",Consolas,monospace;}
+  #tip .o{color:#9aa3ad;text-decoration:line-through;} #tip .n{color:#7ee2a8;font-weight:800;}
+  #tip .meta{color:#aab2bc;margin-top:3px;}
+  #tip .s3{display:inline-block;border-radius:8px;padding:0 6px;font-weight:700;font-size:10.5px;}
+  #tip .more{color:#7fb0ff;margin-top:5px;border-top:1px solid #3a4048;padding-top:4px;}
+  .s3-green{background:#15462e;color:#7ee2a8;} .s3-amber{background:#5a3f12;color:#f4cf8a;} .s3-red{background:#5a1f1c;color:#f3a39c;}
+
+  #mask{position:fixed;inset:0;background:rgba(20,24,30,.34);z-index:70;display:none;}
+  #drawer{position:fixed;top:0;right:0;height:100%;width:560px;max-width:94vw;background:#fff;z-index:80;
+    transform:translateX(100%);transition:transform .22s ease;overflow-y:auto;box-shadow:-4px 0 26px rgba(0,0,0,.16);}
+  #drawer.open{transform:translateX(0);}
+  .dh{display:flex;align-items:center;gap:10px;padding:15px 22px;border-bottom:1px solid #e6e9ee;font-size:16px;font-weight:700;position:sticky;top:0;background:#fff;z-index:2;}
+  .dh .x{margin-left:auto;color:#9aa0a8;font-size:20px;cursor:pointer;font-weight:400;}
+  .db{padding:8px 22px 30px;}
+  .sec{font-size:13.5px;font-weight:700;margin:18px 0 8px;padding-left:9px;border-left:3px solid #3370ff;}
+  .sec.green{border-color:#2ba471;} .sec.amber{border-color:#e09c1e;} .sec.gray{border-color:#9aa0a8;}
+  .sec .hint{font-weight:400;font-size:11.5px;color:#8a9099;margin-left:8px;}
+  table.kv{width:100%;border-collapse:collapse;font-size:12.5px;}
+  table.kv td{border:1px solid #d4dae3;padding:6px 11px;}
+  table.kv td.k{background:#dde4ee;font-weight:700;color:#3a4763;width:96px;white-space:nowrap;}
+  .mono{font-family:"SF Mono",Consolas,monospace;} .muted{color:#8a9099;}
+  table.concl{width:100%;border-collapse:collapse;font-size:12.5px;}
+  table.concl td{border:1px solid #cfe3d7;padding:7px 11px;}
+  table.concl td.k{background:#dcefe3;font-weight:700;color:#1a6d49;width:104px;white-space:nowrap;}
+  .big{font-size:16px;font-weight:800;color:#1366d6;}
+  .dev-pos{color:#c0392b;font-weight:800;} .dev-neg{color:#1d5fc4;font-weight:800;}
+
+  .tl{position:relative;margin:4px 0 2px;padding-left:6px;}
+  .tl .it{position:relative;padding:0 0 14px 22px;border-left:2px solid #e1e6ee;margin-left:6px;}
+  .tl .it:last-child{border-left:2px solid transparent;}
+  .tl .dot{position:absolute;left:-7px;top:1px;width:12px;height:12px;border-radius:50%;background:#fff;border:2px solid #b9c2cf;}
+  .tl .it.sys .dot{border-color:#9333ea;} .tl .it.sale .dot{border-color:#1366d6;}
+  .tl .it.cur .dot{border-color:#e8912a;background:#fff3df;box-shadow:0 0 0 3px #fbe6c4;}
+  .tl .top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;}
+  .tl .when{color:#8a9099;font-family:"SF Mono",Consolas,monospace;font-size:11px;}
+  .tl .who{font-weight:700;} .tl .who.sys{color:#7c3aed;} .tl .who.sale{color:#1366d6;}
+  .tl .chip{font-size:10.5px;font-weight:700;border-radius:8px;padding:1px 7px;}
+  .chip-up{background:#e3f6ec;color:#147a43;} .chip-down{background:#e6efff;color:#1d5fc4;}
+  .chip-air{background:#fdeceb;color:#c0392b;} .chip-sys{background:#f3e9fc;color:#7c3aed;} .chip-amber{background:#fff3da;color:#9a6a06;}
+  .tl .chg-num{font-family:"SF Mono",Consolas,monospace;font-size:12px;margin-top:3px;}
+  .tl .chg-num .o{color:#9aa3ad;text-decoration:line-through;} .tl .chg-num .n{color:#13315c;font-weight:800;}
+  .tl .rsn{font-size:11.5px;color:#5a6169;margin-top:2px;line-height:1.55;}
+  .tl .st{font-size:10.5px;font-weight:700;border-radius:7px;padding:1px 7px;margin-left:auto;}
+  .st-wait{background:#fff3da;color:#9a6a06;} .st-pass{background:#e3f6ec;color:#1a6d49;}
+  .st-live{background:#eef1f5;color:#5a6169;} .st-rej{background:#f3e7e6;color:#9c3b32;}
+  .actbar{margin-top:12px;background:#fff8ec;border:1px solid #f3d49a;border-radius:7px;padding:10px 13px;font-size:12px;color:#8a6206;line-height:1.6;}
+  .actbar .row{display:flex;align-items:center;gap:10px;margin-top:8px;}
+  .btn{font-size:12.5px;font-weight:700;border-radius:6px;padding:6px 16px;border:1px solid;cursor:pointer;}
+  .btn-ok{background:#2ba471;border-color:#2ba471;color:#fff;} .btn-no{background:#fff;border-color:#d99;color:#c0392b;}
+  .btn[disabled]{opacity:.5;cursor:not-allowed;}
+  .flag{margin-top:14px;background:#f6f8fb;border:1px solid #e1e7ef;border-radius:6px;padding:9px 12px;font-size:11.5px;color:#5a6169;line-height:1.65;}
+  .flag b{color:#1f2329;} .demo{color:#b06a1e;font-weight:700;}
+
+  /* 展开箭头 */
+  td.exp{width:32px;cursor:pointer;color:#8a929c;user-select:none;padding:8px 6px;}
+  td.exp:hover{color:#3370ff;background:#eef4ff !important;}
+  td.exp .arw{font-size:10px;display:inline-block;}
+  tr.opened td.exp{color:#3370ff;background:#eef4ff !important;}
+
+  /* 本期下单两周（采购据此下单） */
+  thead .sub-week.dinghead{background:#efeaff;color:#5b3fc4;}
+  thead .sub-week.dinghead .dt{color:#8a72d6;}
+  thead .sub-week.dingtag{position:relative;}
+  td.ding{background:#f6f3ff !important;border-top:2px solid #8b6cf0;border-bottom:2px solid #8b6cf0;}
+  td.ding.ding-l{border-left:2px solid #8b6cf0;}
+  td.ding.ding-r{border-right:2px solid #8b6cf0;}
+
+  /* 展开行 · 趋势图 */
+  tr.exprow>td{padding:0;background:#fbfcfe;border-bottom:1px solid #e3e8f0;}
+  .chartbox{padding:14px 20px 18px;}
+  .chart-head{display:flex;align-items:center;gap:16px;flex-wrap:wrap;font-size:13px;font-weight:700;margin-bottom:10px;color:#1f2329;}
+  .chart-head .hint{font-weight:400;font-size:11.5px;color:#8a9099;}
+  .legend2{display:inline-flex;align-items:center;gap:14px;font-size:12px;font-weight:600;color:#5a6169;}
+  .legend2 .lg{display:inline-flex;align-items:center;gap:6px;}
+  .legend2 i{display:inline-block;width:18px;height:3px;border-radius:2px;}
+  .ls-sys{background:#5b7cfa;} .ls-sale{background:#e0a53a;} .ls-ref{background:#c0392b;height:0!important;border-top:2px dashed #c0392b;width:18px;}
+  .chart-main{display:flex;gap:16px;align-items:flex-start;}
+  .svg-holder{flex:0 0 auto;background:#fff;border:1px solid #eef1f5;border-radius:8px;padding:4px;}
+  .chart-detail{flex:1;min-width:250px;max-width:320px;background:#fff;border:1px solid #e3e8f0;border-radius:8px;padding:13px 15px;font-size:12px;color:#5a6169;min-height:200px;}
+  .chart-detail .dh2{font-size:13px;font-weight:800;color:#1f2329;margin-bottom:3px;}
+  .chart-detail .sub{font-size:11px;color:#9aa0a8;margin-bottom:8px;}
+  .chart-detail table{width:100%;border-collapse:collapse;font-size:12px;}
+  .chart-detail td{padding:5px 2px;border-bottom:1px solid #f0f2f6;vertical-align:top;}
+  .chart-detail td.k{color:#8a9099;width:82px;white-space:nowrap;}
+  .chart-detail td b{color:#1f2329;}
+  .chart-detail .boost{margin-top:9px;background:#eef4ff;border-radius:6px;padding:7px 10px;color:#26507e;font-size:11.5px;line-height:1.55;}
+  .chart-detail .empty{color:#aab0b8;padding-top:60px;text-align:center;line-height:1.7;}
+  .chart-detail .diff-ok{color:#1a6d49;} .chart-detail .diff-bad{color:#c0392b;}
+  circle.node{cursor:pointer;} circle.arr{cursor:pointer;}
+  text.xlab{font-size:9px;fill:#9aa0a8;} text.ylab{font-size:9.5px;fill:#9aa0a8;}
+
+  .muted2{color:#8a9099;font-weight:400;}
+
+  /* 三态圆点（断货预警） */
+  .s3dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:middle;}
+  .s3dot.red{background:#e34d42;box-shadow:0 0 0 2px #f7d3d0;}
+  .s3dot.amber{background:#e8a13a;box-shadow:0 0 0 2px #f6e6c6;}
+  .s3dot.green{background:#3ab881;box-shadow:0 0 0 2px #cfeede;}
+
+  /* 三行表头 · 发货日期行 + 覆盖售卖期行 */
+  thead .sub-date{background:#f7edda;color:#8a6a2e;font-weight:600;font-size:11px;}
+  thead .sub-cover{background:#fbf5e8;color:#a07a3a;font-weight:600;font-size:10px;}
+  thead .sub-cover .cv{color:#b06a1e;}
+  thead .sub-wk .dingbadge{display:block;margin-top:3px;font-size:9.5px;font-weight:800;color:#fff;background:#8b6cf0;border-radius:7px;padding:1px 5px;white-space:nowrap;}
+  thead .sub-date.dinghead,thead .sub-cover.dinghead{background:#efeaff;}
+  thead .sub-date.dinghead{color:#6b4fd0;} thead .sub-cover.dinghead .cv{color:#6b4fd0;}
+
+  /* v8：确认列已撤销（常规行由顶栏一键通过收口） */
+
+  /* 收件箱徽章条 + 视图切换 */
+  .rolebar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#f3f6fb;border:1px solid #e0e7f1;border-radius:9px;padding:9px 13px;margin-bottom:12px;}
+  .rolebar .rlab{font-size:12.5px;font-weight:800;color:#3a4763;}
+  .rolebar .rl{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:700;color:#5a6169;border-radius:8px;padding:6px 13px;cursor:pointer;background:#fff;border:1px solid #e0e5ec;}
+  .rolebar .rl.active{background:#1f2329;color:#fff;border-color:#1f2329;}
+  .rolebar .rl .bn{font-size:11px;font-weight:800;background:#e34d42;color:#fff;border-radius:9px;padding:0 6px;min-width:17px;text-align:center;}
+  .rolebar .rl.active .bn{background:#ff6b60;}
+  .rolebar .vt{margin-left:4px;display:inline-flex;border:1px solid #cfd6e0;border-radius:7px;overflow:hidden;}
+  .rolebar .vt span{font-size:12px;font-weight:700;padding:5px 12px;cursor:pointer;color:#5a6169;background:#fff;}
+  .rolebar .vt span.on{background:#3370ff;color:#fff;}
+  .rolebar .allpass{margin-left:auto;font-size:12.5px;font-weight:700;border-radius:7px;padding:7px 15px;cursor:pointer;background:#2ba471;color:#fff;border:1px solid #2ba471;}
+  .rolebar .allpass:hover{background:#248a5f;}
+  .rolebar .rlhint{font-size:11.5px;color:#8a9099;width:100%;margin-top:2px;}
+
+/* ===== v2 增补 ===== */
+.grp-net{background:#fff4e2;color:#8a5a00;font-size:11px;border-bottom:2px solid #e8b45a;min-width:104px;padding:4px 6px;}
+.gn-sub{font-weight:400;font-size:10px;color:#b08430;margin-top:1px;}
+.c-net{background:#fffaf1;text-align:center;vertical-align:middle;border-left:2px solid #f0d9a8;padding:4px 6px;}
+.net-big{font-size:14px;font-weight:800;color:#b06a00;}
+.net-sub{font-size:10px;color:#9a8b6a;margin-top:1px;white-space:nowrap;}
+.net-zero{font-size:10px;color:#147a43;font-weight:700;margin-top:2px;}
+.phasebtn{margin-left:10px;border:1px solid #e8b45a;background:#fff8ea;color:#8a5a00;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;font-weight:700;}
+.phasebtn:hover{background:#fdefd2;}
+td.editable{cursor:pointer;}
+td.editable:hover{box-shadow:inset 0 0 0 2px #bcd2ff;}
+.cf-all:disabled{opacity:.5;cursor:not-allowed;}
+.cf-hint{display:block;font-size:9px;color:#98a1ad;margin-top:2px;}
+
+/* ===== v3 增补：修改表单 / 审核条 / 净额公式 ===== */
+#auditbar{margin:8px 0;padding:8px 12px;border:1px solid #f0c36d;background:#fff8e6;border-radius:8px;font-size:12.5px;color:#7a4d00;}
+#editmask{display:none;position:fixed;inset:0;background:rgba(20,26,40,.45);z-index:60;}
+#editbox{display:none;position:fixed;z-index:61;top:50%;left:50%;transform:translate(-50%,-50%);width:430px;max-width:92vw;background:#fff;border-radius:12px;box-shadow:0 18px 60px rgba(0,0,0,.25);}
+.eb-h{padding:12px 16px;font-weight:800;border-bottom:1px solid #edf0f4;display:flex;justify-content:space-between;font-size:14px;}
+.eb-h .x{cursor:pointer;color:#98a1ad;}
+.eb-b{padding:12px 16px 14px;}
+.eb-ctx{font-size:12px;color:#3a4763;background:#f5f7fb;border-radius:6px;padding:6px 8px;margin-bottom:10px;}
+.eb-row{margin-bottom:10px;font-size:12.5px;}
+.eb-row label{display:block;font-weight:700;margin-bottom:4px;color:#25324a;}
+.eb-row select,.eb-row input,.eb-row textarea{width:100%;box-sizing:border-box;border:1px solid #c9d2df;border-radius:6px;padding:6px 8px;font-size:12.5px;font-family:inherit;}
+.eb-gate{font-size:11px;color:#7a4d00;background:#fff8e6;border:1px solid #f0c36d;border-radius:6px;padding:6px 8px;margin-bottom:10px;line-height:1.55;}
+.eb-act{display:flex;gap:8px;}
+.btn-submit{flex:1;background:#3370ff;color:#fff;border:none;border-radius:7px;padding:8px 0;font-weight:800;font-size:13px;cursor:pointer;}
+.btn-submit:hover{background:#2a5fd9;}
+.btn-cancel{background:#fff;border:1px solid #c9d2df;border-radius:7px;padding:8px 14px;font-size:13px;cursor:pointer;color:#3a4763;}
+.eb-note{margin-top:8px;font-size:10.5px;color:#98a1ad;line-height:1.5;}
+.net-eq{font-size:10px;color:#9a8b6a;margin-top:1px;white-space:nowrap;}
+.net-st{font-size:10px;color:#c0392b;font-weight:700;}
+/* v11：净额格不可点（原地即推导），hover 高亮取消 */
+
+/* ===== v5 增补：状态机徽章 / 申请卡 ===== */
+.stbadge{display:inline-block;padding:5px 10px;border-radius:7px;font-size:12.5px;font-weight:800;margin:2px 0 6px;}
+.st-yel{background:#fff8e6;border:1px solid #f0c36d;color:#7a4d00;}
+.st-org{background:#fdeee0;border:1px solid #e8912a;color:#9c4a00;}
+.st-ok{background:#e9f7ee;border:1px solid #6cc08b;color:#0e5c32;}
+.reqcard{border:1px solid #e8912a;background:#fffaf3;border-radius:8px;padding:8px 10px;margin:4px 0 8px;}
+.rq-h{font-weight:800;font-size:12.5px;color:#9c4a00;margin-bottom:4px;}
+.rq-audit{margin-top:6px;font-size:12px;color:#3a4763;border-top:1px dashed #f0c36d;padding-top:6px;}
+
+/* ===== v6 增补：审核一体化（规格 S0–S5 冻结版） ===== */
+/* 状态外框五色：格子的流转位置一眼可辨（S0 状态机） */
+td.chg.p-yel{box-shadow:inset 0 0 0 2px #e5c14e;border-radius:4px;background:#fffdf0 !important;}
+td.chg.p-org{box-shadow:inset 0 0 0 2px #e8912a;border-radius:4px;background:#fff8ee !important;}
+td.chg.p-ops{box-shadow:inset 0 0 0 2px #3370ff;border-radius:4px;background:#f0f5ff !important;}
+td.chg.p-fin{box-shadow:inset 0 0 0 2px #8b6cf0;border-radius:4px;background:#f6f3ff !important;}
+td.chg.p-rej{box-shadow:inset 0 0 0 2px #e34d42;border-radius:4px;background:#fdf0ef !important;}
+.rolebar .rl .bn.z{background:#c8cfda;}
+.rolebar .batchchip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;border-radius:8px;padding:6px 12px;cursor:pointer;background:#fdf1e3;border:1px solid #e8b45a;color:#8a5200;}
+.rolebar .batchchip.done{background:#e9f7ee;border-color:#6cc08b;color:#0e5c32;}
+tr.foldrow td{background:#f6f8fb;color:#6a727d;font-size:12px;cursor:pointer;text-align:center;padding:7px;}
+tr.foldrow td:hover{background:#eef3fa;color:#3370ff;}
+/* 抽屉操作区（S2 按钮矩阵） */
+.acts6{margin-top:10px;background:#f7f9fc;border:1px solid #e1e7ef;border-radius:8px;padding:10px 12px;}
+.acts6 .an{font-size:11.5px;color:#5a6169;line-height:1.6;margin-bottom:8px;}
+.acts6 .an b{color:#1f2329;}
+.acts6 .ar{display:flex;gap:8px;flex-wrap:wrap;}
+.btn6{font-size:12.5px;font-weight:800;border-radius:7px;padding:7px 16px;border:1px solid;cursor:pointer;}
+.b-pass{background:#2ba471;border-color:#2ba471;color:#fff;}
+.b-rej{background:#fff;border-color:#e34d42;color:#c0392b;}
+.b-ghost{background:#fff;border-color:#c9d2df;color:#3a4763;}
+.b-blue{background:#3370ff;border-color:#3370ff;color:#fff;}
+.btn6:disabled{opacity:.45;cursor:not-allowed;}
+.stbadge.st-blue{background:#eef4ff;border:1px solid #9db9ff;color:#1d3f8f;}
+.stbadge.st-fin{background:#f3efff;border:1px solid #b9a4f2;color:#4b2fb0;}
+.stbadge.st-rej6{background:#fdf0ef;border:1px solid #e8998f;color:#9c3b32;}
+/* 批次签核弹层（S4） */
+#bmask{display:none;position:fixed;inset:0;background:rgba(20,26,40,.45);z-index:88;}
+#batchbox{display:none;position:fixed;z-index:89;top:4vh;left:50%;transform:translateX(-50%);width:860px;max-width:95vw;max-height:92vh;overflow-y:auto;background:#fff;border-radius:13px;box-shadow:0 20px 70px rgba(0,0,0,.3);}
+.bx-h{padding:13px 18px;border-bottom:1px solid #e6e9ee;display:flex;align-items:center;gap:12px;flex-wrap:wrap;position:sticky;top:0;background:#fff;z-index:2;}
+.bx-h .tt{font-weight:800;font-size:15px;}
+.bx-h .ddl{font-size:12px;font-weight:700;background:#fdf1e3;color:#b06a00;border:1px solid #e8b45a;border-radius:6px;padding:3px 10px;}
+.bx-h .x{margin-left:auto;color:#98a1ad;cursor:pointer;font-size:18px;}
+.bx-lt{padding:7px 18px;font-size:11.5px;font-weight:800;letter-spacing:.08em;background:#fdf4f0;color:#b05a1e;border-bottom:1px solid #f0e3d8;}
+.bx-lt.l2{background:#f4f7fb;color:#5a6a80;}
+.bxrow{display:flex;align-items:center;gap:10px;padding:9px 18px;border-bottom:1px solid #eef1f5;font-size:12.5px;flex-wrap:wrap;}
+.bxrow .why{font-size:11px;font-weight:800;border-radius:5px;padding:1px 8px;white-space:nowrap;}
+.why-chg{background:#fdeee0;color:#9c4a00;} .why-miss{background:#fbe9e7;color:#b03a2e;}
+.why-warn{background:#fff6de;color:#9a6a06;} .why-new{background:#e6efff;color:#1d5fc4;} .why-flow{background:#eef1f5;color:#5a6169;}
+.bxrow .nm{font-weight:800;min-width:170px;}
+.bxrow .dt{color:#5a6169;font-family:"SF Mono",Consolas,monospace;font-size:12px;}
+.bxrow .dt b{color:#1f2329;}
+.bxrow .ops2{margin-left:auto;display:flex;gap:6px;}
+.bxrow .ops2 button{font-size:11.5px;font-weight:700;border-radius:6px;padding:3px 12px;cursor:pointer;border:1px solid;}
+.bp{background:#fff;border-color:#2ba471;color:#1a6d49;} .bb{background:#fff;border-color:#e34d42;color:#c0392b;} .bo{background:#fff;border-color:#c9d2df;color:#5a6169;}
+.bxrow .done6{font-size:11.5px;font-weight:800;}
+.bxgrp{display:flex;align-items:center;gap:10px;padding:8px 18px;border-bottom:1px solid #eef1f5;background:#fbfcfe;font-size:12px;color:#5a6169;cursor:pointer;}
+.bxgrp .nm2{font-weight:800;color:#1f2329;}
+.bxgrp .acc{font-size:11px;background:#eef1f5;border-radius:5px;padding:1px 7px;}
+.bxgrp .acc.low{background:#fbe9e7;color:#b03a2e;}
+.bxgrp .car{margin-left:auto;color:#a9b2c0;}
+.bxsub{display:none;padding:4px 18px 8px 40px;border-bottom:1px solid #eef1f5;font-size:12px;color:#5a6169;background:#fdfefe;line-height:1.9;}
+.bx-f{padding:12px 18px;background:#f7f9fc;display:flex;align-items:center;gap:12px;flex-wrap:wrap;position:sticky;bottom:0;border-top:1px solid #e6e9ee;}
+.bx-f .cnt{font-size:12px;color:#5a6169;} .bx-f .cnt b{color:#1f2329;}
+/* 终审聚合面板（S5） */
+#finalpanel{display:none;border:2px solid #8b6cf0;border-radius:11px;background:#fbfaff;padding:0;margin-bottom:12px;overflow:hidden;}
+#finalpanel .fp-h{padding:11px 16px;background:#f3efff;border-bottom:1px solid #ddd2f5;display:flex;align-items:center;gap:12px;font-weight:800;font-size:14px;color:#3b2496;flex-wrap:wrap;}
+#finalpanel .fp-h .po{font-family:"SF Mono",Consolas,monospace;font-size:11.5px;font-weight:400;color:#7a68b8;}
+#finalpanel .fp-sum{display:flex;gap:26px;padding:10px 16px;flex-wrap:wrap;font-size:12.5px;border-bottom:1px solid #eee8fa;}
+#finalpanel .fp-sum .k{color:#7a68b8;} #finalpanel .fp-sum b{font-size:15px;color:#1f2329;}
+#finalpanel .fp-red{padding:8px 16px;border-bottom:1px solid #eee8fa;}
+#finalpanel .fp-ri{display:flex;align-items:center;gap:9px;font-size:12.5px;margin:4px 0;flex-wrap:wrap;}
+#finalpanel .rtag{font-size:11px;font-weight:800;background:#fbe9e7;color:#b03a2e;border-radius:5px;padding:1px 8px;}
+#finalpanel .fp-act{padding:11px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+#finalpanel .fp-note{font-size:11.5px;color:#7a68b8;width:100%;line-height:1.6;}
+#finalpanel .approved{font-size:13px;font-weight:800;color:#0e5c32;background:#e9f7ee;border:1px solid #6cc08b;border-radius:7px;padding:7px 13px;}
+/* ===== v7 增补：模拟演算 / 基础参数卡 ===== */
+.simbtn{margin-left:auto;border:1px solid #8b6cf0;background:#f6f3ff;color:#5b3fc4;border-radius:6px;padding:4px 12px;font-size:12px;font-weight:700;cursor:pointer;}
+.simbtn.on{background:#8b6cf0;color:#fff;}
+.simrow{display:flex;align-items:center;gap:12px;font-size:12px;color:#3a4763;margin:4px 0;flex-wrap:wrap;}
+.simrow label{display:inline-flex;align-items:center;gap:5px;}
+.simrow select,.simrow input{font-size:12px;border:1px solid #c9d2df;border-radius:5px;padding:2px 6px;}
+.verdict{margin-top:7px;font-size:12px;background:#f1edff;border-radius:6px;padding:6px 9px;color:#3b2496;}
+.verdict.good{background:#e9f7ee;color:#0e5c32;}
+.simacts{margin-top:7px;display:flex;gap:8px;}
+/* ===== v8 增补 ===== */
+.simbtn{margin-left:0;}
+td.w12fold{background:#ededf0;color:#6a727d;font-size:11px;cursor:pointer;min-width:64px;}
+td.w12fold:hover{background:#e3e6ec;color:#3370ff;}
+th.w12h{cursor:pointer;user-select:none;}
+th.w12h:hover{filter:brightness(.96);}
+td.c-model .mbadges{display:inline-flex;gap:4px;margin-left:6px;vertical-align:middle;}
+.chart-main{align-items:stretch;}
+.chart-detail{max-width:265px;min-width:230px;}
+.chart-detail table td{white-space:normal;word-break:break-all;}
+.chart-detail table td.k{width:70px;font-size:11.5px;}
+.chart-detail .dh2{font-size:12.5px;}
+.chart-params{flex:0 0 250px;background:#fff;border:1px solid #e3e8f0;border-radius:8px;padding:12px 13px;font-size:12px;color:#5a6169;}
+.chart-params .dh2{font-size:12.5px;font-weight:800;color:#1f2329;margin-bottom:3px;}
+.chart-params .sub{font-size:10.5px;color:#9aa0a8;margin-bottom:8px;line-height:1.5;}
+.chart-params table{width:100%;border-collapse:collapse;font-size:11.5px;}
+.chart-params td{padding:5px 2px;border-bottom:1px solid #f0f2f6;vertical-align:top;white-space:normal;}
+.chart-params td.k{color:#8a9099;width:66px;white-space:nowrap;}
+.chart-params td b{color:#1f2329;}
+.chart-params .note{margin-top:8px;background:#f6f8fb;border-radius:6px;padding:6px 8px;font-size:10.5px;line-height:1.55;color:#6a727d;}
+.simrow.w12{opacity:.85;background:#f4f5f7;border-radius:6px;padding:3px 8px;}
+.simrow .locknote{font-size:10.5px;color:#9c6a06;background:#fff6de;border-radius:4px;padding:1px 6px;}
+.simrow.focus{background:#eef4ff;border-radius:6px;padding:3px 8px;box-shadow:inset 0 0 0 1.5px #9db9ff;}
+/* ===== v12 增补 ===== */
+td.simcell{box-shadow:inset 0 0 0 2px #8b5cf0 !important;background:#f6f3ff !important;}
+td.simcell .simto{color:#5b3fc4;font-weight:800;font-size:12px;margin-left:2px;}
+td.simcell .simic{font-size:10px;margin-left:2px;}
+.simstrip{margin:6px 0 8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;font-weight:700;color:#4b2fb0;background:#f6f3ff;border:1px dashed #8b6cf0;border-radius:8px;padding:6px 11px;}
+.simstrip.bad{background:#fdf0ef;border-color:#e8998f;color:#9c3b32;}
+.simstrip .btn6{padding:4px 12px;font-size:11.5px;}
+#nodepanel{display:none;position:fixed;z-index:72;background:#fff;border:1.5px solid #8b6cf0;border-radius:10px;box-shadow:0 10px 34px rgba(30,20,80,.24);padding:11px 13px;font-size:12px;width:322px;color:#3a4763;}
+#nodepanel .np-t{font-weight:800;color:#1f2329;font-size:13px;margin-bottom:7px;display:flex;align-items:center;}
+#nodepanel .np-t .x{margin-left:auto;color:#98a1ad;cursor:pointer;font-size:15px;}
+#nodepanel .np-r{display:flex;align-items:center;gap:7px;margin:5px 0;flex-wrap:wrap;}
+#nodepanel .np-r .k{color:#8a9099;width:56px;}
+#nodepanel .np-r b{font-size:13px;}
+#nodepanel .np-r b.mod{color:#5b3fc4;}
+#nodepanel select{font-size:12px;border:1px solid #c9d2df;border-radius:5px;padding:3px 6px;max-width:200px;}
+#nodepanel .np-warn{margin-top:7px;font-size:11.5px;border-radius:6px;padding:6px 9px;line-height:1.6;background:#f6f3ff;color:#4b2fb0;}
+#nodepanel .np-warn.bad{background:#fdf0ef;color:#b03a2e;font-weight:800;}
+#nodepanel .np-warn.good{background:#e9f7ee;color:#0e5c32;}
+#nodepanel .np-a{margin-top:9px;display:flex;gap:7px;flex-wrap:wrap;}
+#nodepanel .np-a .btn6{padding:5px 14px;font-size:12px;}
+#nodepanel .locknote{font-size:10.5px;color:#9c6a06;background:#fff6de;border-radius:4px;padding:1px 6px;}
+.ndl.mod{fill:#5b3fc4;font-weight:800;}
+.axbreak{fill:#98a1ad;font-size:13px;font-weight:700;}
+.snapline{margin:2px 0 6px;font-size:12px;color:#5a6169;background:#f7f9fc;border:1px solid #e6ebf2;border-radius:7px;padding:6px 12px;}
+.snapline b{color:#1f2329;}
+.ndl{font-size:10.5px;fill:#5a6169;paint-order:stroke;stroke:#fff;stroke-width:3px;stroke-linejoin:round;}   /* v16：白描边光晕，避免与曲线/网格/活动底色重叠不可读 */
+.ndl.b{font-weight:800;fill:#1f2329;font-size:11px;}
+.ndl.ch{fill:#1a5fb4;font-weight:700;}
+tr.sumrow td{background:#eef3fa;font-weight:800;border-top:2px solid #c3cfe0;font-size:13px;padding:8px 6px;}
+tr.sumrow td.sc-label{text-align:right;color:#3a4763;font-size:12px;padding-right:12px;}
+tr.sumrow td.sc-label .scope{font-size:11px;font-weight:700;color:#1a5fb4;background:#e7f0fd;border:1px solid #b9d4f5;border-radius:6px;padding:1px 9px;margin-left:6px;}
+tr.sumrow td.sumnet{color:#8a6206;font-size:14px;}
+tr.sumrow td.sumnet .sub6{display:block;font-size:10px;font-weight:600;color:#98a1ad;}
+.legend2.under{margin:5px 0 0 40px;display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:#5a6169;}
+/* v14：侧卡（追溯/参数）已撤销 —— 详情直显于节点，快照四项常驻图上方 snapline */
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="ttl"><span class="ico">📦</span> 发货计划演变 <span class="badge">v19 · 决策 28 基础数据简化：安全天数统一 7/14 · 库销比全局固定 3.5/4.5（短缺/正常/滞销）｜决策 27 安全区间闸：修改后果在安全天数区间内免审即时生效（留痕·抄送主管）· 出界才审（W3–W5→主管+采购；下单批→采购+终审）· ±15%/冷却 7 天退役 · W1–W2 守工厂节奏维持（审可执行性）· 部门更名「采购部」</span></div>
+
+  <!-- 分册 Tab：按站点物流时效分组 -->
+  <div class="tabs" id="tabs"></div>
+
+  <div class="card">
+    <div class="desc">
+      系统每周滚动算好发货计划，<b>你只确认「够不够、覆盖到哪周」，不用自己算</b>。表头三行：<b>周次 / 发货日期 / 覆盖售卖期</b>。<b>基准 7/6 备货周</b>（周一确认 · 7/7 周二下厂）：<b>备货当周不进表，W1 从下一周 7/13 起算</b>；+45 天交期 → 8/21 出厂落 <b>8/18 那一周（W6）</b> → <b>本期下单批 = W6 + W7 = 前沿</b>，发货计划排到 W7 为止。格子 = 该周应发量；<b>需下单（净额）= W6+W7 应发相加 − 未交货订单余量</b>，采购按净额下 PO。节奏：<b>每周新排一周（逐周滚动）</b>——非下单周排 W6，确认即承诺——<b>承诺 = 系统不重算</b>（铁律①修订）；下单周排 W7，漂移全由 W7 吸收（铁律②）；<b>周二 PO 落地前 W6 仍可提下单异议</b>（改即申请 → 采购 → 终审），PO 通过后 W6+W7 真锁死（决策 19 不可取消）。<span class="muted2">发货 = 出货 / 出厂轴，W1 = 下周；各站点周次一致，时效差异只改覆盖售卖期与在途量。</span>
+    </div>
+    <div class="jobs">
+      <div class="job"><b>① 确认发货计划</b>　常规行顶栏「一键通过（例外除外）」；<b>要改 → 展开趋势图直接拖节点</b>（上下 = 数量、左右 = 时间按周、点渠道名切换），曲线即时变，满意再「转修改申请」（模拟证据自动带入 + 补充说明必填）。闸：<b>W1–W2 锁减不锁加</b>（减发/推迟两周内不动；加发/改空派仅采购应急直改）· <b>W3–W5 三道门槛（±15%）</b> · <b>W6–W7 = 下单异议</b>（W6 已承诺可议至 PO）。</div>
+      <div class="job"><b>② 看覆盖前沿</b>　第三行「覆盖售卖期」= 这批发出去补的是哪段可售；点开行看测算（时效 / 安全库存 / 淡旺季）验系统算得对不对。</div>
+    </div>
+    <div class="kj">
+      数据口径：发货量 + 三态预警 + 库销比 + 覆盖期均系统测算，此表数字为示意 mock。<b>格子数 = 应发量（毛，销售确认）；净额列 = <b>只读结果</b> = W6+W7 − 未交货余量（2.5.2），要改数一律回格子提异议。</b>净额 = 0 时本批不下新单。周二采购在净额区「生成下单计划」→ 下单执行看板（工厂×规格 · 调拨在看板算）→ 终审。
+    </div>
+
+    <div class="rolebar" id="rolebar">
+      <span class="rlab">角色透镜</span>
+      <span class="rl active" data-r="sale">销售 <span class="bn" id="bn-sale">0</span></span>
+      <span class="rl" data-r="lead">主管 <span class="bn" id="bn-lead">0</span></span>
+      <span class="rl" data-r="ops">采购 <span class="bn" id="bn-ops">0</span></span>
+      <span class="rl" data-r="final">终审 <span class="bn" id="bn-final">0</span></span>
+      <span class="vt"><span class="on" data-v="mine">待我处理</span><span data-v="all">全部</span></span>
+      <span class="batchchip" id="batchchip" style="display:none" onclick="openBatch()">📋 本期批次签核 · 截止周三 18:00（剩 26h）</span>
+      <span class="batchchip" id="pochip" style="display:none" onclick="genPO()">⚙ 生成本期下单计划（净额 → 执行看板）</span>
+      <button class="allpass" id="allpass">✓ 全表一键通过 <span style="font-weight:400;font-size:11px;">（预警行 + 需看未读除外）</span></button>
+      <button class="phasebtn" id="phasebtn" onclick="togglePhase()">📅 本周 = 下单周：W7 新排待确认 · 周二合并 W6 下 PO（点击切换）</button>
+      <span class="rlhint" id="rlhint">同一张表、同一个 URL，角色 = 筛选视角 + 按钮组合（规格 S0）。侧边栏「审核中心」已降级为一个「待办 (N)」深链接：点击 = 打开本表 + 自动激活「待我处理」。徽章数 = 状态机流到该角色的对象数。</span>
+    </div>
+
+    <!-- S5 终审聚合面板：主表的一个模式切换，不独立开发看板 -->
+    <div id="finalpanel"></div>
+
+    <div id="auditbar" style="display:none">⚠ <b>销售提交的修改需求进入审核流</b>；当前 <b id="auditn">0</b> 条在途。<span class="muted2">（原型：提交即计入状态机）</span></div>
+
+    <div class="bar">
+      <span class="lbl">筛选</span>
+      <select><option>全部销售</option></select>
+      <select><option>全部产品标签</option><option>新品期</option><option>成长期</option><option>成熟期</option><option>淘汰期</option></select>
+      <label class="chk"><input type="checkbox"> 仅看预警</label>
+      <label class="chk"><input type="checkbox"> 仅看本周动过的</label>
+      <span class="count" id="count"></span>
+    </div>
+
+    <div class="legend">
+      <div class="ln">
+        <span class="li"><b>变动：</b></span>
+        <span class="li"><b style="color:#147a43">↑</b> 加发</span>
+        <span class="li"><b style="color:#1d5fc4">↓</b> 减发</span>
+        <span class="li"><b style="color:#c0392b">✈</b> 改空派</span>
+        <span class="li"><b style="color:#7c3aed">⟳</b> 系统重算</span>
+        <span class="li" style="margin-left:8px;"><b>流转外框：</b></span>
+        <span class="li"><span class="sw" style="box-shadow:inset 0 0 0 2px #e5c14e;background:#fffdf0;"></span> 🟡 待销售</span>
+        <span class="li"><span class="sw" style="box-shadow:inset 0 0 0 2px #e8912a;background:#fff8ee;"></span> 🟠 待主管</span>
+        <span class="li"><span class="sw" style="box-shadow:inset 0 0 0 2px #3370ff;background:#f0f5ff;"></span> 🔵 待采购</span>
+        <span class="li"><span class="sw" style="box-shadow:inset 0 0 0 2px #8b6cf0;background:#f6f3ff;"></span> 🟣 待终审</span>
+        <span class="li"><span class="sw" style="box-shadow:inset 0 0 0 2px #e34d42;background:#fdf0ef;"></span> ⛔ 被驳回</span>
+      </div>
+      <div class="ln">
+        <span class="li"><b>产品标签：</b></span>
+        <span class="li"><span class="life life-new">新品期</span></span>
+        <span class="li"><span class="life life-grow">成长期</span></span>
+        <span class="li"><span class="life life-mature">成熟期</span></span>
+        <span class="li"><span class="life life-drop">淘汰期</span></span>
+        <span class="li" style="margin-left:8px;"><b>库销比：</b><span class="tag-low" style="font-weight:700;">短缺 &lt;3.5</span> / <span class="tag-ok" style="font-weight:700;">正常 3.5–4.5</span> / <span class="tag-high" style="font-weight:700;">滞销 &gt;4.5</span>（决策 28 全局固定）</span>
+      </div>
+      <div class="ln">
+        <span class="li"><b>周段闸：</b></span>
+        <span class="li">🔒 <b>W1–W2</b> 锁减不锁加：减发/推迟不动；<b>加发/改空派仅采购直改</b>（即时生效留痕，销售知会）· 销售救急发黄/红预警</span>
+        <span class="li"><b style="color:#1d5fc4">W3–W5</b> 已承诺 · 三道门槛（连续3天偏离&gt;20% / 单次±15% / 冷却7天）</span>
+        <span class="li"><b style="color:#b06a00">W6 已承诺</b>（系统不重算 · PO 前可提异议）· <b style="color:#b06a00">W7 前沿</b> 未承诺 —— 调量＝下单异议 → 安全区间闸（区间内免审生效；出界走下单链 销售→采购→终审，决策 27）· <b>PO 落地后双周真锁 🔒</b></span>
+      </div>
+    </div>
+
+    <div class="wrap">
+      <table class="grid">
+        <thead>
+          <tr>
+            <th class="grp-info" id="gh-info" colspan="9">商品信息（看一眼就能初判：要不要备、能不能备）</th>
+            <th class="grp-week" id="gh-week" colspan="7">发货周次（备货当周 7/6 不进表 · W1 = 7/13 → W7 = 8/24；前沿 W6–W7 按净额交采购）</th>
+            <th class="grp-net" rowspan="4">需新下厂<div class="gn-sub">净额 · PO 唯一依据</div></th>
+          </tr>
+          <tr id="sub-wk"></tr>
+          <tr id="sub-date"></tr>
+          <tr id="sub-cover"></tr>
+        </thead>
+        <tbody id="body"></tbody>
+      </table>
+    </div>
+    <div class="kj" style="margin-top:8px;">W8+ 为系统预览区：仅系统顺延 / 重算可写入，销售只读（默认收起）。样板仅留 5 条 SKU 供 ERP 照做。全站点统一一张表，时效差异只体现在覆盖售卖期与到货曲线。到货曲线口径：已到 = 领星真实签收（T+1 同步），未到 = 预估单点，<b>不做到货分布</b>（07-03 会议定）；在途 = 发货量 − 已签收。<b style="color:#b06a1e">铁律①修订（承诺=系统不重算、人可议至 PO、真锁点=PO 落地）→ 列入待 Ailah 拍板清单（S6）。</b></div>
+  </div>
+</div>
+
+<div id="nodepanel"></div>
+<div id="bmask" onclick="closeBatch()"></div>
+<div id="batchbox"></div>
+
+<div id="editmask" onclick="closeEdit()"></div>
+<div id="editbox">
+  <div class="eb-h">✏ 修改申请<span class="x" onclick="closeEdit()">✕</span></div>
+  <div class="eb-b">
+    <div class="eb-ctx" id="eb-ctx"></div>
+    <div class="eb-row" id="ebrow-type"><label>修改方式</label>
+      <select id="eb-type">
+        <option value="up">↑ 加发 / 上调数量</option>
+        <option value="down">↓ 减发 / 下调数量</option>
+        <option value="air">✈ 改运输方式（海运 → 空派）</option>
+      </select></div>
+    <div class="eb-row" id="ebrow-qty"><label>新数量</label><input id="eb-qty" type="number" placeholder="调整后的数量（台）"></div>
+    <div class="eb-row"><label>理由类型</label>
+      <select id="eb-rtype"><option>秒杀排期</option><option>断货救急</option><option>需求下修</option><option>活动取消</option><option>其他</option></select></div>
+    <div class="eb-row"><label>补充说明 <b style="color:#c0392b">* 必填（加发 / 减发都必须写）</b></label>
+      <textarea id="eb-rsn" rows="3" placeholder="例：秒杀排期确认、FBA 5 天内断货、需求下修、活动取消…"></textarea></div>
+    <div class="eb-gate" id="eb-preview" style="display:none;background:#eef4ff;border-color:#bcd2ff;color:#1d3f8f;"></div>
+    <div class="eb-gate" id="eb-gate"></div>
+    <div class="eb-act"><button class="btn-submit" onclick="submitEdit()">提交申请</button><button class="btn-cancel" onclick="closeEdit()">取消</button></div>
+    <div class="eb-note">提交后：格子标 ⏳ 待审 · 顶部出现「销售提交的修改需求需要审核」· 主管 + 采购收件箱 +1</div>
+  </div>
+</div>
+<div id="tip"></div>
+<div id="mask"></div>
+<div id="drawer">
+  <div class="dh"><span id="dh-ttl">发货变动</span><span class="x" onclick="closeDrawer()">✕</span></div>
+  <div class="db" id="db"></div>
+</div>
+
+<script>
+/* cov = 该出货周对应的可售覆盖窗口（出货日 + 海运~35 + 入仓~5 ≈ +40 天，宽 7 天）。
+   本册主流时效示意；精确到 SKU 的覆盖走行内标签 + 抽屉 */
+/* 基准 2026-07-06（周一 · 备货周）：备货当周不进表 —— 系统从下一周起算 W1 = 7/13。
+   下厂 7/7 周二 + 45 天交期 → 8/21 出厂 → 落 W6（8/17~23，即 8/18 那一周）
+   → 本期下单批 = W6 + W7，发货计划排到 W7（8/24~30）为止，W8+ 系统预览不排。
+   W1~W2（备货当周往后推两周）锁定不调。 */
+const WEEKS=[
+  {w:'W1',d:'07-13~07-19',cov:'08-22~28'},{w:'W2',d:'07-20~07-26',cov:'08-29~09-04'},
+  {w:'W3',d:'07-27~08-02',cov:'09-05~11'},{w:'W4',d:'08-03~08-09',cov:'09-12~18'},
+  {w:'W5',d:'08-10~08-16',cov:'09-19~25'},{w:'W6',d:'08-17~08-23',cov:'09-26~10-02'},
+  {w:'W7',d:'08-24~08-30',cov:'10-03~09'}
+];
+
+/* 统一系统：全站点一张表（07-03 定：不分美加/欧/日）。发货网格排到本期下单末周 W7，W8+ 不预填 */
+const SHEETS=[
+  {key:'all',ic:'🌐',label:'全部站点 · 统一系统',sites:['US','CA','DE','FR','JP'],horizon:6}
+];
+
+const CH={
+  'r1w2':{type:'up',pending:true,stat:'org',needFinal:true,from:600,to:800,s3:'amber',s3t:'黄·空运',by:'Echo',at:'06-29 14:32',
+    short:'秒杀排期确认，FBA 近 5 天将断货，临时加发',sellable:'09-05 ~ 09-11',fba:142,daily:96,sout:'5 天后',cur:'海运 37 天',
+    concl:{plan:600,calc:800,dev:'+33.3%',why:'秒杀排期确认 + 近期日均上调'},
+    tl:[
+      {kind:'sys',who:'系统',when:'06-22 09:10',chip:'sys',chipt:'⟳ 重算',from:'—',to:600,rsn:'每周一按实际销量滚动重算，W3 应发 600 台',st:'live',stt:'已生效'},
+      {kind:'sale',who:'销售 Echo',when:'06-29 14:32',chip:'up',chipt:'↑ 加发',from:600,to:800,rsn:'秒杀排期确认，FBA 近 5 天将断货，临时加发 200 台',st:'wait',stt:'⏳ 待采购审',cur:true}
+    ]},
+  'r8w5':{type:'air',pending:true,stat:'ops',needFinal:true,from:'海运',to:'空派',s3:'red',s3t:'红·海外仓',by:'Echo',at:'06-29 16:05',
+    short:'红预警·必断货救援，海运赶不上，改空派',sellable:'09-12 ~ 09-18',fba:120,daily:108,sout:'即将断货',cur:'空派 7 天',
+    concl:{plan:'800·海运',calc:'800·空派',dev:'改运输方式',why:'海运 37 天赶不上断货日，必断货救援'},
+    tl:[
+      {kind:'sys',who:'系统',when:'06-29 06:00',chip:'sys',chipt:'⟳ 判红',from:'海运',to:'海运',rsn:'三态判红：预计断货日 < 空派到货可售日，进必断货特殊处理',st:'live',stt:'系统判定'},
+      {kind:'sale',who:'销售 Echo',when:'06-29 16:05',chip:'air',chipt:'✈ 改空派',from:'海运',to:'空派',rsn:'红预警救援，海运赶不上，800 台改空派填断货窗口',st:'wait',stt:'⏳ 提交审核'},
+      {kind:'sys',who:'主管 李敏',when:'07-06 09:40',chip:'sys',chipt:'✓ 真实性通过',from:'海运',to:'空派',rsn:'断货窗口属实（三态判红 + FBA 水位核对），转采购审可执行性',st:'pass',stt:'✓ 主管通过 → 待采购',cur:true}
+    ]},
+  'r12w4':{type:'up',pending:false,stat:'ok',from:56,to:80,s3:'green',s3t:'绿·海运',by:'Sisley',at:'06-28 11:20',
+    short:'动销回暖，补足覆盖期缺口',sellable:'7/27 ~ 8/2',fba:210,daily:11,sout:'42 天后',cur:'海运 37 天',
+    concl:{plan:56,calc:80,dev:'+42.9%',why:'近 14 天动销回暖，覆盖期需求上修'},
+    tl:[
+      {kind:'sys',who:'系统',when:'06-15 09:10',chip:'sys',chipt:'⟳ 重算',from:'—',to:56,rsn:'W4 初始应发 56 台',st:'live',stt:'已生效'},
+      {kind:'sale',who:'销售 Sisley',when:'06-22 10:40',chip:'up',chipt:'↑ 加发',from:56,to:72,rsn:'预判动销回暖加发',st:'rej',stt:'✕ 采购驳回'},
+      {kind:'sys',who:'采购 Karl',when:'06-22 15:02',chip:'sys',chipt:'驳回',from:72,to:56,rsn:'驳回理由：动销回暖证据不足，先维持，观察一周再议',st:'live',stt:'维持原计划'},
+      {kind:'sale',who:'销售 Sisley',when:'06-28 11:20',chip:'up',chipt:'↑ 加发',from:56,to:80,rsn:'近 7 天日均确认上行至 11/天，覆盖期缺口扩大，加发到 80',st:'pass',stt:'✓ 采购通过',cur:true}
+    ]},
+  'r14w3':{type:'down',pending:false,stat:'ok',from:504,to:400,s3:'green',s3t:'绿·海运',by:'Eva',at:'06-28 09:45',
+    short:'近 7 天动销转弱，主动减发避免压仓',sellable:'8/3 ~ 8/9',fba:980,daily:58,sout:'30 天后',cur:'海运 37 天',
+    concl:{plan:504,calc:400,dev:'−20.6%',why:'动销转弱，库销比超 4.5 入滞销区，主动减发'},
+    tl:[
+      {kind:'sys',who:'系统',when:'06-21 09:10',chip:'sys',chipt:'⟳ 重算',from:'—',to:504,rsn:'W3 应发 504 台',st:'live',stt:'已生效'},
+      {kind:'sale',who:'销售 Eva',when:'06-28 09:45',chip:'down',chipt:'↓ 减发',from:504,to:400,rsn:'近 7 天动销转弱，库销比升破 4.5 滞销线，主动减发避免压仓',st:'pass',stt:'✓ 采购通过',cur:true}
+    ]},
+  /* v16：原 r4w8（W8 系统新增）为孤儿 mock——W8 列不渲染、无格引用，已删 */
+  'r5w4':{type:'sys',pending:true,stat:'yel',from:600,to:800,s3:'amber',s3t:'黄·库销短缺',by:'系统',at:'07-06 06:00',
+    short:'周一滚动重算：近 7 天日均上行，W5 应发 600 → 800（例外格，需销售确认）',sellable:'09-19 ~ 09-25',fba:310,daily:72,sout:'21 天后',cur:'海运 37 天',
+    concl:{plan:600,calc:800,dev:'+33.3%',why:'滚动重算：近 7 天日均 64 → 72，覆盖期需求上修'},
+    tl:[
+      {kind:'sys',who:'系统',when:'07-06 06:00',chip:'sys',chipt:'⟳ 重算',from:600,to:800,rsn:'每周一滚动重算：日均上行，W5 应发调至 800（例外格 → 待销售确认）',st:'wait',stt:'🟡 待销售确认',cur:true}
+    ]}
+};
+
+const ROWS=[
+  /* 样板仅留 5 条演示（ERP 照此实现）：
+     ① ONO3Pro US：净额公式主案例（1600−600=1000）+ W3 待审加发
+     ② L61Pro US：红预警改空派案例
+     ③ J62Pro FR：W3 待审改量案例（小体量 SKU）
+     ④ J01Pro JP：净额 = 0 案例（未交货订单余量够，本批不下新单）
+     ⑤ ONO5Pro US：新品案例（0 容忍 · 不套健康区间闸） */
+  {site:'US',stk:'必断货',sales:'Echo',model:'ONO3Pro',asin:'B0FB3P6H48',daily:96,grade:'S',isr:1.6,isrTag:'短缺',life:'成长',
+   cells:[[1000,'lock'],[800,'lock'],[800,'chg','r1w2'],800,800,800,800]},
+  {site:'US',stk:'必断货',sales:'Echo',model:'L61Pro',asin:'B0GMD43632',daily:108,grade:'S',isr:1.5,isrTag:'短缺',life:'成长',
+   cells:[[1080,'lock'],[500,'lock'],500,[800,'chg','r8w5'],800,300,null]},
+  {site:'FR',sales:'Sisley',model:'J62Pro',asin:'B0H33Y34S3',daily:11,grade:'A',isr:3.9,isrTag:'正常',life:'成长',
+   cells:[[64,'lock'],[56,'lock'],[80,'chg','r12w4'],64,32,32,160]},
+  {site:'JP',sales:'Jennifer',model:'J01Pro',asin:'B0G2XX7MVH',daily:11,grade:'B',isr:3.8,isrTag:'正常' /* 决策28:原3.0按新阈值属短缺,与绿行演示语义冲突,mock 调 3.8 */,life:'成长',
+   cells:[[104,'lock'],[104,'lock'],144,null,104,104,104]},
+  {site:'US',sales:'Echo',model:'ONO5Pro',asin:'B0G4D9NJRX',daily:72,grade:'S',isr:1.8,isrTag:'短缺',life:'新品',
+   cells:[[600,'lock'],[300,'lock'],300,360,[800,'chg','r5w4'],600,300]}
+];
+
+const MK={up:'↑',down:'↓',air:'✈',sys:'⟳'};
+const LIFE={'新品':'new','成长':'grow','成熟':'mature','淘汰':'drop'};
+const ISRT={'短缺':'low','正常':'ok','滞销':'high'};  // 决策 28：库销比全局固定 <3.5 短缺 / 3.5-4.5 正常 / >4.5 滞销
+const DING=[5,6];   // 本期下单落点：7/7 周二下厂 + 45 天交期 → 8/21 出厂落 W6 → 本期下单批 = W6+W7；PO 依据 = 净额列
+let EDITCTX=null;
+let ORDER_WEEK=true;          // 逐周滚动：非下单周=W6新排待确认(无W7列)；下单周=W6已承诺锁定+W7新排待确认
+let USEQ=0;const ORDOK={};   // 行级本周确认标记（例外⑤：新长出的一周随行确认；确认对象=发货计划，不是下单额）
+let POGEN=false;             // 采购已按净额生成本期下单计划（PO 草案 → 下单执行看板 → 终审）
+/* v10：净额 = 只读结果（发货计划 − 未交货余量），修改一律发生在 W6/W7 格子（=下单异议）。
+   跨站点调拨 / 让单在「下单执行看板」按工厂×规格计算（执行口径），不回写需求口径。 */
+const READ=new Set();         // 「需看」已读行（点开趋势/变动详情即记为已读）
+/* ===== v6 审核一体化全局（规格 S0）===== */
+let ROLE='sale', MINE=true, POAPPROVED=false, CLK=0;
+const OWNER={yel:'sale',rej:'sale',org:'lead',ops:'ops',fin:'final'};
+const RNAME={sale:'销售',lead:'主管',ops:'采购',final:'终审'};
+const STXT={yel:'🟡 待销售确认',rej:'⛔ 已驳回 · 待销售处理',org:'🟠 待主管审（真实性）',ops:'🔵 待采购审（可执行性）',fin:'🟣 待终审（本期 PO 聚合）',ok:'✅ 已生效'};
+const BATCH={signed:null,acted:{}};
+const MISS=[{id:'m1',nm:'ONO3Pro · US · W6 首周',dt:'覆盖 09-26~10-02 落入<b>秋促窗口</b>（9/10~10/10，主管活动日历）· 系统数 <b>800</b> · 销售一键确认未调整',state:null}];
+const ACCU={Echo:'82%',Sisley:'76%',Jennifer:'64%'};
+function statOf(o){return (o&&o.stat)||'ok';}
+function now6(){CLK++;return '11:'+String(10+CLK).padStart(2,'0');}
+function objBy(id,kind){return CH[id];}   // v10：净额申请机制已删除，审核对象只剩格子
+function pushTl(o,who,chipt,rsn,st,stt){if(!o.tl)o.tl=[];o.tl.forEach(t=>t.cur=false);
+  o.tl.push({kind:'sys',who:who,when:'07-06 '+now6(),chip:'sys',chipt:chipt,from:o.from,to:o.to,rsn:rsn,st:st,stt:stt,cur:true});}
+/* 未交货订单可用量（滚动到覆盖期起点的既有供给，mock；真实值由 2.5.2 滚动模拟输出） */
+const UNDELIV={'B0FB3P6H48':600,'B0G2XX7MVH':380,'B0G4D9NJRX':120,'B0H33Y34S3':0,'B0GMD43632':0};
+let CUR=[];
+
+/* ===== 到货 & 安全库存天数趋势（v2：180 天轴 · 今天分界「实到签收 vs 预估」· 上下限 · 活动底色） ===== */
+const CD_DATES=(function(){const a=[],d=new Date(2026,6,1);for(let i=0;i<98;i++){const x=new Date(d.getTime()+i*864e5);a.push(('0'+(x.getMonth()+1)).slice(-2)+'-'+('0'+x.getDate()).slice(-2));}return a;})();
+const TODAY_I=5;  // 2026-07-06（v16 修复：图表原用 07-03，与表格基准 07-06 不一致）
+const LOW_D=7,HIGH_D=14;  // 安全天数上下限（决策 28：统一 7/14，不分站点/新老品/淡旺季，配置中心两个常数）
+/* B2 修复：与字典 2.0.2 定稿区间一致（PD 6/10–7/10）；越窗部分绘制时钳制 */
+const ACT=[{n:'PD',s:'06-10',e:'07-10'},{n:'秋促',s:'09-10',e:'10-10'},{n:'黑五',s:'11-01',e:'12-15'}];
+/* v8：CD_ARR 静态到货表已删除 —— 批次一律由行内周格子推导（rowBatches），表↔曲线↔模拟同一套数 */
+
+function toggleExp(ri){
+  READ.add(ri);refreshCf(ri);
+  const er=document.getElementById('exp-'+ri),box=er.querySelector('.chartbox'),arw=document.getElementById('arw-'+ri);
+  const tr=arw.parentElement;
+  if(er.style.display==='none'){
+    if(box.dataset.built==='0'){box.innerHTML=buildChart(ri);box.dataset.built='1';}
+    er.style.display='';arw.querySelector('.arw').textContent='▼';tr.classList.add('opened');
+  }else{er.style.display='none';arw.querySelector('.arw').textContent='▶';tr.classList.remove('opened');}
+}
+/* ===== v8：基础参数（发货测算依据，配置中心取值） ===== */
+const PARAMS={
+  'B0FB3P6H48':{lead:45,ship:'美国海运普线-35天',t:37,inb:7,inbN:'到货日属淡季，建议 7（旺季 14）',safe:14,safeN:'S 级产品 +7 = 14（老品标准 7）'},
+  'B0GMD43632':{lead:45,ship:'美国海运普线-35天',t:37,inb:7,inbN:'到货日属淡季，建议 7（旺季 14）',safe:14,safeN:'S 级产品 +7 = 14（老品标准 7）'},
+  'B0H33Y34S3':{lead:45,ship:'法国海运普线-40天',t:42,inb:7,inbN:'到货日属淡季，建议 7（旺季 14）',safe:7,safeN:'A 级老品标准 7'},
+  'B0G2XX7MVH':{lead:45,ship:'日本海运普线-28天',t:30,inb:7,inbN:'到货日属淡季，建议 7（旺季 14）',safe:7,safeN:'B 级老品标准 7'},
+  'B0G4D9NJRX':{lead:45,ship:'美国海运普线-35天',t:37,inb:7,inbN:'到货日属淡季，建议 7（旺季 14）',safe:14,safeN:'新品 · S 级 +7 = 14'}
+};
+const SHOW_STOCK=false;
+/* 库存快照 mock：FBA 在库 / 在途（真实值 = 领星 T+1 同步 + 发货−签收） */
+const STOCKX={
+  'B0FB3P6H48':{fba:142,transit:1730},'B0GMD43632':{fba:120,transit:1580},
+  'B0H33Y34S3':{fba:210,transit:160},'B0G2XX7MVH':{fba:340,transit:208},'B0G4D9NJRX':{fba:190,transit:2000}   /* v16 mock 校准：绿色行起点抬高，负库存曲线只出现在必断货行（数据修复轮） */
+};
+/* 预计断货日：曲线首个触底日（与曲线同源；真实 = 2.4.2 三态预警口径） */
+function soutOf(r){
+  const sys=seriesFor(r,null);
+  for(let i=TODAY_I+1;i<sys.length;i++){if(sys[i]<=0)return CD_DATES[i];}   /* B1 修复：断货 = 安全天数 ≤0（原 ≤3 是 floor 的权宜判法） */
+  return null;
+}
+
+/* ===== v14：图表几何（全宽横贯版面） ===== */
+const G={W:1400,H:310,L:46,R:20,T:26,B:44};
+G.pw=G.W-G.L-G.R;G.ph=G.H-G.T-G.B;G.yMax=50;
+/* 空段压缩：今天~首个到货前（约 7/1~8/12）压到总宽 16%，后段（可调整区）拿走 84% */
+const BREAK_I=42;               // ≈ 8/12，首批到货前的分界
+const COMPRESS=0.16;            // 前段占比
+function frac(i){const N=CD_DATES.length-1;
+  if(i<=BREAK_I)return i/BREAK_I*COMPRESS;
+  return COMPRESS+(i-BREAK_I)/(N-BREAK_I)*(1-COMPRESS);}
+const gxs=i=>G.L+frac(i)*G.pw;
+const gys=v=>G.T+(1-Math.min(Math.max(v,0),G.yMax)/G.yMax)*G.ph;   /* 负值贴 0 轴显示（数据仍为负，B1） */
+function xToI(px){const t=(px-G.L)/G.pw;const N=CD_DATES.length-1;
+  if(t<=COMPRESS)return Math.round(t/COMPRESS*BREAK_I);
+  return Math.round(BREAK_I+(t-COMPRESS)/(1-COMPRESS)*(N-BREAK_I));}
+
+/* ===== 拖拽即改：上下=数量（1 格 = 1 天库存 = 日均台数）· 左右=时间（按周吸附）· 点渠道名切换 ===== */
+let DRAG=null;
+function dragAllowed(b){
+  if(POAPPROVED&&DING.includes(b.wi)&&ORDER_WEEK)return false;   // PO 落地后 W6/W7 真锁
+  return true;   // v16：W1–W2 不再整体锁——唯一规则 =「不可往后挪」（move 中钳 delay ≤0）；数量按角色在 move / 转申请时钳制
+}
+const DRAG_TH=6;   // 位移 <6px = 点击（弹面板）；≥6px = 拖拽
+function simDrag(e,ri,wi){
+  e.preventDefault();if(e.stopPropagation)e.stopPropagation();
+  const r=CUR[ri];const b=rowBatches(r).find(x=>x.wi===wi);
+  if(!b)return;
+  const svg=document.getElementById('svg-'+ri);
+  const bb=svg&&svg.getBoundingClientRect?svg.getBoundingClientRect():{left:0,top:0,width:G.W,height:G.H};
+  const m0=SIM.mods[wi]||{};
+  DRAG={ri:ri,wi:wi,b:b,x0:e.clientX,y0:e.clientY,bb:bb,started:false,locked:!dragAllowed(b),
+        q0:(m0.qty!=null&&!isNaN(m0.qty))?m0.qty:b.qty,d0:m0.delay||0};
+  document.onmousemove=simDragMove;
+  document.onmouseup=simDragEnd;
+}
+function simDragMove(e){
+  if(!DRAG)return;
+  if(DRAG.locked)return;   /* v16 修复：PO 落地后 W6/W7 真锁——原 locked 标记未被消费，锁形同虚设 */
+  const {ri,wi,b,bb}=DRAG;const r=CUR[ri];
+  if(!DRAG.started){
+    if(Math.abs(e.clientX-DRAG.x0)<DRAG_TH&&Math.abs(e.clientY-DRAG.y0)<DRAG_TH)return;  // 阈值内不动
+    // 提前救援：W1–W2 也允许进入拖拽（move 内按方向钳制，只放行提前 / 采购加量）
+    DRAG.started=true;
+    if(!SIM.on){SIM.on=true;rebuildChart(ri);}
+    hideNodePanel();
+  }
+  const sx=G.W/(bb.width||G.W), sy=G.H/(bb.height||G.H);
+  const dayPx=G.pw/(CD_DATES.length-1);
+  const dxDays=(e.clientX-DRAG.x0)*sx/dayPx;
+  let dW=Math.round(dxDays/7);                                   // 左右：按周吸附（负=提前）
+  const daysPerPx=G.yMax/G.ph;
+  const dyDays=Math.round((DRAG.y0-e.clientY)*sy*daysPerPx);     // 上下：1 天库存/格
+  const m=SIM.mods[wi]=SIM.mods[wi]||{};
+  const t1=m.ch?(CHS.find(c=>c.k===m.ch)||{t:b.t}).t:b.t;
+  if(b.lockWk){
+    /* v17（2026-07-07 拍板）：W1–W2 守的是工厂节奏——
+       销售：不可推迟、不可减量；提前 / 加量 / 改渠道放行（转申请走主管链，非即时）
+       采购：可推迟（库存堆积减压，克制使用）/ 提前 / 加量 / 改渠道，应急直改留痕；不可减量 */
+    const dMax=(ROLE==='ops')?2:0;
+    let d=Math.max(-2,Math.min(dMax,DRAG.d0+dW));
+    while(b.si+d*7<TODAY_I&&d<dMax)d++;                          // 出货日不得早于今天
+    while(b.si+d*7+t1>=CD_DATES.length&&d>-2)d--;                // 到货点留在窗内（采购推迟时）
+    m.delay=d;
+    m.qty=Math.max(b.qty,DRAG.q0+dyDays*r.daily);                // 双角色：只加不减（销售加量走主管链）
+    if(ROLE!=='ops')m.saleAdvance=(d<0);
+  }else{
+    const dMin=-2, dMax=2;                                       // 提前放开：不再钳到 W1–W2 边界（提前=救断货，允许）
+    let d=Math.max(dMin,Math.min(dMax,DRAG.d0+dW));
+    while(b.si+d*7+t1>=CD_DATES.length&&d>dMin)d--;              // 到货点留在窗内
+    while(b.si+d*7+t1<TODAY_I&&d<dMax)d++;                       // 到货点不得早于今天
+    m.delay=d;
+    m.qty=Math.max(0,DRAG.q0+dyDays*r.daily);
+  }
+  liveUpdate(ri,wi);
+}
+function simDragEnd(e){
+  if(!DRAG)return;
+  const {ri,wi,started}=DRAG;
+  document.onmousemove=null;document.onmouseup=null;
+  if(!started){DRAG=null;openNodePanel(ri,wi);return;}   // 视为点击 → 详情面板
+  DRAG=null;
+  const b=rowBatches(CUR[ri]).find(x=>x.wi===wi);
+  const m=SIM.mods[wi];
+  if(m&&!m.delay&&!m.ch&&m.qty===b.qty){delete SIM.mods[wi];rebuildChart(ri);return;}
+  markSimCell(ri,wi);rebuildChart(ri);
+  openNodePanel(ri,wi,true);   // 拖后 → 面板带「确认 / 还原」+「转修改申请」
+}
+/* 拖拽中的轻量重绘：只动模拟线 / 节点 / 标注 / 状态条文本，不整卡重建 */
+function liveUpdate(ri,wi){
+  const r=CUR[ri];
+  SIMS=seriesFor(r,SIM.mods);
+  const lineOf=arr=>arr.map((v,i)=>(i?'L':'M')+gxs(i).toFixed(1)+' '+gys(v).toFixed(1)).join(' ');
+  const sp=document.getElementById('simpath-'+ri);if(sp)sp.setAttribute('d',lineOf(SIMS));
+  const b=rowBatches(r).find(x=>x.wi===wi);if(!b)return;
+  const m=SIM.mods[wi]||{};
+  const t1=m.ch?(CHS.find(c=>c.k===m.ch)||{t:b.t}).t:b.t;
+  const ai=Math.min(CD_DATES.length-1,b.si+((m.delay||0)*7)+t1);
+  const q=(m.qty!=null&&!isNaN(m.qty))?m.qty:b.qty;
+  const nd=document.getElementById(`nd-${ri}-${wi}`);
+  if(nd){nd.setAttribute('cx',gxs(ai).toFixed(1));nd.setAttribute('cy',gys(SIMS[ai]).toFixed(1));}
+  const gg=document.getElementById(`ndg-${ri}-${wi}`);
+  if(gg)gg.setAttribute('transform',`translate(${gxs(ai).toFixed(1)},${gys(SIMS[ai]).toFixed(1)})`);
+  const tq=document.getElementById(`ndq-${ri}-${wi}`);if(tq)tq.textContent=`${WEEKS[wi].w} · ${fmt(q)} 台${q!==b.qty?'*':''}`;
+  const td2=document.getElementById(`ndd-${ri}-${wi}`);if(td2)td2.textContent=`到货 ${CD_DATES[ai].replace('-','/')}${(m.delay||0)?((m.delay>0?' ⏱+':' ⏱')+m.delay+'周'):''}`;
+  const st=document.getElementById('sstx-'+ri);
+  if(st){const base=metricsOf(seriesFor(r,null)),sm=metricsOf(SIMS);
+    const nMod=Object.keys(SIM.mods).filter(w=>{const x=SIM.mods[w];return x&&(x.delay||x.ch||x.qty!=null);}).length;
+    st.innerHTML=`🧪 模拟中 · <b>${nMod}</b> 处改动 · 合计：超上限 ${base.over} → <b>${sm.over}</b> 天 · 最低 ${base.mn} → <b>${sm.mn}</b> 天${sm.mn<LOW_D?' · ⚠ 跌破安全下限':(sm.over<base.over?' · ✓ 向健康回落':'')}`;}
+}
+/* ===== v15：节点面板（点击弹出）—— 详情 + 渠道下拉 + 确认/还原 + 就地转申请 ===== */
+let PENDMOD=null;   // 拖后待确认：{ri,wi,snapshot}；未确认则 revert
+function nodeMetrics(r,wi,m){
+  const base=metricsOf(seriesFor(r,null));
+  const one={};if(m&&(m.delay||m.ch||m.qty!=null))one[wi]=m;
+  const solo=metricsOf(seriesFor(r,one));
+  return {base:base,solo:solo};
+}
+function openNodePanel(ri,wi,afterDrag){
+  const p=document.getElementById('nodepanel');if(!p)return;
+  const r=CUR[ri];const b=rowBatches(r).find(x=>x.wi===wi);if(!b){p.style.display='none';return;}
+  const pr=PARAMS[r.asin]||PARAMS['B0FB3P6H48'];
+  const m=SIM.mods[wi]||{};
+  const canEdit=dragAllowed(b);
+  const chk=m.ch||chKeyOf(b.ch);
+  const t1=(CHS.find(c=>c.k===chk)||{t:b.t}).t;
+  const ai=Math.min(CD_DATES.length-1,b.si+((m.delay||0)*7)+t1);
+  const q=(m.qty!=null&&!isNaN(m.qty))?m.qty:b.qty;
+  const sell=CD_DATES[Math.min(CD_DATES.length-1,ai+pr.inb)]||'—';
+  const chList=CHS;   // v16：W1–W2 渠道与 W3+ 无区别（仅锁推迟）
+  const modded=m.delay||m.ch||m.qty!=null;
+  const mm=nodeMetrics(r,wi,m);const bad=mm.solo.mn<LOW_D;const better=mm.solo.over<mm.base.over;
+  if(afterDrag&&!PENDMOD)PENDMOD={ri:ri,wi:wi};
+  p.innerHTML=`<div class="np-t">${WEEKS[wi].w} 批发　<span style="font-weight:400;color:#8a9099;font-size:11px">发货 ${WEEKS[wi].d.slice(0,5)}</span>${b.lockWk?` <span class="locknote">🔒 W1–W2 守工厂节奏</span>`:''}<span class="x" onclick="closeNodePanel()">✕</span></div>
+    <div class="np-r"><span class="k">数量</span><b class="${(m.qty!=null&&m.qty!==b.qty)?'mod':''}">${fmt(q)}</b> 台${(m.qty!=null&&m.qty!==b.qty)?`　<span style="color:#98a1ad">原 ${fmt(b.qty)}</span>`:''}</div>
+    <div class="np-r"><span class="k">发货时间</span><b class="${(m.delay||0)?'mod':''}">${WEEKS[wi].d.slice(0,5)}${(m.delay||0)?(m.delay>0?` ⏱ 推迟 ${m.delay} 周`:` ⏱ 提前 ${-m.delay} 周`):''}</b></div>
+    <div class="np-r"><span class="k">渠道</span>${canEdit
+      ? `<select onchange="nodeSetCh(${ri},${wi},this.value)">${chList.map(c=>`<option value="${c.k}" ${chk===c.k?'selected':''}>${c.n}</option>`).join('')}</select>`
+      : `<b>${(CHS.find(c=>c.k===chk)||{}).n}</b>`}</div>
+    <div class="np-r"><span class="k">到货</span><b class="${(m.delay||m.ch)?'mod':''}">${CD_DATES[ai]}</b>　→ 入仓 ${pr.inb} 天 →　可售 <b>${sell}</b></div>
+    <div class="np-r"><span class="k">影响</span>≈ +${Math.round(q/r.daily)} 天安全库存</div>
+    ${modded?`<div class="np-warn ${bad?'bad':(better?'good':'')}">此改动：超上限 ${mm.base.over} → <b>${mm.solo.over}</b> 天 · 最低 ${mm.base.mn} → <b>${mm.solo.mn}</b> 天${bad?' · ⚠ 跌破安全下限，引入断货风险':(better?' · ✓ 向健康回落':'')}</div>`:''}
+    ${!canEdit?`<div class="np-warn">本期 PO 已锁（决策 19）。</div>`:(b.lockWk?`<div class="np-warn">W1–W2 守工厂节奏：${ROLE==='ops'?'采购可推迟（堆积减压，克制使用）/ 提前 / 加量 / 改渠道，直改即时生效留痕；不可减量。':'销售可提前 / 加量 / 改渠道（转申请走主管链）；不可推迟、不可减量 —— 推迟找采购，减压走顺延。'}</div>`:'')}
+    <div class="np-a">${
+      PENDMOD&&PENDMOD.ri===ri&&PENDMOD.wi===wi
+        ? `<button class="btn6 b-blue" onclick="nodeConfirm(${ri},${wi})">✓ 确认此改动</button><button class="btn6 b-ghost" onclick="nodeRevert(${ri},${wi})">↩ 还原</button>`
+        : (modded?`<button class="btn6 b-blue" onclick="openSimApply(${ri})">→ 转为修改申请</button><button class="btn6 b-ghost" onclick="nodeRevert(${ri},${wi})">↩ 还原此格</button>`:'')
+    }</div>`;
+  p.style.display='block';
+  const nd=document.getElementById(`nd-${ri}-${wi}`);
+  let x=innerWidth/2-160,y=160;
+  if(nd&&nd.getBoundingClientRect){const bb=nd.getBoundingClientRect();x=bb.left-150;y=bb.bottom+12;}
+  if(x<8)x=8;if(x+330>innerWidth)x=innerWidth-338;
+  if(y+240>innerHeight)y=Math.max(10,y-300);
+  p.style.left=x+'px';p.style.top=y+'px';
+  NPOPEN={ri:ri,wi:wi};
+}
+let NPOPEN=null;
+function closeNodePanel(){const p=document.getElementById('nodepanel');if(p)p.style.display='none';NPOPEN=null;
+  if(PENDMOD){nodeRevert(PENDMOD.ri,PENDMOD.wi);}}   // 关闭 = 未确认 → 自动还原
+function hideNodePanel(){const p=document.getElementById('nodepanel');if(p)p.style.display='none';NPOPEN=null;}
+function nodeSetCh(ri,wi,ck){const m=SIM.mods[wi]=SIM.mods[wi]||{};m.ch=ck;
+  if(!SIM.on)SIM.on=true;
+  if(!PENDMOD)PENDMOD={ri:ri,wi:wi};
+  markSimCell(ri,wi);rebuildChart(ri);openNodePanel(ri,wi);}
+function nodeConfirm(ri,wi){PENDMOD=null;markSimCell(ri,wi);rebuildChart(ri);openNodePanel(ri,wi);}  // 保留改动，转为「转申请」态
+function nodeRevert(ri,wi){delete SIM.mods[wi];PENDMOD=null;
+  const k='k'+ri+'-'+wi;const td=document.querySelector(`td[data-cell="${ri}-${wi}"]`);
+  if(td&&(k in SIMMARK)){td.classList.remove('simcell');td.innerHTML=SIMMARK[k];delete SIMMARK[k];}
+  rebuildChart(ri);closeNodePanelSoft();}
+function closeNodePanelSoft(){const p=document.getElementById('nodepanel');if(p)p.style.display='none';NPOPEN=null;}
+
+/* 点渠道名 = 循环切换（W1–W2 只在不慢于当前的渠道里循环） */
+function simCycleCh(ri,wi){
+  const r=CUR[ri];const b=rowBatches(r).find(x=>x.wi===wi);if(!b||!dragAllowed(b))return;
+  const list=CHS;   // v16：W1–W2 渠道放开
+  const m=SIM.mods[wi]||{};
+  const cur=m.ch||chKeyOf(b.ch);
+  const idx=list.findIndex(c=>c.k===cur);
+  const nxt=list[(idx+1)%list.length].k;
+  if(!SIM.on)SIM.on=true;
+  const mm=SIM.mods[wi]=SIM.mods[wi]||{};mm.ch=nxt;
+  markSimCell(ri,wi);rebuildChart(ri);
+}
+/* 抽屉「修改申请」入口 → 展开趋势图开模拟（操作 = 直接拖节点） */
+function openSimChart(ri){
+  READ.add(ri);
+  const er=document.getElementById('exp-'+ri);
+  if(er&&er.style.display==='none')toggleExp(ri);
+  SIM.on=true;rebuildChart(ri);
+  if(er&&er.scrollIntoView)er.scrollIntoView({behavior:'smooth',block:'center'});
+}
+/* 全区悬停：对齐最近日期即显示，带跟随虚线 */
+function chartHover(e,ri){
+  const svg=e.target.ownerSVGElement;if(!svg)return;
+  const bb=svg.getBoundingClientRect();
+  const x=(e.clientX-bb.left)*(G.W/(bb.width||G.W));
+  let i=xToI(x);
+  i=Math.max(0,Math.min(CD_DATES.length-1,i));
+  cdHov(e,i);
+  const g=document.getElementById('hvl-'+ri);
+  if(g){const gx=gxs(i).toFixed(1);g.setAttribute('x1',gx);g.setAttribute('x2',gx);g.setAttribute('opacity','1');}
+}
+
+/* ===== 图表（v14 终版：全宽 · 节点常显详情 · 拖拽即改 · 无侧卡） ===== */
+function buildChart(ri){
+  const r=CUR[ri];
+  const p=PARAMS[r.asin]||PARAMS['B0FB3P6H48'];
+  const SYS=seriesFor(r,null);
+  const SALE=SYS.map(v=>Math.min(46,Math.round(v*1.02+0.6)));
+  const DAILY=i=>Math.round(r.daily*(1+0.06*Math.sin(i/9)));
+  const SIMSER=SIM.on?seriesFor(r,SIM.mods):null;
+  SIMS=SIMSER;
+  LASTC={ri:ri,sys:SYS,sale:SALE,sim:SIMSER,daily:DAILY};
+  const N=CD_DATES.length;
+  const line=arr=>arr.map((v,i)=>(i?'L':'M')+gxs(i).toFixed(1)+' '+gys(v).toFixed(1)).join(' ');
+  let grid='',ylabs='';
+  for(let g=0;g<=50;g+=10){const y=gys(g);grid+=`<line x1="${G.L}" y1="${y}" x2="${G.W-G.R}" y2="${y}" stroke="#eef1f5"/>`;ylabs+=`<text class="ylab" x="${G.L-6}" y="${y+3}" text-anchor="end">${g}</text>`;}
+  let xlabs='';[0,BREAK_I,52,63,73,83,93,N-1].forEach(i=>{if(i<N)xlabs+=`<text class="xlab" x="${gxs(i).toFixed(1)}" y="${G.H-G.B+13}" text-anchor="middle">${CD_DATES[i]}</text>`;});
+  const brx=gxs(BREAK_I);
+  xlabs+=`<text class="axbreak" x="${(brx-4).toFixed(1)}" y="${G.H-G.B-2}">≈</text><text class="xlab" x="${brx.toFixed(1)}" y="${G.T-6}" text-anchor="middle" fill="#98a1ad">↤ 空档压缩 ｜ 可调整区 ↦</text>`;
+  let acts='';
+  ACT.forEach(a=>{let st=CD_DATES.indexOf(a.s),e=CD_DATES.indexOf(a.e);
+    if(st<0&&e<0)return;               /* 整段在窗外（如黑五） */
+    if(st<0)st=0;const ee=e<0?N-1:e;   /* 起点早于窗口（PD 6/10）→ 钳到窗口左缘 */
+    acts+=`<rect x="${gxs(st).toFixed(1)}" y="${G.T}" width="${(gxs(ee)-gxs(st)).toFixed(1)}" height="${G.ph}" fill="#f4b942" fill-opacity="0.10"/>`
+      +`<text class="xlab" x="${gxs(st)+3}" y="${G.T+11}" fill="#b06a00">${a.n}</text>`;});
+  const area=line(SYS)+` L ${gxs(N-1).toFixed(1)} ${gys(0)} L ${gxs(0).toFixed(1)} ${gys(0)} Z`;
+  const yLo=gys(LOW_D),yHi=gys(HIGH_D),xT=gxs(TODAY_I);
+
+  /* 模拟状态条 */
+  let simstrip='',simpath='',simlg='';
+  if(SIM.on){
+    simpath=`<path id="simpath-${ri}" d="${line(SIMSER)}" fill="none" stroke="#8b5cf0" stroke-width="2.2" stroke-dasharray="7 4"/>`;
+    simlg=`<span class="lg"><i style="background:none;height:0!important;border-top:2.2px dashed #8b5cf0;width:18px"></i>模拟线</span>`;
+    const base=metricsOf(SYS),sm=metricsOf(SIMSER);
+    const nMod=Object.keys(SIM.mods).filter(w=>{const m=SIM.mods[w];return m&&(m.delay||m.ch||m.qty!=null);}).length;
+    const bad=sm.mn<LOW_D;
+    simstrip=`<div class="simstrip ${bad?'bad':''}"><span id="sstx-${ri}">🧪 模拟中 · <b>${nMod}</b> 处改动 · 合计：超上限 ${base.over} → <b>${sm.over}</b> 天 · 最低 ${base.mn} → <b>${sm.mn}</b> 天${bad?' · ⚠ 跌破安全下限':(sm.over<base.over?' · ✓ 向健康回落':'')}</span>
+      <span style="flex:1"></span>
+      <button class="btn6 b-blue" onclick="openSimApply(${ri})">→ 转为修改申请</button>
+      <button class="btn6 b-ghost" onclick="simResetAll(${ri})">全部重置</button>
+      <span style="font-weight:400;color:#8a7fc0;font-size:11px;">拖圆点：上下 = 数量（1 格 = 1 天库存）· 左右 = 时间（按周）· 点渠道名切渠道 —— 沙盘不落数据，提交才过闸</span></div>`;
+  }
+
+  /* 未来批次节点（W1–W7）：详情直显，免点击 */
+  let dots='';
+  rowBatches(r).forEach(b=>{
+    const m=SIM.mods[b.wi]||{};
+    const t1=(SIM.on&&m.ch)?(CHS.find(c=>c.k===m.ch)||{t:b.t}).t:b.t;
+    const ai=Math.min(N-1,b.si+((SIM.on?(m.delay||0):0)*7)+t1);
+    if(ai>=N)return;
+    const ser=SIM.on?SIMSER:SYS;
+    const q=(SIM.on&&m.qty!=null&&!isNaN(m.qty))?m.qty:b.qty;
+    const chName=((SIM.on&&m.ch)?(CHS.find(c=>c.k===m.ch)||{}).n:null)||b.ch.replace(/^..(海运|空派)/,'$1').replace('美国','').replace('法国','').replace('日本','');
+    const allow=dragAllowed(b);
+    const sellDate=CD_DATES[Math.min(N-1,ai+p.inb)]||'—';
+    const modded=SIM.on&&(m.delay||m.ch||m.qty!=null);
+    const cx=gxs(ai), cy=gys(ser[ai]);
+    const above=cy>G.T+46;   /* v16：标注默认上置（原奇偶交替、下置文字与曲线/轴重叠）；节点贴顶时才下置 */
+    const qMod=(SIM.on&&m.qty!=null&&m.qty!==b.qty);
+    const dMod=(SIM.on&&(m.delay||0));
+    const canDrag=allow||(b.lockWk);   // 锁定节点也可点（弹面板看详情 / 提前救援）
+    dots+=`<circle id="nd-${ri}-${b.wi}" class="arr" cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="7"
+        fill="${modded?'#f6f3ff':'#fff'}" stroke="${b.lockWk?'#b06a00':'#5b7cfa'}" stroke-width="2.5" stroke-dasharray="${b.lockWk?'':'3 2'}"
+        style="cursor:pointer"
+        onmousedown="simDrag(event,${ri},${b.wi})"
+        onmousemove="ndHov(event,${ri},${b.wi})" onmouseleave="cdHovOut()"/>
+      <g id="ndg-${ri}-${b.wi}" transform="translate(${cx.toFixed(1)},${cy.toFixed(1)})" pointer-events="none">
+        <text id="ndq-${ri}-${b.wi}" x="0" y="${above?-27:20}" text-anchor="middle" class="ndl b ${qMod?'mod':''}">${WEEKS[b.wi].w} · ${fmt(q)} 台${qMod?'*':''}</text>
+        <text id="ndd-${ri}-${b.wi}" x="0" y="${above?-14:33}" text-anchor="middle" class="ndl ${dMod?'mod':''}">到货 ${CD_DATES[ai].replace('-','/')}${b.lockWk?' 🔒':''}</text>
+      </g>`;
+  });
+
+  /* 库存快照信息行（原追溯卡四项，常驻） */
+  const st=STOCKX[r.asin]||{fba:0,transit:0};
+  const so=soutOf(r);
+  const snap=`<div class="snapline">📦 当前在库 <b>${fmt(st.fba)}</b>（FBA · 0:00 快照）　·　在途 <b>${fmt(st.transit)}</b>（= 发货 − 已签收，已计入曲线起点）　·　未交货订单 <b>${fmt(UNDELIV[r.asin]||0)}</b>　·　预计断货日 ${so?`<b style="color:#c0392b">${so}</b>`:'<b style="color:#147a43">3 个月内无</b>'}　·　入仓 <b>${p.inb}</b> 天（节点悬停看「可售日」）</div>`;
+
+  const svg=`<svg id="svg-${ri}" width="100%" viewBox="0 0 ${G.W} ${G.H}" style="display:block">
+    ${acts}${grid}
+    <line x1="${xT}" y1="${G.T}" x2="${xT}" y2="${G.H-G.B}" stroke="#333" stroke-width="1.2" stroke-dasharray="2 3"/>
+    <text class="xlab" x="${xT+3}" y="${G.T+22}" fill="#333">今天 07-06</text>
+    <line x1="${G.L}" y1="${yLo}" x2="${G.W-G.R}" y2="${yLo}" stroke="#c0392b" stroke-width="1.2" stroke-dasharray="5 4"/>
+    <text class="ylab" x="${G.W-G.R}" y="${yLo+11}" text-anchor="end" fill="#c0392b">安全下限 ${LOW_D} 天 · 跌破=断货风险</text>
+    <line x1="${G.L}" y1="${yHi}" x2="${G.W-G.R}" y2="${yHi}" stroke="#e8912a" stroke-width="1.2" stroke-dasharray="5 4"/>
+    <text class="ylab" x="${G.W-G.R}" y="${yHi-4}" text-anchor="end" fill="#b06a00">安全上限 ${HIGH_D} 天 · 长期超出=备货偏多，砍最近批次</text>
+    <path d="${area}" fill="#5b7cfa" fill-opacity="0.08"/>
+    <path d="${line(SALE)}" fill="none" stroke="#e0a53a" stroke-width="2"/>
+    <path d="${line(SYS)}" fill="none" stroke="#5b7cfa" stroke-width="2"/>
+    ${simpath}
+    <line id="hvl-${ri}" x1="0" x2="0" y1="${G.T}" y2="${G.H-G.B}" stroke="#98a1ad" stroke-width="1" stroke-dasharray="3 3" opacity="0" pointer-events="none"/>
+    <rect x="${G.L}" y="${G.T}" width="${G.pw}" height="${G.ph}" fill="transparent" onmousemove="chartHover(event,${ri})" onmouseleave="cdHovOut()"/>
+    ${dots}${ylabs}${xlabs}
+    <text class="ylab" x="${G.L-30}" y="${G.T-8}">天数</text>
+  </svg>`;
+  return `<div class="chart-head">📈 到货 &amp; 安全库存天数趋势（≈3 个月） · <span style="color:#3370ff">${r.model} · ${r.site}</span>
+      <button class="simbtn ${SIM.on?'on':''}" onclick="toggleSim(${ri})">🧪 模拟演算</button>
+      <span class="hint">节点 = 未来批次（W1–W7）· <b>点看详情 / 改渠道 · 拖改量与时间</b> · 拖后确认才保留</span>
+    </div>
+    ${snap}
+    ${simstrip}
+    <div class="svg-holder" style="width:100%">${svg}
+      <div class="legend2 under">
+        <span class="lg"><i class="ls-sys"></i>系统预估安全天数</span>
+        <span class="lg"><i class="ls-sale"></i>销售预估安全天数</span>
+        <span class="lg"><i class="ls-ref"></i>上下限（站点×淡旺季）</span>
+        <span class="lg">◌ 到货节点（W1–W7 · 点=详情/改渠道 · 拖=改量/改期 · 橙=W1–W2 守工厂节奏（销售禁推迟/减量））</span>
+        <span class="lg" style="color:#b06a00">▨ 活动日区间</span>
+        ${simlg}
+      </div>
+    </div>`;
+}
+/* 节点悬停：完整批次详情（含入仓 → 可售日、渠道时效） */
+function ndHov(e,ri,wi){
+  const r=CUR[ri];const b=rowBatches(r).find(x=>x.wi===wi);if(!b)return;
+  const p=PARAMS[r.asin]||PARAMS['B0FB3P6H48'];
+  const m=(SIM.on?SIM.mods[wi]:null)||{};
+  const t1=m.ch?(CHS.find(c=>c.k===m.ch)||{t:b.t}).t:b.t;
+  const ai=Math.min(CD_DATES.length-1,b.si+((m.delay||0)*7)+t1);
+  const q=(m.qty!=null&&!isNaN(m.qty))?m.qty:b.qty;
+  const sell=CD_DATES[Math.min(CD_DATES.length-1,ai+p.inb)]||'—';
+  tip.innerHTML=`<div class="h">${WEEKS[wi].w} 批 · 发 ${WEEKS[wi].d.slice(0,5)}${b.lockWk?'（W1–W2 守工厂节奏）':''}</div>
+    <div class="meta">数量 <b>${fmt(q)}</b> 台${q!==b.qty?`（原 ${fmt(b.qty)}）`:''} · 渠道 ${((m.ch?(CHS.find(c=>c.k===m.ch)||{}).n:null)||b.ch)}（${t1} 天）</div>
+    <div class="meta">预计到货 <b>${CD_DATES[ai]}</b> → 入仓 ${p.inb} 天 → <b>可售 ${sell}</b></div>
+    <div class="meta">这批 ≈ +${Math.round(q/r.daily)} 天安全库存 · 当天日均 ${Math.round(r.daily*(1+0.06*Math.sin(ai/9)))} 台/天</div>
+    <div class="meta" style="color:#8a7fc0">👆 点节点 = 详情 + 改渠道　·　拖动：上下 = 数量 / 左右 = 时间（周）${b.lockWk?'　·　W1–W2：'+(ROLE==='ops'?'可推迟 / 提前 / 加量 / 改渠道（直改留痕），不可减量':'可提前 / 加量 / 改渠道（走主管链），不可推迟 / 减量'):''}</div>`;
+  tip.style.display='block';
+  let x=e.clientX+14,y=e.clientY+14;
+  if(x+300>innerWidth)x=e.clientX-304;
+  if(y+130>innerHeight)y=e.clientY-140;
+  tip.style.left=x+'px';tip.style.top=y+'px';
+}
+
+/* ===== v8：批次由行格子推导（表 ↔ 曲线 ↔ 模拟 同一套数） ===== */
+const CHS=[{k:'air7',n:'空派-7天',t:7},{k:'fast30',n:'海运快线-30天',t:30},{k:'sea35',n:'海运普线-35天',t:35},{k:'slow45',n:'海运慢船-45天',t:45}];
+function chT(str){const m=(''+str).match(/-(\d+)天/);return m?+m[1]:35;}
+function chKeyOf(str){const t=chT(str);const c=CHS.find(x=>x.t===t);return c?c.k:'sea35';}
+const SIM={on:false,mods:{},focusWi:null};   // mods: 周列索引 wi → {delay:周, ch:渠道key, qty:台}
+let LASTC=null;                              // 当前打开图表的曲线缓存（悬停用）
+
+/* v14：已到货节点删除（与「在库」含义重复）——历史到货已体现在起始库存里 */
+function startDays(r){const st=STOCKX[r.asin]||{fba:0,transit:0};
+  return Math.round((st.fba+st.transit)/Math.max(1,r.daily));}   // 起点 = (在库+在途)÷日均，mock；v16：与快照行「在途已计入曲线起点」口径一致（原 ×0.35 与说明矛盾）
+function rowBatches(r){
+  const p=PARAMS[r.asin]||PARAMS['B0FB3P6H48'];const out=[];
+  for(let i=0;i<WEEKS.length;i++){
+    const c=r.cells[i];const v=c==null?0:(Array.isArray(c)?(+c[0]||0):(+c||0));
+    if(!v)continue;
+    const si=CD_DATES.indexOf(WEEKS[i].d.slice(0,5));if(si<0)continue;
+    out.push({wi:i,si:si,ai:si+p.t,qty:v,ch:p.ship,t:p.t,lockWk:i<=1});
+  }
+  return out;
+}
+function seriesFor(r,mods){
+  const eff={};
+  rowBatches(r).forEach(b=>{
+    const m=(mods&&mods[b.wi])||{};
+    const t1=m.ch?(CHS.find(c=>c.k===m.ch)||{t:b.t}).t:b.t;
+    const ai=b.si+((m.delay||0)*7)+t1;
+    const q=(m.qty!=null&&!isNaN(m.qty))?m.qty:b.qty;
+    if(ai<CD_DATES.length&&q>0)eff[ai]=(eff[ai]||0)+q/r.daily;   // 天数增益 = 数量 / 日均（mock；真实走 2.5.2 滚动模拟）
+  });
+  const out=[];let v=startDays(r);
+  for(let i=0;i<CD_DATES.length;i++){if(eff[i])v+=eff[i];out.push(Math.round(v));v-=0.55;}
+  return out;   /* B1 修复：负库存不 floor——缺口体现为 ≤0（显示贴 0 轴），断货判定与模拟结论才成立 */
+}
+function metricsOf(arr){let over=0,mn=99;for(let i=TODAY_I;i<arr.length;i++){if(arr[i]>HIGH_D)over++;if(arr[i]<mn)mn=arr[i];}return {over:over,mn:mn};}
+function rebuildChart(ri){const er=document.getElementById('exp-'+ri);if(!er)return;
+  const box=er.querySelector('.chartbox');if(box){box.innerHTML=buildChart(ri);box.dataset.built='1';}}
+function toggleSim(ri){SIM.on=!SIM.on;if(!SIM.on){simResetAll(ri);}else rebuildChart(ri);}
+function simResetAll(ri){SIM.mods={};unmarkSimCells();rebuildChart(ri);}
+function simSet(ri,wi,field,val){const m=SIM.mods[wi]=SIM.mods[wi]||{};
+  if(field==='delay')m.delay=+val;else if(field==='ch')m.ch=val;else m.qty=parseInt(val);
+  rebuildChart(ri);markSimCell(ri,wi);}
+
+const SIMMARK={};
+function markSimCell(ri,wi){
+  const td=document.querySelector(`td[data-cell="${ri}-${wi}"]`);if(!td)return;
+  if(!(('k'+ri+'-'+wi) in SIMMARK))SIMMARK['k'+ri+'-'+wi]=td.innerHTML;
+  const m=SIM.mods[wi]||{};const r=CUR[ri];const b=rowBatches(r).find(x=>x.wi===wi);if(!b)return;
+  const q=(m.qty!=null&&!isNaN(m.qty))?m.qty:b.qty;
+  let ext='';
+  if(q!==b.qty)ext+=`<span class="simto">→${fmt(q)}</span>`;
+  if(m.delay)ext+=`<span class="simic">⏱+${m.delay}周</span>`;
+  if(m.ch&&m.ch!==chKeyOf(b.ch))ext+=`<span class="simic">✈</span>`;
+  td.classList.add('simcell');
+  td.innerHTML=`${fmt(b.qty)}${ext}`;
+}
+function unmarkSimCells(){
+  Object.keys(SIMMARK).forEach(k=>{const parts=k.slice(1).split('-');
+    const td=document.querySelector(`td[data-cell="${parts[0]}-${parts[1]}"]`);
+    if(td){td.classList.remove('simcell');td.innerHTML=SIMMARK[k];}
+    delete SIMMARK[k];});
+}
+
+/* 模拟 → 转修改申请：模拟证据自动带入（只读）+ 补充说明必填 */
+function openSimApply(ri){
+  const r=CUR[ri];const bs=rowBatches(r);
+  const mods=Object.keys(SIM.mods).map(Number).filter(wi=>{const m=SIM.mods[wi];return m&&(m.delay||m.ch||(m.qty!=null));});
+  if(!mods.length){alert('尚未做任何调整 —— 先在上方批次控件里改时间 / 渠道 / 数量，看曲线满意后再转申请。');return;}
+  const bundle=[],dropped=[];
+  mods.forEach(wi=>{
+    const b=bs.find(x=>x.wi===wi);if(!b)return;
+    const m=SIM.mods[wi];
+    const q=(m.qty!=null&&!isNaN(m.qty))?m.qty:b.qty;
+    const chChanged=m.ch&&m.ch!==chKeyOf(b.ch);
+    const t1=m.ch?(CHS.find(c=>c.k===m.ch)||{t:b.t}).t:b.t;
+    if(wi<=1){   /* v17 W1–W2（2026-07-07 拍板）：销售不可推迟/减量；采购可推迟、不可减量 */
+      const advance=(m.delay||0)<0, delayed=(m.delay||0)>0;
+      if(q<b.qty){dropped.push(WEEKS[wi].w+'（W1–W2 不可减量 —— 货已生产，少发只会堆仓；减压走采购推迟 / W3+ 顺延）');return;}
+      if(ROLE!=='ops'){
+        if(delayed){dropped.push(WEEKS[wi].w+'（W1–W2 销售不可推迟 —— 工厂已排产；确需推迟由采购执行）');return;}
+        if(!advance&&!chChanged&&q===b.qty)return;
+        const acts1=[];
+        if(q>b.qty)acts1.push('加发 '+b.qty+' → '+q);
+        if(advance)acts1.push('提前 '+(-m.delay)+' 周发出（断货救援）');
+        if(chChanged)acts1.push('渠道改 '+(CHS.find(c=>c.k===m.ch)||{}).n);
+        bundle.push({wi:wi,from:b.qty,to:q,type:q>b.qty?'up':(advance?'advance':'air'),instant:false,delay:m.delay||0,
+          txt:WEEKS[wi].w+'：'+acts1.join('、')});
+        return;
+      }
+      // 采购应急：加量 / 提前 / 推迟 / 改渠道即时生效（减量已在上方拦截）
+      const acts=[];
+      if(q!==b.qty)acts.push('加发 '+b.qty+' → '+q);
+      if(advance)acts.push('提前 '+(-m.delay)+' 周');
+      if(delayed)acts.push('推迟 '+m.delay+' 周（库存堆积减压）');
+      if(chChanged)acts.push('渠道改 '+(CHS.find(c=>c.k===m.ch)||{}).n);
+      if(!acts.length)return;
+      bundle.push({wi:wi,from:b.qty,to:q,type:chChanged?'air':(delayed?'down':'up'),instant:true,delay:m.delay||0,txt:WEEKS[wi].w+'：'+acts.join('、')});
+      return;
+    }
+    const parts=[];
+    if(m.delay)parts.push((m.delay>0?'推迟 '+m.delay:'提前 '+(-m.delay))+' 周');
+    if(chChanged)parts.push('渠道改 '+(CHS.find(c=>c.k===m.ch)||{}).n);
+    if(q!==b.qty)parts.push('数量 '+b.qty+' → '+q);
+    if(!parts.length)return;
+    bundle.push({wi:wi,from:b.qty,to:q,type:(q<b.qty?'down':(q>b.qty?'up':(chChanged?'air':'down'))),instant:false,txt:WEEKS[wi].w+'：'+parts.join('、')});
+  });
+  if(dropped.length)alert('以下调整未纳入申请：\n· '+dropped.join('\n· '));
+  if(!bundle.length)return;
+  const base=metricsOf(seriesFor(r,null)),sm=metricsOf(seriesFor(r,SIM.mods));
+  /* v18 安全区间闸（决策 27）两条测试，满足其一免审：
+     ① 修改后曲线全程落在 [LOW_D, HIGH_D]；② 不劣于系统建议（最低天数不更低 且 不新增超上限天数）
+     —— ② 是工程必要：历史高库存行本就在上限之上，缺 ② 则其任何修改都进审、规则空转。
+     仅对非 W1–W2 的销售修改整包判定（W1–W2 审可执行性，2.4.5 边界） */
+  const gb=gateBad(seriesFor(r,null),seriesFor(r,SIM.mods));
+  const gateAuto=(ROLE!=='ops')&&bundle.every(b=>!b.instant)&&gb.ok;
+  const ev=bundle.map(b=>b.txt).join('；')+'。安全天数超上限 '+base.over+' → '+sm.over+' 天，最低 '+base.mn+' → '+sm.mn+' 天。'
+    +(gateAuto?'✅ 区间闸：修改后曲线'+(sm.mn>=LOW_D&&sm.over===0?'全程在安全区间内':'不劣于系统建议（区间外无任何一天更糟）')+' → 免审即时生效（留痕 · 抄送主管）。'
+              :'⚠ 区间闸：修改使曲线更出界（'+(gb.badLow>0?'下限外更低 '+gb.badLow+' 天':'')+(gb.badLow>0&&gb.badHigh>0?'、':'')+(gb.badHigh>0?'上限外更高 '+gb.badHigh+' 天':'')+'）→ 需审核。');
+  openEdit({bundle:bundle,ri:ri,evidence:ev,auto:gateAuto});
+}
+
+
+/* 曲线悬停：逐日天数 */
+function cdHov(e,i){
+  if(!LASTC)return;
+  tip.innerHTML=`<div class="h">${CD_DATES[i]}</div>
+    <div class="meta">系统安全 <b style="color:#9db9ff">${LASTC.sys[i]}</b> 天 · 销售 <b style="color:#f4cf8a">${LASTC.sale[i]}</b> 天${LASTC.sim?` · 模拟 <b style="color:#c9b3ff">${LASTC.sim[i]}</b> 天`:''}</div>
+    <div class="meta">当天日均预估 ${LASTC.daily(i)} 台/天</div>`;
+  tip.style.display='block';
+  let x=e.clientX+14,y=e.clientY+14;
+  if(x+290>innerWidth)x=e.clientX-294;
+  if(y+90>innerHeight)y=e.clientY-100;
+  tip.style.left=x+'px';tip.style.top=y+'px';
+}
+function cdHovOut(){tip.style.display='none';document.querySelectorAll('line[id^="hvl-"]').forEach(g=>g.setAttribute('opacity','0'));}
+
+/* 渲染分册 Tab */
+const tabsEl=document.getElementById('tabs');
+SHEETS.forEach(s=>{
+  const n=ROWS.filter(r=>s.sites.includes(r.site)).length;
+  const el=document.createElement('div');
+  el.className='tab';el.dataset.k=s.key;
+  el.innerHTML=`<span class="ic">${s.ic}</span>${s.label}<span class="ct">${n} SKU · 到 ${WEEKS[s.horizon].w}</span>`;
+  el.addEventListener('click',()=>renderSheet(s.key));
+  tabsEl.appendChild(el);
+});
+
+function fmt(n){return typeof n==='number'?n.toLocaleString():n;}
+
+/* 渲染某一册（v8：4 列商品信息 · W1–W2 折叠 · 确认列撤销 · 点格子=开模拟） */
+let W12OPEN=false;
+const ME='Echo';   // 原型：当前登录的销售身份（合计行「我的」口径用）
+function toggleW12(){W12OPEN=!W12OPEN;renderSheet(window.CURKEY||'all');}
+function renderSheet(key){
+  window.CURKEY=key;
+  const sh=SHEETS.find(s=>s.key===key);
+  const hz=ORDER_WEEK?sh.horizon:sh.horizon-1;   // 非下单周 W7 还没长出来
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.k===key));
+
+  // —— 三行表头：周次 / 发货日期 / 覆盖售卖期 ——
+  const rw=document.getElementById('sub-wk');rw.innerHTML='';
+  const rd=document.getElementById('sub-date');rd.innerHTML='';
+  const rc=document.getElementById('sub-cover');rc.innerHTML='';
+  rw.insertAdjacentHTML('beforeend',`<th class="sub-info" rowspan="3" style="width:32px;">趋势</th>`);
+  ['站点','销售','型号','ASIN','加权日均','等级','库销比','标签'].forEach(t=>{
+    rw.insertAdjacentHTML('beforeend',`<th class="sub-info" rowspan="3">${t}</th>`);
+  });
+  let wkCols=0;
+  if(!W12OPEN){
+    rw.insertAdjacentHTML('beforeend',`<th class="sub-week w12h" rowspan="3" onclick="toggleW12()" title="W1–W2 守工厂节奏：销售可提前 / 加量 / 改渠道（走主管链），不可推迟 / 减量；采购可推迟 / 提前 / 加量 / 改渠道（直改留痕）。展开看两周明细">W1–W2 🔒<div style="font-size:9.5px;font-weight:500;">点开 ▸</div></th>`);
+    wkCols=1;
+  }else{
+    for(let i=0;i<=1;i++){
+      rw.insertAdjacentHTML('beforeend',`<th class="sub-week w12h" onclick="toggleW12()" title="点击收起 W1–W2">${WEEKS[i].w} 🔒<div style="font-size:9px;font-weight:500;">◂ 收起</div></th>`);
+      rd.insertAdjacentHTML('beforeend',`<th class="sub-date">${WEEKS[i].d}</th>`);
+      rc.insertAdjacentHTML('beforeend',`<th class="sub-cover"><span class="cv">可售 ${WEEKS[i].cov}</span></th>`);
+      wkCols++;
+    }
+  }
+  for(let i=2;i<=hz;i++){
+    const isD=(i===DING[0]||i===DING[1]);
+    const dh=isD?' dinghead':'';
+    const badge=(i===DING[0])?(ORDER_WEEK?(POAPPROVED?`<span class="dingbadge">PO 已落地 🔒</span>`:''):`<span class="dingbadge">本周新排 · 待确认</span>`):(i===DING[1])?`<span class="dingbadge">本周新排 → 周二下厂</span>`:'';
+    rw.insertAdjacentHTML('beforeend',`<th class="sub-week${dh}">${WEEKS[i].w}${badge}</th>`);
+    rd.insertAdjacentHTML('beforeend',`<th class="sub-date${dh}">${WEEKS[i].d}</th>`);
+    rc.insertAdjacentHTML('beforeend',`<th class="sub-cover${dh}"><span class="cv">可售 ${WEEKS[i].cov}</span></th>`);
+    wkCols++;
+  }
+  document.getElementById('gh-week').colSpan=wkCols;
+  document.getElementById('gh-info').colSpan=9;
+
+  const all=ROWS.filter(r=>sh.sites.includes(r.site));
+  const rows=MINE?all.filter(r=>rowMine(r)):all;
+  const hidden=all.length-rows.length;
+  CUR=rows;
+  const totalCols=9+wkCols+1;   // 商品 9 + 周次 + 净额
+  const body=document.getElementById('body');body.innerHTML='';
+  let chg=0,pend=0;
+  rows.forEach((r,ri)=>{
+    let info=`<td class="exp" id="arw-${ri}" onclick="toggleExp(${ri})"><span class="arw">▶</span></td>`
+      +`<td class="c-site"><span class="s3dot ${s3dot(r)}"></span>${r.site}${r.stk?`<span class="stk">● ${r.stk}</span>`:''}</td>`
+      +`<td>${r.sales}</td>`
+      +`<td class="c-model">${r.model}</td>`
+      +`<td class="c-asin">${r.asin}</td>`
+      +`<td class="c-daily">${r.daily}</td>`
+      +`<td><span class="gr gr-${r.grade}">${r.grade}</span></td>`
+      +`<td class="c-isr">${r.isr.toFixed(1)}<span class="isr-tag tag-${ISRT[r.isrTag]}">${r.isrTag}</span></td>`
+      +`<td><span class="life life-${LIFE[r.life]}">${r.life}期</span></td>`;
+    let cells='';
+    /* W1–W2：折叠 = 一格合并；展开 = 两格，锁减不锁加（仅采购可点） */
+    const w12v=i=>{const c=r.cells[i];return c==null?null:(Array.isArray(c)?c[0]:c);};
+    if(!W12OPEN){
+      const v1=w12v(0),v2=w12v(1);
+      cells+=`<td class="w12fold" onclick="toggleW12()" title="W1 ${v1==null?'—':fmt(v1)} · W2 ${v2==null?'—':fmt(v2)} —— 守工厂节奏：销售禁推迟 / 减量，余走主管链；采购可直改（含推迟减压）。点开明细">${v1==null?'—':fmt(v1)}+${v2==null?'—':fmt(v2)} 🔒</td>`;
+    }else{
+      for(let i=0;i<=1;i++){
+        const c=r.cells[i];const v=w12v(i);
+        if(Array.isArray(c)&&c[1]==='chg'){
+          const ch=CH[c[2]];const st=statOf(ch);chg++;if(st!=='ok')pend++;
+          cells+=`<td class="chg ${ch.type} ${st!=='ok'?('p-'+st):''}" data-k="${c[2]}">${st!=='ok'?`<span class="wait">${st==='rej'?'⛔':'⏳'}</span>`:''}<span class="mk">${MK[ch.type]}</span>${fmt(c[0])}</td>`;
+        }else if(ROLE==='ops'){
+          cells+=`<td data-cell="${ri}-${i}" title="采购应急：在下方趋势图上拖该周节点（加量 / 提前 / 推迟减压 / 改渠道）· 即时生效留痕">${v==null?'—':fmt(v)}<span class="lk">🔓</span></td>`;
+        }else{
+          cells+=`<td class="lock" title="W1–W2 守工厂节奏：销售不可推迟 / 减量；提前 / 加量 / 改渠道在趋势图拖节点（转申请走主管链）。缺货救急也可发黄/红预警由采购执行">${v==null?'—':fmt(v)+'<span class="lk">🔒</span>'}</td>`;
+        }
+      }
+    }
+    for(let i=2;i<=hz;i++){
+      const dc=(i===DING[0])?' ding ding-l':(i===DING[1])?' ding ding-r':'';
+      const c=r.cells[i];
+      if(i===DING[0]&&ORDER_WEEK&&!(Array.isArray(c)&&c[1]==='chg')){
+        const v=(c==null)?null:(Array.isArray(c)?c[0]:c);
+        if(POAPPROVED){cells+=`<td class="lock${dc}" title="本期 PO 已落地 · 下单不可取消（决策 19）">${v==null?'—':fmt(v)+'<span class="lk">🔒</span>'}</td>`;continue;}
+        cells+=`<td class="${dc.trim()}" data-cell="${ri}-${i}" title="下单异议（PO 前有效）：在下方趋势图上拖该周节点修改">${v==null?'—':fmt(v)}</td>`;continue;
+      }
+      if(i===DING[1]&&ORDER_WEEK&&POAPPROVED&&!(Array.isArray(c)&&c[1]==='chg')){
+        const v=(c==null)?null:(Array.isArray(c)?c[0]:c);
+        cells+=`<td class="lock${dc}" title="本期 PO 已落地 · 下单不可取消（决策 19）">${v==null?'—':fmt(v)+'<span class="lk">🔒</span>'}</td>`;continue;
+      }
+      if(c===null||c===undefined){cells+=`<td class="dash${dc}" data-cell="${ri}-${i}" title="该周无排">—</td>`;continue;}
+      if(Array.isArray(c)&&c[1]==='chg'){
+        const ch=CH[c[2]];const st=statOf(ch);chg++;if(st!=='ok')pend++;
+        cells+=`<td class="chg ${ch.type} ${st!=='ok'?('p-'+st):''}${dc}" data-k="${c[2]}">`
+          +(st!=='ok'?`<span class="wait">${st==='rej'?'⛔':'⏳'}</span>`:'')
+          +`<span class="mk">${MK[ch.type]}</span>${fmt(c[0])}</td>`;continue;
+      }
+      cells+=`<td class="${dc.trim()}" data-cell="${ri}-${i}" title="要改这周 → 展开趋势图，拖该周节点（上下=数量 / 左右=时间 / 点渠道切换）">${fmt(c)}</td>`;
+    }
+    const cvr=i=>{const c=r.cells[i];return c==null?0:(Array.isArray(c)?(+c[0]||0):(+c||0));};
+    const a1=cvr(DING[0]), g=a1+cvr(DING[1]);
+    const ud=UNDELIV[r.asin]||0, net=Math.max(0,g-ud);
+    const netTd = !ORDER_WEEK
+      ? `<td class="c-net"><div class="net-sub"><b>非下单周</b></div><div class="net-eq">W6 已排 ${fmt(a1)} 台</div><div class="net-eq">下周排 W7 后合并</div><div class="net-eq">− 未交货余 ${fmt(ud)}</div><div class="net-eq" style="color:#3370ff">下周二下 PO</div></td>`
+      : (g===0
+        ? `<td class="c-net"><div class="net-sub">本批无需求${ud?` · 未交货余 ${fmt(ud)}`:''}</div></td>`
+        : `<td class="c-net" style="cursor:default" title="只读结果：改数回 W6/W7 格子（=下单异议）。余量 = 未交货总量 − 已被 W1~W5 计划占用（系统滚动自动扣）。此为需求口径；跨站点调拨在下单执行看板抵扣后得执行口径。">`
+          +`<div class="net-big">${fmt(net)}</div>`
+          +`<div class="net-eq">发货计划合计 ${fmt(g)}</div>`
+          +`<div class="net-eq">− 未交货订单 ${fmt(ud)}</div>`
+          +(net===0?`<div class="net-zero">= 需下单 0 · 订单余量够</div>`:`<div class="net-eq">= <b>需下单 ${fmt(net)}</b></div>`)
+          +`<div class="net-st" id="ordst-${ri}">${poStTxt()}</div></td>`);
+    const tr=document.createElement('tr');tr.innerHTML=info+cells+netTd;body.appendChild(tr);
+    const er=document.createElement('tr');er.className='exprow';er.id='exp-'+ri;er.style.display='none';
+    er.innerHTML=`<td colspan="${totalCols}"><div class="chartbox" data-built="0"></div></td>`;
+    body.appendChild(er);
+  });
+
+  if(hidden>0){const fr=document.createElement('tr');fr.className='foldrow';
+    fr.innerHTML=`<td colspan="${totalCols}">▸ 其余 ${hidden} 个 SKU 当前视角（${RNAME[ROLE]} · 待我处理）无需处理 —— 点击展开全部</td>`;
+    fr.onclick=()=>{MINE=false;syncVt();renderSheet(window.CURKEY||'all');};
+    body.appendChild(fr);}
+
+  /* —— 合计行（v13）：范围按角色 —— 销售=我的 SKU / 主管=本部门 / 采购·终审=公司。
+     合计口径不随「待我处理」筛选变化（数量体感要稳定）。示意数据仅一个部门，主管与公司口径数字相同、标签区分。 */
+  const cv2=(r,j)=>{const c=r.cells[j];return c==null?0:(Array.isArray(c)?(+c[0]||0):(+c||0));};
+  const scope=(ROLE==='sale')?all.filter(r=>r.sales===ME):all;
+  const scopeLbl=(ROLE==='sale')?`我的 SKU · ${ME} × ${scope.length}`:(ROLE==='lead')?`本部门 · ${scope.length} SKU`:`公司 · ${scope.length} SKU`;
+  const sums=[];for(let i=0;i<WEEKS.length;i++)sums[i]=scope.reduce((a,r)=>a+cv2(r,i),0);
+  let sumTds='';
+  if(!W12OPEN){sumTds+=`<td>${fmt(sums[0]+sums[1])}</td>`;}
+  else{sumTds+=`<td>${fmt(sums[0])}</td><td>${fmt(sums[1])}</td>`;}
+  for(let i=2;i<=hz;i++){const dc=(i===DING[0])?' class="ding ding-l"':(i===DING[1])?' class="ding ding-r"':'';sumTds+=`<td${dc}>${fmt(sums[i])}</td>`;}
+  const netSum=scope.reduce((a,r)=>a+Math.max(0,cv2(r,DING[0])+cv2(r,DING[1])-(UNDELIV[r.asin]||0)),0);
+  const sumNet=ORDER_WEEK
+    ?`<td class="sumnet">${fmt(netSum)}<span class="sub6">下单数量合计（净额）</span></td>`
+    :`<td class="sumnet">${fmt(sums[DING[0]])}<span class="sub6">W6 已排合计 · 下周合并下 PO</span></td>`;
+  const sr=document.createElement('tr');sr.className='sumrow';
+  sr.innerHTML=`<td class="sc-label" colspan="9" title="合计范围按角色：销售=本人 SKU；主管=本部门；采购/终审=公司。不随「待我处理」筛选变化。">Σ 每周发货数量合计<span class="scope">${scopeLbl}</span></td>${sumTds}${sumNet}`;
+  body.appendChild(sr);
+
+  document.getElementById('count').innerHTML=
+    `${sh.label} · 视角 <b>${RNAME[ROLE]}</b>${MINE?' · 待我处理':' · 全部'} · 显示 <b>${rows.length}</b>/${all.length} SKU · 本周动过 <b>${chg}</b> 处（<b style="color:#c0392b">${pend}</b> 在流转）`;
+  recalcBadges();
+
+  bindCells();
+}
+
+/* 绑定变动格 悬停 + 点击（每次重渲染后重绑） */
+const tip=document.getElementById('tip');
+const s3cls={green:'s3-green',amber:'s3-amber',red:'s3-red'};
+function bindCells(){
+  document.querySelectorAll('td.chg').forEach(td=>{
+    const ch=CH[td.dataset.k];
+    td.onmouseenter=()=>{
+      const arr=(ch.type==='air')
+        ?`<span class="o">${ch.from}</span> <span class="arrow">→</span> <span class="n">${ch.to}</span>`
+        :`<span class="o">${fmt(ch.from)}</span> <span class="arrow">→</span> <span class="n">${fmt(ch.to)} 台</span>`;
+      tip.innerHTML=`<div class="h">${MK[ch.type]} ${ch.type==='air'?'改运输方式':ch.type==='sys'?'系统重算':ch.type==='up'?'改数量·加发':'改数量·减发'}
+          <span class="s3 ${s3cls[ch.s3]}">${ch.s3t}</span></div>
+        <div class="arrow">${arr}</div><div class="meta">${ch.short}</div>
+        <div class="meta">${ch.by} · ${ch.at}</div>
+        <div class="meta">状态：${hoverStat(ch)}</div>
+        <div class="more">点击查看完整变动时间线 + 推算 →</div>`;
+      tip.style.display='block';
+    };
+    td.onmousemove=e=>{
+      let x=e.clientX+14,y=e.clientY+14;
+      if(x+290>innerWidth)x=e.clientX-294;
+      if(y+140>innerHeight)y=e.clientY-150;
+      tip.style.left=x+'px';tip.style.top=y+'px';
+    };
+    td.onmouseleave=()=>tip.style.display='none';
+    td.onclick=()=>{tip.style.display='none';openDrawer(td.dataset.k);};
+  });
+}
+
+/* 侧边栏 */
+const mask=document.getElementById('mask'),drawer=document.getElementById('drawer');
+const chipMap={up:['chip-up'],down:['chip-down'],air:['chip-air'],sys:['chip-sys']};
+const stMap={wait:'st-wait',pass:'st-pass',live:'st-live',rej:'st-rej'};
+function openDrawer(key){
+  const ch=CH[key];
+  const riR=CUR.findIndex(r=>r.cells.some(c=>Array.isArray(c)&&c[2]===key));
+  if(riR>=0){READ.add(riR);refreshCf(riR);}
+  const wi=weekIdx(key), front=DING.includes(wi);
+  const row=CUR[riR>=0?riR:0];
+  document.getElementById('dh-ttl').textContent=`${row.model} · ${row.site} · ${weekOf(key)}`;
+  const tl=tlHTML(ch);
+  /* ② 修改申请区：状态机 × 角色按钮矩阵（规格 S2） */
+  const apply=buildApply(ch,{key:key,front:front,kind:'cell'});
+  document.getElementById('db').innerHTML=`
+    <div class="sec amber">修改申请 <span class="hint">推导与验算已并入趋势行（参数卡 + 曲线 + 模拟）—— 回表展开该行即见</span></div>
+    ${apply}
+    <div class="sec">历史时间线 <span class="hint">从早到晚 · 橙点 = 最新</span></div>
+    <div class="tl">${tl}</div>`;
+  mask.style.display='block';requestAnimationFrame(()=>drawer.classList.add('open'));
+}
+function confirmCell(key){const ch=CH[key];ch.saleok=true;ch.stat='ok';
+  pushTl(ch,'销售（本人）','✓ 确认无误','销售确认系统值无误（确认即承诺）','pass','✅ 已确认');
+  afterAct(key,'cell');}
+function weekOf(key){
+  for(const r of ROWS){const i=r.cells.findIndex(c=>Array.isArray(c)&&c[2]===key);
+    if(i>=0)return `${WEEKS[i].w}　${WEEKS[i].d}`;}
+  return '';
+}
+function s3pill(s){return s==='green'?'chip-up':s==='amber'?'chip-amber':'chip-air';}
+function closeDrawer(){drawer.classList.remove('open');setTimeout(()=>mask.style.display='none',200);}
+mask.addEventListener('click',closeDrawer);
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDrawer();});
+
+/* 三态点：必断货→红，库销比短缺（<3.5）→黄，其余→绿（断货预警轴，示意） */
+function s3dot(r){return r.stk==='必断货'?'red':(r.isrTag==='短缺'?'amber':'green');}   /* v19:随决策 28 命名同步,否则短缺行黄点失效 */
+/* v8：确认列已撤销 —— 常规行由顶栏「一键通过」收口，例外格在格子/抽屉逐项处理 */
+function refreshCf(ri){}
+function weekIdx(key){for(const r of ROWS){const i=r.cells.findIndex(c=>Array.isArray(c)&&c[2]===key);if(i>=0)return i;}return -1;}
+function gateText(front){
+  return front
+    ?'本期下单批 W6–W7：改数量 = <b>下单异议</b> → 健康区间闸：落健康区间且不比系统建议更出界 → 免审；出界 → 下单链 <b>销售 → 采购 → 终审</b>。W6 为已承诺周（系统不重算），异议通过后系统重跑一次 W7 吸收再出净额；<b>周二 PO 落地后双周不可取消</b>。'
+    :'已承诺周（W3–W5）发货调整：三道门槛 —— 连续3天偏离&gt;20% / 单次±15% / 冷却7天；超±15% 进特殊申请（<b>主管 + 采购共同审核</b>）。';
+}
+/* v14：cellEdit 已删除 —— 修改测算统一走趋势图节点拖拽（周格子只读展示 + 沙盘标记） */
+function editFromDrawer(key){
+  let ri=CUR.findIndex(r=>r.cells.some(c=>Array.isArray(c)&&c[2]===key));
+  if(ri<0){MINE=false;syncVt();renderSheet(window.CURKEY||'all');ri=CUR.findIndex(r=>r.cells.some(c=>Array.isArray(c)&&c[2]===key));}
+  closeDrawer();if(ri>=0)openSimChart(ri);   // v14：展开趋势图开模拟，直接拖对应周节点
+}
+function openEdit(ctx){
+  EDITCTX=ctx;
+  const ctxEl=document.getElementById('eb-ctx');
+  const tRow=document.getElementById('ebrow-type'),qRow=document.getElementById('ebrow-qty');
+  if(tRow)tRow.style.display=ctx.bundle?'none':'';
+  if(qRow)qRow.style.display=ctx.bundle?'none':'';
+  if(ctx.bundle){const r=CUR[ctx.ri];
+    ctxEl.innerHTML=`<b>${r.model} · ${r.site}</b>　模拟证据（自动带入 · 只读）：<br>${ctx.evidence}<br><b style="color:#c0392b">↓ 补充说明必填 —— 模拟只说明「改了会怎样」，审核要的是「为什么要改」（活动取消 / 秒杀确认 / 需求下修…）</b>`;}
+  else if(ctx.wi!=null){ctxEl.innerHTML=`修改 <b>${WEEKS[ctx.wi].w}（${WEEKS[ctx.wi].d}）</b> ${ctx.order?'· 前沿批次（＝下单异议）':'· 发货计划格'} · 当前 <b>${fmt(ctx.cur||0)}</b> 台`;}
+  document.getElementById('eb-gate').innerHTML=gateText(!!ctx.order);
+  document.getElementById('eb-rsn').value='';document.getElementById('eb-qty').value='';
+  /* 前沿 / 下单修改 → 实时净额预览 */
+  const pv=document.getElementById('eb-preview'), qtyEl=document.getElementById('eb-qty');
+  if(!ctx.bundle&&ctx.order&&ctx.ri!=null){
+    pv.style.display='';
+    const base=netOf(ctx.ri);
+    const upd=()=>{const q=parseInt(qtyEl.value);
+      if(isNaN(q)){pv.textContent='净额预览：填写新数量后显示本期 PO 影响';return;}
+      const nn=Math.max(0,base.net+(q-(ctx.cur||0)));
+      pv.innerHTML=`净额预览：本期需下单 <b>${fmt(base.net)}</b> → <b>${fmt(nn)}</b>（需求口径；调拨抵扣在执行看板算）`;};
+    qtyEl.oninput=upd;upd();
+  }else{pv.style.display='none';qtyEl.oninput=null;}
+  document.getElementById('editmask').style.display='block';document.getElementById('editbox').style.display='block';
+}
+function closeEdit(){document.getElementById('editmask').style.display='none';document.getElementById('editbox').style.display='none';EDITCTX=null;}
+/* v18：安全区间闸（决策 27）—— 逐日比较口径（v18.1 修正）：
+   免审 ⇔ 不存在任何一天，修改后曲线在区间外且比系统建议更远离区间：
+     badLow  = ∃日 sm<LOW_D 且 sm<base（下限外更低）
+     badHigh = ∃日 sm>HIGH_D 且 sm>base（上限外更高）
+   逐日口径同时覆盖「全程在区间内」与「不劣于系统建议」，且无聚合度量的两个缺陷：
+   超上限按天数计数会饱和（全程超限的行加量测不出）、全窗最小值会被既有深谷掩盖（断货行砍后段测不出） */
+function gateBad(baseArr,smArr){
+  let badLow=0,badHigh=0;
+  for(let i=TODAY_I;i<smArr.length;i++){
+    if(smArr[i]<LOW_D&&smArr[i]<baseArr[i])badLow++;
+    if(smArr[i]>HIGH_D&&smArr[i]>baseArr[i])badHigh++;
+  }
+  return {badLow:badLow,badHigh:badHigh,ok:badLow===0&&badHigh===0};
+}
+function bandOK(ri,wi,nq){
+  if(ri==null||wi==null)return false;
+  const r=CUR[ri];if(!r)return false;
+  const mods={};mods[wi]={qty:nq};
+  return gateBad(seriesFor(r,null),seriesFor(r,mods)).ok;
+}
+function submitEdit(){
+  const rsn=document.getElementById('eb-rsn').value.trim();
+  if(!rsn){alert('修改理由必填：无论加发还是减发，都必须写清楚理由后才能「提交申请」。');return;}
+  const rtype=document.getElementById('eb-rtype').value;
+  const full=(rtype==='其他'?'':rtype+'：')+rsn;
+  const type=document.getElementById('eb-type').value;
+  const qty=parseInt(document.getElementById('eb-qty').value);
+  const ctx=EDITCTX||{}, when='07-06 '+now6();
+  /* v18：±15% 幅度闸整体退役（决策 27，安全区间闸取代）；overGate 删除 */
+  if(ctx.bundle){                                    /* 模拟转申请：捆绑提交，每周一条记录 */
+    const r=CUR[ctx.ri];
+    const rsnAll='【模拟证据】'+ctx.evidence+'【补充说明】'+full;
+    ctx.bundle.forEach(b=>{
+      const cc=r.cells[b.wi];
+      const exKey=(Array.isArray(cc)&&cc[1]==='chg')?cc[2]:null;
+      if(b.instant){                                 /* W1–W2 采购应急：即时生效 · 留痕 · 销售知会 */
+        const key=exKey||('u'+(++USEQ));
+        if(!exKey)CH[key]={type:b.type,pending:false,stat:'ok',from:b.from,to:b.to,s3:'red',s3t:'应急',by:'采购（本人）',at:when,
+          short:'W1–W2 采购应急调整：'+b.txt,sellable:WEEKS[b.wi].cov,fba:'—',daily:r.daily,sout:'—',cur:'—',
+          concl:{plan:b.from,calc:b.to,dev:'应急',why:rsnAll},tl:[]};
+        const ch=CH[key];ch.stat='ok';ch.from=b.from;ch.to=b.to;ch.type=b.type;
+        pushTl(ch,'采购（本人）','⚡ 应急加发 · 生效','W1–W2 采购应急通道：'+b.txt+'。'+rsnAll+' —— 即时生效，已通知仓库/工厂，销售知会','live','✅ 生效 · 销售知会');
+        r.cells[b.wi]=[b.to,'chg',key];
+        return;
+      }
+      const isOrd=DING.includes(b.wi)&&ORDER_WEEK;
+      /* v18 区间闸免审通道：即时生效 · 留痕 · 抄送主管（决策 27） */
+      if(ctx.auto){
+        const key=exKey||('u'+(++USEQ));
+        if(!exKey)CH[key]={type:b.type,pending:false,stat:'ok',from:b.from,to:b.to,s3:'grn',s3t:'免审',by:'销售（本人）',at:when,
+          short:'区间闸免审：'+b.txt,sellable:WEEKS[b.wi].cov,fba:'—',daily:r.daily,sout:'—',cur:'—',
+          concl:{plan:b.from,calc:b.to,dev:'区间内',why:full},tl:[]};
+        const ch=CH[key];ch.stat='ok';ch.pending=false;ch.from=b.from;ch.to=b.to;ch.type=b.type;
+        pushTl(ch,'系统（区间闸）','✅ 区间内免审 · 自动通过','修改后库存天数全程在安全区间内（决策 27）：'+b.txt+'。'+full+' —— 即时生效 · 留痕 · 抄送主管知会','live','✅ 生效 · 主管已知会');
+        if(b.type!=='air')r.cells[b.wi]=[b.to,'chg',key];else{const c=r.cells[b.wi];if(Array.isArray(c))c[2]=key;}
+        return;
+      }
+      const stat=(b.type==='advance')?'org':(isOrd?'ops':'org');   // 提前救援审真实性 → 主管
+      const nf=isOrd;   // v18：上终审对象 = 下单批（W6/W7）出界修改（随 PO）；W3–W5 出界到采购部即止（决策 27）
+      if(exKey){const ch=CH[exKey];
+        ch.pending=true;ch.saleok=false;ch.from=ch.to;ch.to=b.to;ch.type=b.type;ch.short=b.txt+'（模拟转申请）';ch.by='销售（本人）';ch.at=when;
+        ch.stat=stat;ch.needFinal=nf;ch.tl.forEach(t=>t.cur=false);
+        ch.tl.push({kind:'sale',who:'销售（本人）',when:when,chip:b.type,chipt:(b.type==='up'?'↑ 加发':b.type==='down'?'↓ 减发':'✈ 改运输'),from:ch.from,to:ch.to,rsn:rsnAll,st:'wait',stt:isOrd?'🔵 待采购审（下单链）':'🟠 待主管审（真实性）',cur:true});
+      }else{
+        const key='u'+(++USEQ);
+        CH[key]={type:b.type,pending:true,stat:stat,needFinal:nf,from:b.from,to:b.to,s3:'amber',s3t:'模拟转申请',by:'销售（本人）',at:when,
+          short:b.txt+'（模拟转申请）',sellable:WEEKS[b.wi].cov,fba:'—',daily:r.daily,sout:'—',cur:'—',
+          concl:{plan:b.from,calc:b.from,dev:(b.from>0?((b.to>=b.from?'+':'−')+Math.abs(Math.round((b.to-b.from)/Math.max(b.from,1)*1000)/10)+'%'):'申请中'),why:'模拟转申请待审 —— 系统核定值维持 '+fmt(b.from)},
+          tl:[{kind:'sale',who:'销售（本人）',when:when,chip:b.type,chipt:(b.type==='up'?'↑ 加发':b.type==='down'?'↓ 减发':'✈ 改运输'),from:b.from,to:b.to,rsn:rsnAll,st:'wait',stt:isOrd?'🔵 待采购审（下单链）':'🟠 待主管审（真实性）',cur:true}]};
+        r.cells[b.wi]=[b.from,'chg',key];
+      }
+    });
+    SIM.mods={};Object.keys(SIMMARK).forEach(k=>delete SIMMARK[k]);
+    closeEdit();recalcBadges();renderSheet(window.CURKEY||'all');buildFinalPanel();renderBatchIfOpen();
+    const ri2=CUR.findIndex(x=>x.asin===r.asin);if(ri2>=0)rebuildChart(ri2);
+    return;
+  }
+  if(false){/* v10：净额申请入口已删除（净额=只读结果） */
+  }else if(ctx.key&&CH[ctx.key]){                    /* 已有记录格：追加时间线 */
+    const ch=CH[ctx.key];const nq=isNaN(qty)?ch.to:qty;
+    ch.pending=true;ch.saleok=false;ch.from=ch.to;ch.to=nq;ch.type=type;ch.short=full;ch.by='销售（本人）';ch.at=when;
+    /* v18 区间闸：改后仍在安全区间 → 免审即时生效（决策 27） */
+    if(ctx.ri!=null&&ctx.wi!=null&&typeof nq==='number'&&bandOK(ctx.ri,ctx.wi,nq)){
+      ch.pending=false;ch.stat='ok';ch.s3='grn';ch.s3t='免审';ch.needFinal=false;
+      ch.tl.forEach(t=>t.cur=false);
+      pushTl(ch,'系统（区间闸）','✅ 区间内免审 · 自动通过','修改后库存天数全程在安全区间内（决策 27）：'+fmt(ch.from)+' → '+fmt(nq)+'。'+full+' —— 即时生效 · 留痕 · 抄送主管知会','live','✅ 生效 · 主管已知会');
+      const row=CUR[ctx.ri];if(row)row.cells[ctx.wi]=[nq,'chg',ctx.key];
+      closeEdit();recalcBadges();renderSheet(window.CURKEY||'all');buildFinalPanel();renderBatchIfOpen();return;
+    }
+    ch.stat=ctx.order?'ops':'org';
+    ch.needFinal=ctx.order?true:false;   /* v18：终审对象=下单批出界（随 PO）；W3–W5 出界到采购部即止 */
+    ch.tl.forEach(t=>t.cur=false);
+    ch.tl.push({kind:'sale',who:'销售（本人）',when:when,chip:type,chipt:(type==='up'?'↑ 加发':type==='down'?'↓ 减发':'✈ 改运输'),from:ch.from,to:ch.to,rsn:full,st:'wait',stt:ctx.order?'🔵 待采购审（下单链）':'🟠 待主管审（真实性）',cur:true});
+  }else if(ctx.wi!=null&&ctx.ri!=null){              /* 系统原值格：生成新记录 */
+    const key='u'+(++USEQ), cur=ctx.cur||0, nq=isNaN(qty)?cur:qty;
+    const row=(ctx.ri!=null)?CUR[ctx.ri]:null;
+    /* v18 区间闸：改后仍在安全区间 → 免审即时生效（决策 27） */
+    if(bandOK(ctx.ri,ctx.wi,nq)){
+      CH[key]={type:type,pending:false,stat:'ok',needFinal:false,from:cur,to:nq,s3:'grn',s3t:'免审',by:'销售（本人）',at:when,
+        short:'区间闸免审：'+full,sellable:(WEEKS[ctx.wi]?WEEKS[ctx.wi].cov:'—'),fba:'—',daily:(row?row.daily:'—'),sout:'—',cur:'海运',
+        concl:{plan:cur,calc:nq,dev:'区间内',why:full},
+        tl:[{kind:'live',who:'系统（区间闸）',when:when,chip:'✅ 区间内免审 · 自动通过',rsn:'修改后库存天数全程在安全区间内（决策 27）：'+fmt(cur)+' → '+fmt(nq)+'。'+full+' —— 即时生效 · 留痕 · 抄送主管知会',st:'live',stt:'✅ 生效 · 主管已知会',cur:true}]};
+      if(row)row.cells[ctx.wi]=[nq,'chg',key];
+      closeEdit();recalcBadges();renderSheet(window.CURKEY||'all');buildFinalPanel();renderBatchIfOpen();return;
+    }
+    CH[key]={type:type,pending:true,stat:ctx.order?'ops':'org',needFinal:ctx.order?true:false,
+      from:cur,to:nq,s3:'amber',s3t:'销售申请',by:'销售（本人）',at:when,
+      short:full,sellable:(ctx.wi!=null&&WEEKS[ctx.wi]?WEEKS[ctx.wi].cov:'—'),fba:'—',daily:(row?row.daily:'—'),sout:'—',cur:'海运',
+      concl:{plan:cur,calc:cur,dev:cur>0?((nq>=cur?'+':'−')+Math.abs(Math.round((nq-cur)/Math.max(cur,1)*1000)/10)+'%'):'申请中',why:'销售修改申请待审 —— 系统核定值维持 '+fmt(cur)},
+      tl:[{kind:'sale',who:'销售（本人）',when:when,chip:type,chipt:(type==='up'?'↑ 加发':type==='down'?'↓ 减发':'✈ 改运输'),from:cur,to:nq,rsn:full,st:'wait',stt:ctx.order?'🔵 待采购审（下单链）':'🟠 待主管审（真实性）',cur:true}]};
+    if(row&&ctx.wi!=null)row.cells[ctx.wi]=[cur,'chg',key];   // 写回数据层：重渲染后仍在
+  }
+  closeEdit();recalcBadges();renderSheet(window.CURKEY||'all');buildFinalPanel();renderBatchIfOpen();
+}
+function netOf(ri){
+  const r=CUR[ri];
+  const cv=i=>{const c=r.cells[i];return c==null?0:(Array.isArray(c)?(+c[0]||0):(+c||0));};
+  const a=cv(DING[0]), b=cv(DING[1]), g=a+b, ud=UNDELIV[r.asin]||0;
+  return {a,b,g,ud,net:Math.max(0,g-ud)};
+}
+/* v11：净额抽屉已删除 —— 推导原地展示于净额格，生成动作升至顶栏 pochip */
+/* v10：采购一键生成下单计划 —— 净额（需求口径）冻结快照 → 下单执行看板（工厂×规格聚合、调拨在看板内算）→ 终审 */
+function genPO(){
+  if(!ORDER_WEEK||POGEN)return;
+  let n=0,units=0;const cv=(r,j)=>{const c=r.cells[j];return c==null?0:(Array.isArray(c)?(+c[0]||0):(+c||0));};
+  ROWS.forEach(r=>{const net=Math.max(0,cv(r,DING[0])+cv(r,DING[1])-(UNDELIV[r.asin]||0));if(net>0){n++;units+=net;}});
+  const live=ROWS.some(r=>r.cells.some(c=>Array.isArray(c)&&c[2]&&CH[c[2]]&&['org','ops'].includes(statOf(CH[c[2]]))));
+  if(live&&!confirm('仍有修改申请在主管 / 采购环流转（未到终审位）。\n现在生成 = 按当前净额出草案，在途申请获批后需重生成。\n继续？'))return;
+  POGEN=true;
+  alert(`✓ 已按净额生成本期 PO 草案：${n} 个 SKU · ${units.toLocaleString()} 台（需求口径）。\n→ 推送「下单执行看板」：按工厂 × 规格聚合、拆第 1/2 周；跨站点调拨 / 在产让单在看板内抵扣后得「实际新下单」（执行口径）。\n→ 草案连同标红项转入终审。`);
+  recalcBadges();renderSheet(window.CURKEY||'all');buildFinalPanel();syncPoChip();
+}
+function syncPoChip(){const c=document.getElementById('pochip');if(!c)return;
+  if(ROLE!=='ops'||!ORDER_WEEK){c.style.display='none';return;}
+  c.style.display='';
+  if(POAPPROVED){c.classList.add('done');c.textContent='🔒 本期 PO 已锁（决策 19）';c.onclick=null;}
+  else if(POGEN){c.classList.add('done');c.textContent='✓ PO 草案已生成 → 执行看板 · 待终审';c.onclick=null;}
+  else{c.classList.remove('done');c.textContent='⚙ 生成本期下单计划（净额 → 执行看板）';c.onclick=genPO;}
+}
+function togglePhase(){
+  ORDER_WEEK=!ORDER_WEEK;
+  document.getElementById('phasebtn').textContent=ORDER_WEEK?'📅 本周 = 下单周：W7 新排待确认 · 周二合并 W6 下 PO（点击切换）':'📅 本周 = 非下单周：W6 新排待确认 · 下周二合并下 PO（点击切回）';
+  buildFinalPanel();renderSheet(window.CURKEY||'all');syncPoChip();
+}
+document.querySelector('.allpass').onclick=()=>{
+  let okN=0,exN=0;
+  ROWS.forEach(r=>{
+    if(r.sales!==ME)return;   /* v16 越权修复：一键通过只作用于本人 SKU（原会替其他销售确认） */
+    const hasLive=r.cells.some(c=>Array.isArray(c)&&c[2]&&CH[c[2]]&&statOf(CH[c[2]])!=='ok');
+    if(hasLive){exN++;return;}
+    if(ORDER_WEEK&&!ORDOK[r.asin]){ORDOK[r.asin]=true;okN++;}
+  });
+  recalcBadges();renderSheet(window.CURKEY||'all');
+  alert(`✓ 一键通过 ${okN} 行发货计划（仅本人 SKU · 含本周新排周 · 确认即承诺）。\n${exN} 行含在途例外，需在格子 / 抽屉逐项处理后生效。\n下单额为只读结果，无需销售确认。`);
+};
+
+/* ===== v6 审核一体化：角色透镜 / 状态机动作 / 批次签核 / 终审聚合 ===== */
+
+/* —— 通用渲染 —— */
+function tlHTML(o){let tl='';(o.tl||[]).forEach(it=>{
+  const arrowNum=(it.from==='海运'||it.from==='空派')
+    ?`<span class="o">${it.from}</span> → <span class="n">${it.to}</span>`
+    :`<span class="o">${fmt(it.from)}</span> → <span class="n">${fmt(it.to)} 台</span>`;
+  tl+=`<div class="it ${it.kind==='sys'?'sys':'sale'} ${it.cur?'cur':''}">
+      <span class="dot"></span>
+      <div class="top"><span class="who ${it.kind==='sys'?'sys':'sale'}">${it.who}</span>
+        <span class="chip ${(chipMap[it.chip]||['chip-sys'])[0]}">${it.chipt}</span>
+        <span class="when">${it.when}</span><span class="st ${stMap[it.st]}">${it.stt}</span></div>
+      <div class="chg-num">${arrowNum}</div><div class="rsn">${it.rsn}</div></div>`;});
+  return tl;}
+
+function hoverStat(ch){const st=statOf(ch);
+  if(st==='ok')return ch.saleok?'✅ 销售已确认':'✅ 已生效';
+  let t=STXT[st];
+  if(OWNER[st]===ROLE)t=t.replace('待销售','待你（销售）').replace('待主管','待你（主管）').replace('待采购','待你（采购）').replace('待终审','待你（终审）');
+  if(st==='org')t+=' · 截止周三 18:00（剩 26h）· 超时不放行 → 升级 Ailah 留痕';
+  if(st==='ops')t+=' · 主管已过';
+  if(st==='fin')t+=' · 于「本期 PO 聚合」内操作';
+  if(st==='rej')t+=`（${ch.rejBy||''}：${ch.rejRsn||''}）`;
+  return t;}
+
+function poStTxt(){
+  if(POAPPROVED)return '<span style="color:#0e5c32">🔒 PO 已锁（决策 19）</span>';
+  if(POGEN)return '<span style="color:#4b2fb0">📦 已入 PO 草案 · 待终审</span>';
+  return ORDER_WEEK?'<span style="color:#8a6206">周二由采购生成下单计划</span>':'';}
+
+function reqCardHTML(o){const isAir=o.type==='air';
+  return `<div class="reqcard"><div class="rq-h">销售提交的申请内容</div>
+    <table class="kv">
+      <tr><td class="k">修改方式</td><td>${MK[o.type]||''} ${isAir?'改运输方式':o.type==='up'?'加发 / 上调':'减发 / 下调'}</td><td class="k">数量</td><td><b>${isAir?o.from+' → '+o.to:fmt(o.from)+' → '+fmt(o.to)+' 台'}</b></td></tr>
+      <tr><td class="k">理由</td><td colspan="3">${o.short||o.rsn||''}</td></tr>
+      <tr><td class="k">提交</td><td colspan="3">${o.by} · ${o.at}</td></tr>
+    </table></div>`;}
+
+/* —— S2 按钮矩阵：角色 × 状态 —— */
+function buildApply(o,ctx){
+  const st=statOf(o), kind=ctx.kind, id=kind==='ord'?ctx.asin:ctx.key;
+  const chainNote=o.needFinal?'（终审位：本期 PO 聚合内）':'';
+  if(st==='ok')return `<div class="stbadge st-ok">✅ ${o.saleok?'销售已确认无误':'已生效'}</div>`;
+  if(st==='yel'){
+    let h=`<div class="stbadge st-yel">🟡 待销售确认 —— ${kind==='ord'?'本期净额为系统建议值':'系统重算动过此格（例外格）'}</div>`;
+    if(ROLE==='sale'){
+      h+=`<div class="acts6"><div class="an">你查<b>事实</b>：数字与业务对不对。确认即承诺（铁律①）；要改必须写理由。</div>
+        <div class="ar"><button class="btn6 b-pass" onclick="confirmCell('${id}')">✓ 确认无误</button>
+        <button class="btn6 b-blue" onclick="editFromDrawer('${id}')">✏ 修改申请</button></div></div>`;
+    }else h+=`<div class="acts6"><div class="an">当前卡在<b>销售</b>（事实确认）。你的角色（${RNAME[ROLE]}）此阶段只读。</div></div>`;
+    return h;}
+  if(st==='rej'){
+    let h=`<div class="stbadge st-rej6">⛔ 已驳回 —— ${o.rejBy||''}意见：「${o.rejRsn||''}」</div>`+reqCardHTML(o);
+    if(ROLE==='sale')h+=`<div class="acts6"><div class="an">按驳回意见修改后可再次提交，或维持系统值直接确认。</div>
+      <div class="ar"><button class="btn6 b-blue" onclick="editFromDrawer('${id}')">✏ 修改后再次提交</button>
+      <button class="btn6 b-ghost" onclick="confirmCell('${id}')">维持系统值 · 确认</button></div></div>`;
+    else h+=`<div class="acts6"><div class="an">已打回销售，等待其处理。</div></div>`;
+    return h;}
+  if(st==='org'){
+    let h=`<div class="stbadge st-org">🟠 待主管审（真实性）· 截止周三 18:00（剩 26h）· 超时不放行 → 升级 Ailah 留痕</div>`+reqCardHTML(o);
+    if(ROLE==='lead')h+=`<div class="acts6"><div class="an">你审<b>真实性</b>：活动是否真实、值不值这个量。闸的判定系统已算好（${o.concl?o.concl.dev:''}${o.needFinal?'，超线 → 特殊申请上终审':''}），你只判事实、不做算术。</div>
+      <div class="ar"><button class="btn6 b-pass" onclick="leadPass('${id}','${kind}')">真实性通过 → 转采购</button>
+      <button class="btn6 b-rej" onclick="rejectObj('${id}','${kind}','主管')">驳回（意见必填）</button></div></div>`;
+    else if(ROLE==='sale')h+=`<div class="acts6"><div class="an">你已提交申请，等待主管审核。主管处理前可撤回。</div>
+      <div class="ar"><button class="btn6 b-ghost" onclick="saleWithdraw('${id}','${kind}')">↩ 撤回申请</button></div></div>`;
+    else if(ROLE==='ops')h+=`<div class="acts6"><div class="an">当前卡在<b>主管</b>。你可先<b>预加批注</b>（随对象流转、审核方可见），不改变审核顺序（S2-4）。</div>
+      <div class="ar"><button class="btn6 b-ghost" onclick="opsNote('${id}','${kind}')">📌 预加批注</button></div></div>`;
+    else h+=`<div class="acts6"><div class="an">流转中：主管 → 采购${chainNote}。终审此处只读。</div></div>`;
+    return h;}
+  if(st==='ops'){
+    let h=`<div class="stbadge st-blue">🔵 待采购审（可执行性）${kind==='ord'?' · 下单链：销售 → 采购 → 终审（不经主管，字典 2.9）':''}</div>`+reqCardHTML(o);
+    if(ROLE==='ops')h+=`<div class="acts6"><div class="an">你审<b>可执行性</b>：MOQ / 物流舱位 / 下厂交期。${o.needFinal?'通过后进入终审位（本期 PO 聚合）。':'通过即生效、通知工厂。'}</div>
+      <div class="ar"><button class="btn6 b-pass" onclick="opsPass('${id}','${kind}')">可执行性通过${o.needFinal?' → 转终审':''}</button>
+      <button class="btn6 b-rej" onclick="rejectObj('${id}','${kind}','采购')">驳回（意见必填）</button>
+      <button class="btn6 b-ghost" onclick="opsNote('${id}','${kind}')">📌 加批注</button></div></div>`;
+    else h+=`<div class="acts6"><div class="an">当前卡在<b>采购</b>${chainNote}。你的角色（${RNAME[ROLE]}）此阶段只读。</div></div>`;
+    return h;}
+  if(st==='fin')return `<div class="stbadge st-fin">🟣 待终审 —— 已过前置审核，随本期 PO 在聚合面板一并终审（S5）</div>`+reqCardHTML(o)
+    +(ROLE==='final'?`<div class="acts6"><div class="an">在顶部「本期 PO 聚合」面板操作：一键通过本 PO，或对标红项个别调整。</div></div>`:'');
+  return '';}
+
+/* —— 状态机动作 —— */
+function leadPass(id,kind){const o=objBy(id,kind);if(!o)return;o.stat='ops';BATCH.acted[kind+':'+id]='pass';
+  pushTl(o,'主管（本人）','✓ 真实性通过','活动 / 事实核对属实，转采购审可执行性','pass','✓ 主管通过 → 待采购');afterAct(id,kind);}
+function opsPass(id,kind){const o=objBy(id,kind);if(!o)return;
+  if(o.needFinal){o.stat='fin';pushTl(o,'采购（本人）','✓ 可执行性通过','MOQ / 物流 / 下厂交期可行，进入终审位（本期 PO 聚合）','pass','✓ 采购通过 → 待终审');}
+  else{o.stat='ok';applyCellValue(id,kind);pushTl(o,'采购（本人）','✓ 可执行性通过','MOQ / 物流 / 下厂交期可行，生效并通知工厂','live','✅ 生效');}
+  afterAct(id,kind);}
+function rejectObj(id,kind,by){const rsn=prompt(by+'驳回意见（必填，回销售待办）：');if(!rsn||!rsn.trim())return;
+  const o=objBy(id,kind);if(!o)return;o.stat='rej';o.rejBy=by;o.rejRsn=rsn.trim();
+  if(by==='主管')BATCH.acted[kind+':'+id]='back';
+  pushTl(o,by+'（本人）','✕ 驳回',rsn.trim(),'rej','⛔ 驳回 → 回销售');afterAct(id,kind);}
+function saleWithdraw(id,kind){const o=objBy(id,kind);if(!o)return;o.stat='yel';
+  pushTl(o,'销售（本人）','↩ 撤回申请','主管处理前撤回，回到待确认','live','已撤回');afterAct(id,kind);}
+function opsNote(id,kind){const n=prompt('采购批注（随对象流转，审核方可见，不改变审核顺序）：');if(!n||!n.trim())return;
+  const o=objBy(id,kind);if(!o)return;pushTl(o,'采购（本人）','📌 批注',n.trim(),'live','批注');afterAct(id,kind);}
+function applyCellValue(id,kind){if(kind!=='cell')return;
+  ROWS.forEach(r=>r.cells.forEach(c=>{if(Array.isArray(c)&&c[2]===id&&typeof CH[id].to==='number')c[0]=CH[id].to;}));}
+function afterAct(id,kind){recalcBadges();renderSheet(window.CURKEY||'all');buildFinalPanel();renderBatchIfOpen();
+  const vis=CUR.some(r=>r.cells.some(c=>Array.isArray(c)&&c[2]===id));if(vis)openDrawer(id);else closeDrawer();}
+
+/* —— S1 待我处理：行级归属 —— */
+function rowMine(r){
+  for(const c of r.cells){if(Array.isArray(c)&&c[2]&&CH[c[2]]){const st=statOf(CH[c[2]]);if(st!=='ok'&&OWNER[st]===ROLE&&(ROLE!=='sale'||r.sales===ME))return true;}}
+  if(ROLE==='sale'&&ORDER_WEEK&&!ORDOK[r.asin]&&r.sales===ME)return true;   /* v16 越权修复：销售待办只含本人 SKU */   /* 例外⑤：新长出的一周随行确认（对象=发货计划） */
+  if(ROLE==='ops'&&ORDER_WEEK&&!POGEN)return true;             /* 采购：本期下单计划待生成 */
+  if(ROLE==='final')return anyFinalLive(r);
+  return false;}
+function anyFinalLive(r){
+  for(const c of r.cells){if(Array.isArray(c)&&c[2]&&CH[c[2]]&&CH[c[2]].needFinal){const st=statOf(CH[c[2]]);if(st!=='ok')return true;}}
+  return false;}
+
+/* —— 徽章重算（S0-3：待办 N）—— */
+function recalcBadges(){
+  const cnt={sale:0,lead:0,ops:0,final:0};let inflight=0;
+  ROWS.forEach(r=>{
+    r.cells.forEach(c=>{if(Array.isArray(c)&&c[2]&&CH[c[2]]){const st=statOf(CH[c[2]]);
+      if(st!=='ok'){if(OWNER[st]!=='sale'||r.sales===ME)cnt[OWNER[st]]++;if(st!=='yel')inflight++;}}});
+    if(ORDER_WEEK&&!ORDOK[r.asin]&&r.sales===ME)cnt.sale++;   /* 例外⑤：行级本周确认（v16：仅本人 SKU） */
+  });
+  if(ORDER_WEEK&&!POGEN&&!POAPPROVED)cnt.ops++;  /* 采购：生成本期下单计划 */
+  MISS.forEach(m=>{if(m.state==='back')cnt.sale++;});
+  if(!BATCH.signed)cnt.lead++;
+  if(ORDER_WEEK&&!POAPPROVED)cnt.final++;
+  ['sale','lead','ops','final'].forEach(k=>{const b=document.getElementById('bn-'+k);if(b){b.textContent=cnt[k];b.classList.toggle('z',cnt[k]===0);}});
+  const ab=document.getElementById('auditbar');
+  if(ab){ab.style.display=inflight>0?'':'none';const n=document.getElementById('auditn');if(n)n.textContent=inflight;}}
+
+/* —— 角色透镜 / 视图切换（S1）—— */
+function setRole(r){ROLE=r;
+  document.querySelectorAll('#rolebar .rl').forEach(x=>x.classList.toggle('active',x.dataset.r===r));
+  document.getElementById('batchchip').style.display=(r==='lead')?'':'none';
+  syncPoChip();
+  document.getElementById('allpass').style.display=(r==='sale')?'':'none';
+  syncBatchChip();recalcBadges();buildFinalPanel();renderSheet(window.CURKEY||'all');}
+function syncVt(){document.querySelectorAll('#rolebar .vt span').forEach(x=>x.classList.toggle('on',(x.dataset.v==='mine')===MINE));}
+document.querySelectorAll('#rolebar .rl').forEach(el=>el.onclick=()=>setRole(el.dataset.r));
+document.querySelectorAll('#rolebar .vt span').forEach(el=>el.onclick=()=>{MINE=(el.dataset.v==='mine');syncVt();renderSheet(window.CURKEY||'all');});
+
+/* —— S4 批次确认（主管档三 · 团队一批）—— */
+function batchItems(){const L1=[];
+  ROWS.forEach(r=>r.cells.forEach((c,i)=>{if(Array.isArray(c)&&c[2]&&CH[c[2]]){const ch=CH[c[2]];const st=statOf(ch);
+    if(st==='org')L1.push({kind:'chg',key:c[2],nm:`${r.model} · ${r.site} · ${WEEKS[i]?WEEKS[i].w:''}`,dt:`${fmt(ch.from)} → <b>${fmt(ch.to)}</b>（${ch.concl?ch.concl.dev:''}${ch.needFinal?' · 超线上终审':''}）· ${ch.short}`});
+    else if(st==='rej'&&ch.rejBy==='主管')L1.push({kind:'chg',key:c[2],back:true,nm:`${r.model} · ${r.site} · ${WEEKS[i]?WEEKS[i].w:''}`,dt:`已打回销售（「${ch.rejRsn}」）· 排除本批次，走补充确认`});
+    else if((st==='ops'||st==='fin')&&ch.needFinal)L1.push({kind:'flow',key:c[2],nm:`${r.model} · ${r.site} · ${WEEKS[i]?WEEKS[i].w:''}`,dt:`${STXT[st]} · ${ch.short}`});
+  }}));
+  MISS.forEach(m=>L1.push({kind:'miss',m:m,nm:m.nm,dt:m.dt}));
+  ROWS.forEach(r=>{if(r.life==='新品')L1.push({kind:'new',nm:`${r.model} · ${r.site}`,dt:'新品期 SKU · 0 容忍、不套健康区间闸 · 知会项'});});
+  return L1;}
+function batchNMX(){const n=ROWS.length,m=Object.keys(BATCH.acted).length+MISS.filter(v=>v.state).length;
+  let x=0;ROWS.forEach(r=>r.cells.forEach(c=>{if(Array.isArray(c)&&c[2]&&CH[c[2]]&&statOf(CH[c[2]])==='rej'&&CH[c[2]].rejBy==='主管')x++;}));
+  x+=MISS.filter(v=>v.state==='back').length;return {n:n,m:m,x:x};}
+function openBatch(){document.getElementById('bmask').style.display='block';renderBatch();document.getElementById('batchbox').style.display='block';}
+function closeBatch(){document.getElementById('bmask').style.display='none';document.getElementById('batchbox').style.display='none';}
+function renderBatchIfOpen(){if(document.getElementById('batchbox').style.display==='block')renderBatch();}
+function missBack(id){const m=MISS.find(v=>v.id===id);if(!m)return;const rsn=prompt('打回意见（必填，销售需复核该周量）：');if(!rsn||!rsn.trim())return;
+  m.state='back';m.rsn=rsn.trim();recalcBadges();renderBatch();}
+function missOk(id){const m=MISS.find(v=>v.id===id);if(!m)return;m.state='ok';recalcBadges();renderBatch();}
+function renderBatch(){
+  const box=document.getElementById('batchbox');const items=batchItems();const nmx=batchNMX();
+  const l1=items.map(it=>{
+    let why,ops='';
+    if(it.kind==='chg'){why='<span class="why why-chg">销售改过</span>';
+      ops=it.back?`<span class="done6" style="color:#c0392b">⛔ 已打回 · 排除</span>`
+        :(BATCH.acted['cell:'+it.key]==='pass'?`<span class="done6" style="color:#1a6d49">✓ 已核 · 已过</span><button class="bo" onclick="closeBatch();openDrawer('${it.key}')">点开</button>`
+        :(BATCH.signed?'':`<button class="bp" onclick="leadPass('${it.key}','cell')">真实性通过</button><button class="bb" onclick="rejectObj('${it.key}','cell','主管')">打回</button>`)+`<button class="bo" onclick="closeBatch();openDrawer('${it.key}')">点开抽屉</button>`);}
+    else if(it.kind==='miss'){why='<span class="why why-miss">活动未动数</span>';
+      ops=it.m.state==='back'?`<span class="done6" style="color:#c0392b">⛔ 已打回复核 · 排除（「${it.m.rsn}」）</span>`
+        :it.m.state==='ok'?`<span class="done6" style="color:#1a6d49">✓ 已核 · 确认无需调</span>`
+        :(BATCH.signed?'':`<button class="bb" onclick="missBack('${it.m.id}')">打回 → 要求复核</button><button class="bp" onclick="missOk('${it.m.id}')">确认无需调</button>`);}
+    else if(it.kind==='flow'){why='<span class="why why-warn">黄/红预警</span>';
+      ops=`<button class="bo" onclick="closeBatch();openDrawer('${it.key}')">点开（知会）</button>`;}
+    else{why='<span class="why why-new">新品期</span>';ops='<span class="done6" style="color:#5a6169">知会项</span>';}
+    return `<div class="bxrow">${why}<span class="nm">${it.nm}</span><span class="dt">${it.dt}</span><span class="ops2">${ops}</span></div>`;
+  }).join('');
+  const groups={};ROWS.forEach(r=>{(groups[r.sales]=groups[r.sales]||[]).push(r);});
+  const l2=Object.keys(groups).map((g,i)=>{
+    const rs=groups[g];const cv=r=>{const c=r.cells[DING[0]];return c==null?0:(Array.isArray(c)?(+c[0]||0):(+c||0));};
+    const sum=rs.reduce((a,r)=>a+cv(r),0);const acc=ACCU[g]||'—';const low=parseInt(acc)<70;
+    return `<div class="bxgrp" onclick="const s=document.getElementById('bxs-${i}');s.style.display=s.style.display==='block'?'none':'block'">
+      <span class="nm2">${g}</span><span>${rs.length} 个 SKU · 首周合计 ${sum.toLocaleString()} 台</span>
+      <span class="acc${low?' low':''}">异议准确率 ${acc}${low?' ⚠':''}</span><span class="car">▸ 展开</span></div>
+    <div class="bxsub" id="bxs-${i}">${rs.map(r=>`${r.model} · ${r.site} · W6 首周 ${cv(r).toLocaleString()} 台 · 一键确认`).join('<br>')}</div>`;
+  }).join('');
+  box.innerHTML=`<div class="bx-h"><span class="tt">📋 本期批次签核 · 全团队（团队一批 · S4）</span>
+      <span style="font-size:11.5px;color:#5a6169">周期 7/6~7/17 · 下单周</span>
+      <span class="ddl">⏰ 截止周三 18:00 · 剩 26h · 超时不放行 → 升级 Ailah 留痕</span><span class="x" onclick="closeBatch()">✕</span></div>
+    <div class="bx-lt">第一层 · 必看项 —— 逐条判断，可行内打回（打回即排除本批次、回销售待办，不阻塞签核 S4-3）</div>
+    ${l1||'<div class="bxrow" style="color:#5a6169">本期无必看项</div>'}
+    <div class="bx-lt l2">第二层 · 扫一眼项 —— 一键确认的常规格，按销售人分组（诊断价值留在视图层 S4-2）</div>
+    ${l2}
+    <div class="bx-f"><span class="cnt">签核范围 <b>${nmx.n} 个 SKU</b> · 已逐条核 <b>${nmx.m} 项</b> · 排除 <b>${nmx.x} 项</b>（未闭环 → 不进本期 PO，销售处理后走补充确认，次日 18:00 前补签 · S6-4，量差由次周吸收 · 铁律②）</span>
+      ${BATCH.signed
+        ?`<span class="done6" style="margin-left:auto;color:#0e5c32;font-weight:800">✓ 已签核 N${BATCH.signed.n}/M${BATCH.signed.m}/X${BATCH.signed.x} · ${BATCH.signed.at} · 留痕</span>`
+        :(ROLE==='lead'
+          ?`<button class="btn6 b-blue" style="margin-left:auto" onclick="signBatch()">本批次确认（${nmx.n} SKU · 已核 ${nmx.m} · 排除 ${nmx.x}）</button>`
+          :`<span class="done6" style="margin-left:auto;color:#5a6169">只读（仅主管可签核）</span>`)}</div>`;}
+function signBatch(){const nmx=batchNMX();
+  if(!confirm(`签核本批次：范围 ${nmx.n} SKU · 已逐条核 ${nmx.m} 项 · 排除 ${nmx.x} 项。\nN/M/X 将写入留痕（S4-4）。确认签核？`))return;
+  BATCH.signed={n:nmx.n,m:nmx.m,x:nmx.x,at:'07-06 '+now6()};
+  recalcBadges();renderBatch();syncBatchChip();buildFinalPanel();}
+function syncBatchChip(){const c=document.getElementById('batchchip');if(!c)return;
+  if(BATCH.signed){c.classList.add('done');c.textContent=`✓ 本期批次已签核 · N${BATCH.signed.n}/M${BATCH.signed.m}/X${BATCH.signed.x} · 留痕`;}
+  else{c.classList.remove('done');c.textContent='📋 本期批次签核 · 截止周三 18:00（剩 26h）';}}
+
+/* —— S5 终审聚合（主表的模式切换，不独立开发看板）—— */
+function buildFinalPanel(){const p=document.getElementById('finalpanel');if(!p)return;
+  if(ROLE!=='final'||!ORDER_WEEK){p.style.display='none';return;}
+  p.style.display='block';
+  let net=0;const cv=(r,j)=>{const c=r.cells[j];return c==null?0:(Array.isArray(c)?(+c[0]||0):(+c||0));};
+  ROWS.forEach(r=>{net+=Math.max(0,cv(r,DING[0])+cv(r,DING[1])-(UNDELIV[r.asin]||0));});
+  const reds=[];
+  ROWS.forEach(r=>r.cells.forEach(c=>{if(Array.isArray(c)&&c[2]&&CH[c[2]]&&CH[c[2]].needFinal){const ch=CH[c[2]];const st=statOf(ch);
+    if(st!=='ok')reds.push({key:c[2],fin:st==='fin',txt:`${r.model} ${r.site} · ${ch.type==='air'?'红预警空派救援':'特殊申请 '+(ch.concl?ch.concl.dev:'')} · ${st==='fin'?'✓ 前置已过 · 待终审':'流转中：'+STXT[st]}`});}}));
+  const allFin=reds.every(v=>v.fin);
+  const can=allFin&&!!BATCH.signed&&POGEN&&!POAPPROVED;
+  p.innerHTML=`<div class="fp-h">本期 PO 聚合 · 全站点合并<span class="po">PO-2026-0714 · = 首周承诺 + 次周新排 − 未交货余量</span>${POAPPROVED?'<span class="approved" style="margin-left:auto">✅ PO 已通过 · 下单不可取消（决策 19）· 采购发合同下厂</span>':''}</div>
+    <div class="fp-sum">
+      <span><span class="k">需下单净额合计 </span><b>${net.toLocaleString()} 台</b></span>
+      <span><span class="k">涉及 SKU </span><b>${ROWS.length}</b></span>
+      <span><span class="k">金额（仅终审+主管可见 · 2.9.5③）</span><b>$${(net*43).toLocaleString()}</b></span>
+      <span><span class="k">主管批次签核 </span><b>${BATCH.signed?`✓ N${BATCH.signed.n}/M${BATCH.signed.m}/X${BATCH.signed.x}`:'⏳ 未签核'}</b></span>
+      <span><span class="k">PO 草案（采购生成）</span><b>${POGEN?'✓ 已生成 → 执行看板':'⏳ 待生成'}</b></span>
+    </div>
+    <div class="fp-red">${reds.length?reds.map(v=>`<div class="fp-ri"><span class="rtag">标红</span><span>${v.txt}</span>${v.key?`<button class="btn6 b-ghost" style="padding:2px 10px;font-size:11.5px" onclick="openDrawer('${v.key}')">点开链路</button>`:''}</div>`).join(''):'<div class="fp-ri" style="color:#5a6169">本期无标红项</div>'}</div>
+    <div class="fp-act">${POAPPROVED?'':`<button class="btn6 b-blue" ${can?'':'disabled'} onclick="approvePO()">一键通过本 PO</button>
+      <button class="btn6 b-ghost" disabled title="原型：仅标红项可个别调整">个别调整（仅标红项）</button>`}
+      <span class="fp-note">通过条件：主管批次已签核 ＋ 采购已生成 PO 草案 ＋ 全部标红项过完采购（🟣 待终审位）。终审只看汇总与标红（字典 2.9）；通过 = 下单不可取消（决策 19）、锁信号回流表格（W6+W7 真锁）。金额与本面板同一份 PO 数据在「下单执行看板」按工厂 × 规格透视。${POAPPROVED?'':can?'':' 当前有前置未完成，按钮置灰。'}</span></div>`;}
+function approvePO(){
+  ROWS.forEach(r=>r.cells.forEach(c=>{if(Array.isArray(c)&&c[2]&&CH[c[2]]&&statOf(CH[c[2]])==='fin'){const ch=CH[c[2]];ch.stat='ok';
+    if(typeof ch.to==='number')c[0]=ch.to;
+    pushTl(ch,'终审 Ailah','✓ 终审通过','随本期 PO 一键通过（PO-2026-0714）· 下单不可取消','live','✅ 终审通过 · 生效');}}));
+
+  POAPPROVED=true;recalcBadges();buildFinalPanel();renderSheet(window.CURKEY||'all');syncPoChip();}
+
+/* 初始：销售视角 · 待我处理 */
+setRole('sale');syncVt();
+
+</script>
+</body>
+</html>

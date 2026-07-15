@@ -334,6 +334,12 @@ function makeShipmentPlanFilter(activeParams, showAllRows) {
   const filterItems = [
     { asin: { $eq: activeParams.asin } },
     { country: { $eq: activeParams.country } },
+    {
+      $or: [
+        { plan_source: { $empty: true } },
+        { plan_source: { $ne: 'shipment_plan_v2' } },
+      ],
+    },
   ];
 
   if (!showAllRows) {
