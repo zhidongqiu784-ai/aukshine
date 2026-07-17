@@ -798,6 +798,18 @@
     category: '类别 = 从小类排名数组取第一个类别。\ncategory = small_cate_rank[0].category。',
   };
 
+  const WEEKLY_PERFORMANCE_UPDATE_TOOLTIP_TEXT = '每天更新2次（早上8点、16点），每次更新过去30天的数据；';
+  const WEEKLY_PERFORMANCE_DIRECT_VALUE_FIELDS = new Set([
+    'sales', 'guanggaodan', 'zongliuliang', 'guanggaodianji', 'guanggaohuafei',
+    'ranking', 'reviews_count', 'avg_star', 'prev_star', 'prev_rank',
+    'promotion_volume', 'ad_sales_amount', 'b2b_volume', 'return_count', 'impressions',
+    'shared_ads_sb_cost', 'shared_ads_sbv_cost', 'ads_sd_cost', 'ads_sp_cost',
+    'ads_sd_sales', 'ads_sp_sales', 'shared_ads_sb_sales', 'shared_ads_sbv_sales',
+    'ad_direct_order_quantity', 'page_views_total', 'page_views', 'page_views_mobile',
+    'sessions', 'sessions_mobile', 'return_goods_count', 'date',
+    'ad_direct_sales_amount', 'category',
+  ]);
+
   const DAILY_SYNC_TOOLTIP_TEXT = [
     '按站点分早晚场同步：',
     'JP站点：早场 06/07/08 任一时间同步；晚场 18/19 任一时间同步。',
@@ -813,7 +825,7 @@
 
   const SQL_UPDATED_FIELD_TEXT = {
     'daily.date': '每天自动生成从今天起未来 3 个月的日期。',
-    'daily.activity_annotation': '每天 5:30 同步昨日活动标注。',
+    'daily.activity_annotation': '每天5:30更新',
     'daily.daily_price': `购物车价格\n${DAILY_SYNC_TOOLTIP_TEXT}`,
     'daily.list_price': `LP/WP/TP\n${DAILY_SYNC_TOOLTIP_TEXT}`,
     'daily.star_rating': `星级\n${DAILY_SYNC_TOOLTIP_TEXT}`,
@@ -7972,105 +7984,140 @@
       }, sortConfig.dir === 'asc' ? '▲' : '▼');
     };
 
-    const renderFormula = (formula) => {
-      const lines = Array.isArray(formula)
-        ? (formula.length ? formula : ['直接展示该指标值'])
-        : String(formula || '直接展示该指标值').split(/\r?\n/);
-      return React.createElement('div', { style: { marginBottom: '6px' } }, lines.map((line, idx) =>
-        React.createElement('div', {
-          key: `formula_${idx}`,
-          style: { marginTop: idx === 0 ? 0 : '4px' },
-        }, line)
-      ));
+    const splitTooltipText = (value) => {
+      const text = Array.isArray(value) ? value.join('\n') : String(value || '').trim();
+      if (!text) return [];
+      const lines = text.match(/[^。！？\n]+[。！？]?/g) || [text];
+      return lines.map((line) => line.trim()).filter(Boolean);
+    };
+    const tooltipSectionTitleStyle = {
+      marginBottom: '5px',
+      color: '#bae0ff',
+      fontSize: '12px',
+      fontWeight: 800,
+      letterSpacing: '0.02em',
+    };
+    const tooltipBodyStyle = {
+      color: 'rgba(255,255,255,0.92)',
+      fontSize: '13px',
+      lineHeight: 1.7,
+      whiteSpace: 'normal',
+      wordBreak: 'break-word',
+      overflowWrap: 'anywhere',
+      textWrap: 'pretty',
+    };
+    const tooltipFieldRowStyle = {
+      display: 'grid',
+      gridTemplateColumns: '92px minmax(0, 1fr)',
+      gap: '7px',
+      alignItems: 'start',
+    };
+    const tooltipCodeStyle = {
+      padding: '1px 5px',
+      borderRadius: '4px',
+      background: 'rgba(255,255,255,0.08)',
+      color: 'rgba(255,255,255,0.9)',
+      fontFamily: 'monospace',
+      whiteSpace: 'normal',
+      wordBreak: 'break-all',
     };
 
-    const renderTooltip = ({ title, formula, emptyRules = [], fields = [], writeBackField, hideEmptyRules = false, hideFieldMapping = false, sourceInfos = [], emptyRuleMode = '任意' }) => React.createElement('div', {
-      style: {
-        maxWidth: '360px',
-        fontSize: '13px',
-        lineHeight: 1.6,
-        color: 'inherit',
-      },
-    },
-      React.createElement('div', { style: { fontWeight: 700, marginBottom: '6px' } }, title),
-      renderFormula(formula),
-      !hideEmptyRules && React.createElement('div', { style: { marginBottom: '2px' } }, `为空的情况（满足${emptyRuleMode}）：`),
-      !hideEmptyRules && React.createElement('ul', {
+    const renderTooltip = ({ title, formula, emptyRules = [], fields = [], writeBackField, hideEmptyRules = false, hideFieldMapping = false, sourceInfos = [], emptyRuleMode = '任意' }) => {
+      const formulaLines = splitTooltipText(formula || '直接展示该指标值');
+      const resolvedEmptyRules = emptyRules.length ? emptyRules : ['无特殊为空条件'];
+      return React.createElement('div', {
         style: {
-          margin: '0 0 10px 18px',
-          padding: 0,
-        },
-      }, (emptyRules.length ? emptyRules : ['无特殊为空条件']).map((rule, idx) =>
-        React.createElement('li', { key: `empty_${idx}` }, rule)
-      )),
-      IS_ADMIN && React.createElement('hr', {
-        style: {
-          border: 0,
-          borderTop: '1px solid rgba(255,255,255,0.22)',
-          margin: '8px 0',
-        },
-      }),
-      IS_ADMIN && React.createElement('div', {
-        style: {
-          fontSize: '12px',
-          opacity: 0.75,
-          lineHeight: 1.55,
+          width: '440px',
+          maxWidth: 'calc(100vw - 56px)',
+          color: 'inherit',
+          WebkitFontSmoothing: 'antialiased',
         },
       },
-        React.createElement('div', { style: { fontWeight: 700, marginBottom: '4px' } }, '字段说明（开发用）'),
-        Array.isArray(sourceInfos) && sourceInfos.map((source, idx) => React.createElement('div', {
-          key: `source_${idx}`,
+        React.createElement('div', {
           style: {
-            marginBottom: '6px',
-            paddingBottom: '6px',
-            borderBottom: idx === sourceInfos.length - 1 ? 'none' : '1px dashed rgba(255,255,255,0.18)',
+            paddingBottom: '9px',
+            borderBottom: '1px solid rgba(255,255,255,0.2)',
+            color: '#fff',
+            fontSize: '14px',
+            fontWeight: 800,
+            lineHeight: 1.45,
+            textWrap: 'balance',
+          },
+        }, title),
+        React.createElement('div', { style: { paddingTop: '10px' } },
+          React.createElement('div', { style: tooltipSectionTitleStyle }, '取值与计算规则'),
+          React.createElement('div', { style: { display: 'grid', gap: '4px' } },
+            formulaLines.map((line, idx) => React.createElement('div', {
+              key: `formula_${idx}`,
+              style: tooltipBodyStyle,
+            }, line))
+          )
+        ),
+        !hideEmptyRules && React.createElement('div', {
+          style: {
+            marginTop: '10px',
+            padding: '8px 10px',
+            borderRadius: '6px',
+            background: 'rgba(255,255,255,0.08)',
           },
         },
-          React.createElement('div', null,
-            React.createElement('span', null, '来源工作流：'),
-            React.createElement('code', {
-              style: {
-                fontFamily: 'monospace',
-                whiteSpace: 'normal',
-                wordBreak: 'break-all',
-              },
-            }, source.workflow)
-          ),
-          source.schedule && React.createElement('div', null, `执行时间：${source.schedule}`),
-          source.scope && React.createElement('div', null, `适用站点：${source.scope}`),
-          React.createElement('div', null,
-            React.createElement('span', null, 'SQL 节点：'),
-            React.createElement('code', {
-              style: {
-                fontFamily: 'monospace',
-                whiteSpace: 'normal',
-                wordBreak: 'break-all',
-              },
-            }, source.node)
+          React.createElement('div', { style: { ...tooltipSectionTitleStyle, color: '#ffd591' } }, `为空情况（满足${emptyRuleMode}）`),
+          React.createElement('ul', {
+            style: {
+              ...tooltipBodyStyle,
+              margin: '0 0 0 18px',
+              padding: 0,
+            },
+          }, resolvedEmptyRules.map((rule, idx) => React.createElement('li', {
+            key: `empty_${idx}`,
+            style: { marginTop: idx === 0 ? 0 : '3px', paddingLeft: '2px' },
+          }, rule)))
+        ),
+        IS_ADMIN && React.createElement('div', {
+          style: {
+            marginTop: '10px',
+            paddingTop: '9px',
+            borderTop: '1px solid rgba(255,255,255,0.2)',
+            color: 'rgba(255,255,255,0.72)',
+            fontSize: '12px',
+            lineHeight: 1.65,
+          },
+        },
+          React.createElement('div', { style: { ...tooltipSectionTitleStyle, color: '#b7eb8f' } }, '🔧 字段说明（开发用）'),
+          React.createElement('div', { style: { display: 'grid', gap: '5px' } },
+            ...sourceInfos.flatMap((source, idx) => [
+              React.createElement('div', { key: `source_workflow_${idx}`, style: tooltipFieldRowStyle },
+                React.createElement('span', { style: { color: 'rgba(255,255,255,0.62)' } }, '来源工作流'),
+                React.createElement('code', { style: tooltipCodeStyle }, source.workflow)
+              ),
+              source.schedule && React.createElement('div', { key: `source_schedule_${idx}`, style: tooltipFieldRowStyle },
+                React.createElement('span', { style: { color: 'rgba(255,255,255,0.62)' } }, '执行时间'),
+                React.createElement('span', null, source.schedule)
+              ),
+              source.scope && React.createElement('div', { key: `source_scope_${idx}`, style: tooltipFieldRowStyle },
+                React.createElement('span', { style: { color: 'rgba(255,255,255,0.62)' } }, '适用站点'),
+                React.createElement('span', null, source.scope)
+              ),
+              React.createElement('div', { key: `source_node_${idx}`, style: tooltipFieldRowStyle },
+                React.createElement('span', { style: { color: 'rgba(255,255,255,0.62)' } }, 'SQL 节点'),
+                React.createElement('code', { style: tooltipCodeStyle }, source.node)
+              ),
+            ].filter(Boolean)),
+            ...(!hideFieldMapping ? fields.map((item, idx) => React.createElement('div', {
+              key: `field_${idx}`,
+              style: tooltipFieldRowStyle,
+            },
+              React.createElement('span', { style: { color: 'rgba(255,255,255,0.62)' } }, item.label),
+              React.createElement('code', { style: tooltipCodeStyle }, item.field)
+            )) : []),
+            !hideFieldMapping && React.createElement('div', { style: tooltipFieldRowStyle },
+              React.createElement('span', { style: { color: 'rgba(255,255,255,0.62)' } }, '写回字段'),
+              React.createElement('code', { style: tooltipCodeStyle }, writeBackField || '无')
+            )
           )
-        )),
-        !hideFieldMapping && fields.map((item, idx) => React.createElement('div', { key: `field_${idx}` },
-          React.createElement('span', null, `${item.label}：`),
-          React.createElement('code', {
-            style: {
-              fontFamily: 'monospace',
-              whiteSpace: 'normal',
-              wordBreak: 'break-all',
-            },
-          }, item.field)
-        )),
-        !hideFieldMapping && React.createElement('div', { style: { marginTop: '4px' } },
-          React.createElement('span', null, '写回字段：'),
-          React.createElement('code', {
-            style: {
-              fontFamily: 'monospace',
-              whiteSpace: 'normal',
-              wordBreak: 'break-all',
-            },
-          }, writeBackField || '无')
         )
-      )
-    );
+      );
+    };
 
     const getHeaderTooltipText = (col) => {
       if (col._dynamicKind === 'keyword') return renderTooltip({
@@ -8096,9 +8143,13 @@
       if (FIELD_TOOLTIP_DATA[col.field]) return renderTooltip(FIELD_TOOLTIP_DATA[col.field]);
       if (col.src === 'weekly' && WEEKLY_PERFORMANCE_FIELD_TOOLTIP_TEXT[col.field]) {
         const weeklyTooltipLines = WEEKLY_PERFORMANCE_FIELD_TOOLTIP_TEXT[col.field].split('\n');
+        const weeklyFormulaLines = [weeklyTooltipLines[0] || '直接展示该指标值'];
+        if (WEEKLY_PERFORMANCE_DIRECT_VALUE_FIELDS.has(col.field)) {
+          weeklyFormulaLines.push(WEEKLY_PERFORMANCE_UPDATE_TOOLTIP_TEXT);
+        }
         return renderTooltip({
           title: col.label,
-          formula: weeklyTooltipLines[0] || '直接展示该指标值',
+          formula: weeklyFormulaLines,
           fields: [
             { label: '字段标识公式', field: weeklyTooltipLines[1] || `${col.field} = 直接展示该指标值` },
             { label: `字段来源（${col.label}）`, field: `weekly_performance.${col.field}` },
@@ -8211,7 +8262,8 @@
       return React.createElement(Tooltip, {
         title: getHeaderTooltipText(col),
         placement: 'top',
-        overlayStyle: { maxWidth: '360px' },
+        overlayStyle: { maxWidth: '480px' },
+        overlayInnerStyle: { padding: '12px 14px', borderRadius: '8px' },
         mouseEnterDelay: 0.15,
       }, React.createElement('span', {
         style: {
@@ -8262,7 +8314,8 @@
     const renderCompetitorGroupHeaderLabel = (col) => React.createElement(Tooltip, {
       title: getHeaderTooltipText(col),
       placement: 'top',
-      overlayStyle: { maxWidth: '360px' },
+      overlayStyle: { maxWidth: '480px' },
+      overlayInnerStyle: { padding: '12px 14px', borderRadius: '8px' },
       mouseEnterDelay: 0.15,
     }, React.createElement('span', {
       style: {
