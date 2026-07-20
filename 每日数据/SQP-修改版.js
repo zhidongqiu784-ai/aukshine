@@ -429,7 +429,7 @@
     },
     impression_share: {
       title: '曝光份额',
-      formula: `${ASIN_SOURCE_TOOLTIP}${MARKET_SOURCE_TOOLTIP}曝光份额 = SQP-Asin曝光量 ÷ SQP-市场曝光量。`,
+      formula: '曝光份额 = SQP-Asin曝光量 ÷ SQP-市场曝光量。',
       emptyRules: ['SQP-Asin曝光量为空', 'SQP-市场曝光量为空或为 0'],
       fields: [
         { label: 'Asin曝光量', field: 'sqp_term_weekly.impressions_asin_count' },
@@ -1583,6 +1583,21 @@
       .sort((a, b) => a.localeCompare(b))
       .find((asin) => isValidNumber(nullableSum(byAsin[asin], field)));
     return sourceAsin ? nullableSum(byAsin[sourceAsin], field) : null;
+  };
+  const getMarketFieldValues = (rows, isMatchedTermRow, fields) => {
+    const byAsin = {};
+    (rows || []).forEach((row) => {
+      if (isMatchedTermRow && !isMatchedTermRow(row)) return;
+      const rowAsin = String(row?.asin || '').trim();
+      if (!rowAsin) return;
+      if (!byAsin[rowAsin]) byAsin[rowAsin] = [];
+      byAsin[rowAsin].push(row);
+    });
+    const sortedAsins = Object.keys(byAsin).sort((a, b) => a.localeCompare(b));
+    return Object.fromEntries((fields || []).map((field) => {
+      const sourceAsin = sortedAsins.find((asin) => isValidNumber(nullableSum(byAsin[asin], field)));
+      return [field, sourceAsin ? nullableSum(byAsin[sourceAsin], field) : null];
+    }));
   };
   const divNull = (a, b) => (isValidNumber(a) && isValidNumber(b) && Number(b) !== 0) ? roundRateValue(Number(a) / Number(b)) : null;
   const getMainWeekKey = (row) => row?.country_asin_week_date || row?.country_asin_weekDate || row?.country_asin_weekdate || row?.id;
@@ -4346,15 +4361,15 @@
           ...(sqpFilterAnd.length > 0 ? { filter: JSON.stringify({ $and: sqpFilterAnd }) } : {}),
         };
 
-        const stageDefaultState = await loadAsinStageDefaultShare();
-        if (requestSeq !== requestSeqRef.current) return;
-        const rSqp = await ctx.request({ url: 'sqp_weekly_main:list', method: 'get', params: sqpParams });
+        const [stageDefaultState, rSqp, activeTermRefs] = await Promise.all([
+          loadAsinStageDefaultShare(),
+          ctx.request({ url: 'sqp_weekly_main:list', method: 'get', params: sqpParams }),
+          loadActiveTermRefs(),
+        ]);
         if (requestSeq !== requestSeqRef.current) return;
         const mainRecords = Array.isArray(rSqp?.data?.data) ? rSqp.data.data : [];
         const totalCount = pickTotalFromResponse(rSqp);
         const keys = mainRecords.map(getMainWeekKey).filter(Boolean);
-        const activeTermRefs = await loadActiveTermRefs();
-        if (requestSeq !== requestSeqRef.current) return;
         let termRows = [];
         if (keys.length) {
           const termFilter = {
@@ -5426,21 +5441,64 @@
       }
 
       const countryAsin = `${filterCountry}_${filterAsin}`;
-      const fetchAll = async (url, params = {}) => {
-        const pageSize = 500;
-        const rows = [];
-        for (let page = 1; page <= 10000; page += 1) {
-          const res = await ctx.request({
+      const SQP_CALC_FIELDS = [
+        'report_date',
+        'asin',
+        'search_query',
+        'search_query_volume',
+        'impressions_count',
+        'clicks_count',
+        'cart_additions_count',
+        'purchases_count',
+        'impressions_asin_count',
+        'clicks_asin_count',
+        'cart_additions_asin_count',
+        'purchases_asin_count',
+      ];
+      const fetchAll = async (url, params = {}, options = {}) => {
+        const pageSize = options.pageSize || 500;
+        const firstRes = await ctx.request({
+          url,
+          method: 'get',
+          params: { ...params, page: 1, pageSize },
+        });
+        const firstBatch = Array.isArray(firstRes?.data?.data) ? firstRes.data.data : [];
+        if (firstBatch.length < pageSize) return firstBatch;
+
+        const totalPage = Number(firstRes?.data?.meta?.totalPage);
+        if (!Number.isFinite(totalPage) || totalPage <= 1) {
+          const rows = [...firstBatch];
+          for (let page = 2; page <= 10000; page += 1) {
+            const res = await ctx.request({
+              url,
+              method: 'get',
+              params: { ...params, page, pageSize },
+            });
+            const batch = Array.isArray(res?.data?.data) ? res.data.data : [];
+            rows.push(...batch);
+            if (batch.length < pageSize) break;
+          }
+          return rows;
+        }
+
+        const pageRows = new Array(totalPage);
+        pageRows[0] = firstBatch;
+        const concurrency = 4;
+        for (let startPage = 2; startPage <= totalPage; startPage += concurrency) {
+          const pageNumbers = Array.from(
+            { length: Math.min(concurrency, totalPage - startPage + 1) },
+            (_, index) => startPage + index
+          );
+          const results = await Promise.all(pageNumbers.map((page) => ctx.request({
             url,
             method: 'get',
             params: { ...params, page, pageSize },
+          })));
+          results.forEach((res, index) => {
+            pageRows[pageNumbers[index] - 1] = Array.isArray(res?.data?.data) ? res.data.data : [];
           });
-          const batch = Array.isArray(res?.data?.data) ? res.data.data : [];
-          rows.push(...batch);
-          const totalPage = Number(res?.data?.meta?.totalPage);
-          if (batch.length < pageSize || (Number.isFinite(totalPage) && page >= totalPage)) break;
         }
-        return rows;
+        return pageRows.flat();
       };
 
       const termPatchRows = [];
@@ -5487,11 +5545,18 @@
           };
           const matchedAsinRows = currentAsinRows.filter(isMatchedTermRow);
 
-          const searchQueryVolume = getMarketFieldValue(marketRows, isMatchedTermRow, 'search_query_volume');
-          const impressionsCount = getMarketFieldValue(marketRows, isMatchedTermRow, 'impressions_count');
-          const clicksCount = getMarketFieldValue(marketRows, isMatchedTermRow, 'clicks_count');
-          const cartAdditionsCount = getMarketFieldValue(marketRows, isMatchedTermRow, 'cart_additions_count');
-          const purchasesCount = getMarketFieldValue(marketRows, isMatchedTermRow, 'purchases_count');
+          const marketValues = getMarketFieldValues(marketRows, isMatchedTermRow, [
+            'search_query_volume',
+            'impressions_count',
+            'clicks_count',
+            'cart_additions_count',
+            'purchases_count',
+          ]);
+          const searchQueryVolume = marketValues.search_query_volume;
+          const impressionsCount = marketValues.impressions_count;
+          const clicksCount = marketValues.clicks_count;
+          const cartAdditionsCount = marketValues.cart_additions_count;
+          const purchasesCount = marketValues.purchases_count;
           const impressionsAsinCount = nullableSum(matchedAsinRows, 'impressions_asin_count');
           const clicksAsinCount = nullableSum(matchedAsinRows, 'clicks_asin_count');
           const cartAdditionsAsinCount = nullableSum(matchedAsinRows, 'cart_additions_asin_count');
@@ -5597,6 +5662,7 @@
         onProgress?.({ label: '正在批量读取市场品牌 SQP 明细...', percent: 12 });
         const [sqpRows, existingTermRows] = await Promise.all([
           reportDates.length ? fetchAll('sqp:list', {
+            fields: SQP_CALC_FIELDS,
             filter: JSON.stringify({
               $and: [
                 { country: { $eq: filterCountry } },
@@ -5604,7 +5670,7 @@
                 { report_date: { $lte: reportDates[reportDates.length - 1] } },
               ],
             }),
-          }) : [],
+          }, { pageSize: 2000 }) : [],
           fetchAll('sqp_term_weekly:list', {
             filter: JSON.stringify({ country_asin: { $eq: countryAsin } }),
           }),
@@ -5712,12 +5778,15 @@
       setCurPage(1);
       (async () => {
         try {
+          await load({ page: 1, size: pageSizeRef.current, skipFormula: true });
+          if (!active) return;
           showFormulaProgress({ label: '正在检查类目默认词...', percent: 6 });
           const result = await ensureDefaultTermsForCurrentAsin();
           if (!active) return;
+          let calculationOk = false;
           if (result.created > 0) {
             showFormulaProgress({ label: `已补齐 ${result.created} 个默认词，正在生成周汇总...`, percent: 18 });
-            await calculateFormulas({
+            calculationOk = await calculateFormulas({
               silent: true,
               reload: false,
               allowNonAdmin: true,
@@ -5727,10 +5796,20 @@
             ctx.message.success(`已自动补齐 ${result.created} 个默认词`);
             finishFormulaProgress('默认词周汇总生成完成');
           } else {
+            showFormulaProgress({ label: '正在获取最新数据...', percent: 18 });
+            calculationOk = await calculateFormulas({
+              silent: true,
+              reload: false,
+              allowNonAdmin: true,
+              onProgress: showFormulaProgress,
+            });
+            if (!active) return;
             if (result.message) ctx.message.warning(result.message);
-            resetFormulaProgress();
+            finishFormulaProgress('最新数据加载完成');
           }
-          await load({ page: 1, size: pageSizeRef.current, skipFormula: true });
+          if (!calculationOk) {
+            await load({ page: 1, size: pageSizeRef.current, skipFormula: true });
+          }
         } catch (err) {
           resetFormulaProgress();
           ctx.message.warning(`默认词自动生成失败：${err?.message || '未知错误'}`);
@@ -5776,7 +5855,9 @@
             showFormulaProgress(progress);
           },
         });
-        await load({ page: curPageRef.current, size: pageSizeRef.current, skipFormula: true });
+        if (!ok) {
+          await load({ page: curPageRef.current, size: pageSizeRef.current, skipFormula: true });
+        }
         ctx.message.success(ok ? '数据已刷新并重新计算公式' : '数据已刷新');
         finishFormulaProgress(ok ? '刷新公式计算完成' : '数据已刷新');
       } catch (err) {
@@ -6847,7 +6928,7 @@
               ),
               React.createElement('thead', null,
                 React.createElement('tr', null,
-                  visibleCols.map((col) => {
+                  visibleCols.map((col, colIdx) => {
                     const isPinned = col.pinned;
                     const leftOff  = isPinned ? pinnedLeftMap[col.key] : undefined;
                     const canEdit  = isCellEditable(col);
@@ -6856,7 +6937,7 @@
                     const termGroup = isTermCol ? termHeaderGroups[col._termGroupKey || col._termColumnKey] : null;
                     const headerTooltip = isTermCol ? getTermGroupTooltipData(col, termGroup?.label) : getHeaderTooltipData(col);
                     const hasFormulaTooltip = !isTermCol && !!FORMULA_TOOLTIPS[col.field];
-                    if (isTermCol && termGroup?.firstIndex !== visibleCols.findIndex((c) => c.key === col.key)) return null;
+                    if (isTermCol && termGroup?.firstIndex !== colIdx) return null;
                     const termGroupWidth = isTermCol
                       ? visibleCols
                           .filter((c) => c._isTermColumn && (c._termGroupKey || c._termColumnKey) === (col._termGroupKey || col._termColumnKey))
@@ -7044,7 +7125,7 @@
                 data.map((row, rIdx) => {
                   const rowId = getMainWeekKey(row);
                   return React.createElement('tr', { key: rowId || rIdx, style: { background: rIdx % 2 === 0 ? '#fff' : '#fafafa' } },
-                    visibleCols.map((col) => {
+                    visibleCols.map((col, cIdx) => {
                       const isPinned  = col.pinned;
                       const leftOff   = isPinned ? pinnedLeftMap[col.key] : undefined;
                       const dynFn     = DYNAMIC_COLOR[col.field] || DYNAMIC_COLOR[col.key];
@@ -7052,7 +7133,6 @@
                       const isNum     = ALL_NUMERIC.has(col.field);
                       const canEdit   = isCellEditable(col);
                       const isEditing = editingCell && editingCell.rowId === rowId && editingCell.colKey === col.key;
-                      const cIdx      = visibleCols.findIndex((c) => c.key === col.key);
                       const selected  = isCellSelected(rIdx, cIdx);
 
                       if (col._isTermColumn) {
