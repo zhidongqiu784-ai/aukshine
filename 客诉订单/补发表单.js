@@ -190,77 +190,6 @@ const FIELD_TEXT_KEYS = {
 
   const SENDING_METHOD_OPTIONS = ['邮寄', '返款', '无需'];
 
-const OPTION_LABELS_EN = {
-  待确认: 'Pending Confirmation',
-  需发送: 'Need to Send',
-  已提交: 'Submitted',
-  已完成: 'Completed',
-  搁置: 'On Hold',
-  驳回: 'Rejected',
-  评论审核中: 'Review in Progress',
-  待确认支付信息: 'Pending Payment Info',
-  待检查review: 'Pending Review Check',
-  待上传物流单: 'Pending Tracking Upload',
-  待物流信息更新: 'Pending Logistics Update',
-  邀评: 'Review Invitation',
-  测评: 'Review Order',
-  '客诉/差评补偿': 'Complaint / Negative Review Compensation',
-  佣金: 'Commission',
-  直评: 'Direct Review',
-  留Feedback: 'Leave Feedback',
-  '免评/取消单': 'No Review / Cancel Order',
-  秒杀进度条: 'Deal Progress Bar',
-  混秒: 'Mixed Deal',
-  查差评邮箱: 'Find Negative Review Email',
-  踩差评: 'Downvote Negative Review',
-  '加购/心愿单': 'Add to Cart / Wishlist',
-  QA: 'QA',
-  '站外推广（需备注）': 'Off-site Promotion (Remark Required)',
-  '追加返款（需备注）': 'Additional Refund (Remark Required)',
-  '其他（需备注）': 'Other (Remark Required)',
-  中介: 'Agent',
-  PayPal: 'PayPal',
-  Zelle: 'Zelle',
-  Venmo: 'Venmo',
-  银行卡: 'Bank Card',
-  '支付宝/微信': 'Alipay / WeChat',
-  亚马逊礼品卡: 'Amazon Gift Card',
-  沃尔玛礼品卡: 'Walmart Gift Card',
-  乐天礼品卡: 'Rakuten Gift Card',
-  TV棒: 'TV Stick',
-  折叠支架: 'Foldable Stand',
-  幕布: 'Projection Screen',
-  相机支架: 'Camera Stand',
-  '32G内存卡': '32G Memory Card',
-  一年延保: 'One-year Extended Warranty',
-  '180天更换': '180-day Replacement',
-  遥控器: 'Remote Control',
-  '补发/换货': 'Reissue / Exchange',
-  其他配件: 'Other Accessories',
-  无需送礼: 'No Gift Needed',
-  Visa预付卡: 'Visa Prepaid Card',
-  支架及配件: 'Stand and Accessories',
-  除尘口底盖: 'Dust Port Bottom Cover',
-  投影仪本体: 'Projector Body',
-  投影仪通用: 'Projector Universal',
-  投影仪: 'Projector',
-  通用: 'Universal',
-  通用支架: 'Universal Stand',
-  电源线: 'Power Cable',
-  HDMI线: 'HDMI Cable',
-  便携背带: 'Portable Strap',
-  螺丝: 'Screws',
-  说明书: 'Manual',
-  调焦齿轮: 'Focus Gear',
-  适配器: 'Adapter',
-  防尘网: 'Dust Filter',
-  防滑底垫: 'Anti-slip Bottom Pad',
-  镜头盖: 'Lens Cover',
-  邮寄: 'Mail',
-  返款: 'Refund',
-  无需: 'Not Needed',
-};
-
   const FIELD_VALUE_RULES = {
     order_number: {
       field: 'refund.order_number',
@@ -670,15 +599,8 @@ const OPTION_LABELS_EN = {
 
   function getOptionLabel(value, language) {
     if (language !== 'en') return value;
-    const exactLabel = OPTION_LABELS_EN[value];
-    if (exactLabel) return exactLabel;
-
-    return Object.keys(OPTION_LABELS_EN)
-      .sort((left, right) => right.length - left.length)
-      .reduce(
-        (label, optionText) => label.split(optionText).join(OPTION_LABELS_EN[optionText]),
-        String(value || ''),
-      );
+    const text = String(value || '');
+    return ctx.t(text, { ns: 'lm-collections', defaultValue: text });
   }
 
   function toLocalizedOptions(values, language) {
@@ -689,9 +611,18 @@ const OPTION_LABELS_EN = {
   }
 
   function localizeOption(option, language) {
+    const label = String(option.label || '');
+    const category = String(option.category || '');
+    const localizedCategory = getOptionLabel(category, language);
+    const localizedLabel = category && label.includes(category)
+      ? label.split(category).join(localizedCategory)
+      : getOptionLabel(label, language);
+
     return {
       ...option,
-      label: getOptionLabel(option.label, language),
+      label: language === 'en'
+        ? localizedLabel.split('投影仪通用').join('Projector Universal')
+        : localizedLabel,
     };
   }
 
