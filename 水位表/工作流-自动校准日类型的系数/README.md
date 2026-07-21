@@ -49,9 +49,9 @@
 
 该文件已按新规则调整为：从 `datetypetime.chushixishu` 读取初始系数，恢复所有不属于“基础活动类型”的日类型。国家与活动区域按以下关系匹配：
 
-- `US`、`UK`、`DE`、`FR`、`ES`、`IT` 对应“美国/欧洲”
-- `CA` 对应“加拿大”
-- `JP` 对应“日本”
+- `datetypetime.country` 存储无空格的国家代码列表，例如 `US,CA`、`UK,DE,FR,ES,IT`、`JP`
+- SQL 通过 `FIND_IN_SET(业务国家代码, datetypetime.country) > 0` 匹配区域配置
+- 后续调整国家归组时只修改 `datetypetime.country`，不再修改 SQL
 
 只有同一地区、日类型的初始系数唯一，且当前值与初始值不同时才更新。该 SQL 不使用 `mark` 字段。如果以后重新加入工作流，它会在每次工作流运行时固定恢复所有非基础活动类型的系数。
 

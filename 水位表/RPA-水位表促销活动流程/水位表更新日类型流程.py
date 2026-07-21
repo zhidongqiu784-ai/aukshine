@@ -71,11 +71,7 @@ def step_1_reset_daily_sales_type(cursor):
                 )
                 FROM datetypetime dtt
                 WHERE dtt.daytype_category IN ('基础类型', '叠加基础类型')
-                  AND (
-                         (ds.country IN ('US', 'UK', 'IT', 'DE', 'FR', 'ES') AND dtt.country = '美国/欧洲')
-                      OR (ds.country = 'CA' AND dtt.country = '加拿大')
-                      OR (ds.country = 'JP' AND dtt.country = '日本')
-                  )
+                  AND FIND_IN_SET(ds.country, dtt.country) > 0
                   AND ds.date BETWEEN dtt.startdate AND dtt.enddate
             ),
             '日常'
@@ -136,11 +132,7 @@ def step_3_update_big_event_and_exclusive(cursor):
             ON ds.date >= dtt.startdate
                AND ds.date <= dtt.enddate
                AND dtt.daytype_category IN ('大促BDLD', '专享类型')
-               AND (
-                   (ds.country IN ('US', 'UK', 'IT', 'DE', 'FR', 'ES') AND dtt.country = '美国/欧洲')
-                   OR (ds.country = 'CA' AND dtt.country = '加拿大')
-                   OR (ds.country = 'JP' AND dtt.country = '日本')
-               )
+               AND FIND_IN_SET(ds.country, dtt.country) > 0
                AND (
                    (
                        dtt.daytype_category = '大促BDLD'

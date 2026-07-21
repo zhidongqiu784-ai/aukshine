@@ -15,20 +15,7 @@ INNER JOIN (
     HAVING COUNT(DISTINCT dtt.chushixishu) = 1
 ) AS cfg
     ON cfg.daytype = sc.type
-   AND (
-          (
-              sc.country IN ('US', 'UK', 'DE', 'FR', 'ES', 'IT')
-              AND cfg.activity_region = '美国/欧洲'
-          )
-       OR (
-              sc.country = 'CA'
-              AND cfg.activity_region = '加拿大'
-          )
-       OR (
-              sc.country = 'JP'
-              AND cfg.activity_region = '日本'
-          )
-   )
+   AND FIND_IN_SET(sc.country, cfg.activity_region) > 0
 SET
     sc.coefficient = cfg.initial_coefficient
 WHERE NOT (

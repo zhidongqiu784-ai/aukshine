@@ -48,20 +48,7 @@ INNER JOIN (
                     ''
                 )
             AND dtt.daytype_category = '基础活动类型'
-            AND (
-                   (
-                       ds.country IN ('US', 'UK', 'DE', 'FR', 'ES', 'IT')
-                       AND dtt.country = '美国/欧洲'
-                   )
-                OR (
-                       ds.country = 'CA'
-                       AND dtt.country = '加拿大'
-                   )
-                OR (
-                       ds.country = 'JP'
-                       AND dtt.country = '日本'
-                   )
-            )
+            AND FIND_IN_SET(ds.country, dtt.country) > 0
       )
     GROUP BY
         ds.asin,

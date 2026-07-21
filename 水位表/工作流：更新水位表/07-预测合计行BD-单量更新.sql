@@ -37,11 +37,7 @@ real_bd_days AS (
           WHERE dtt.daytype IS NOT NULL
             AND dtt.daytype LIKE 'BD%'
             AND FIND_IN_SET(dtt.daytype, REPLACE(ds.type, '、', ',')) > 0
-            AND (
-                   (ds.country IN ('US', 'UK', 'IT', 'DE', 'FR', 'ES') AND dtt.country = '美国/欧洲')
-                OR (ds.country = 'CA' AND dtt.country = '加拿大')
-                OR (ds.country = 'JP' AND dtt.country = '日本')
-            )
+            AND FIND_IN_SET(ds.country, dtt.country) > 0
       )
       AND asin IS NOT NULL
       AND asin != ''
@@ -116,11 +112,7 @@ blocked_days AS (
                 OR dtt.daytype LIKE 'LD%'
                 OR dtt.daytype_category = '专享类型'
             )
-            AND (
-                   (ds.country IN ('US', 'UK', 'IT', 'DE', 'FR', 'ES') AND dtt.country = '美国/欧洲')
-                OR (ds.country = 'CA' AND dtt.country = '加拿大')
-                OR (ds.country = 'JP' AND dtt.country = '日本')
-            )
+            AND FIND_IN_SET(ds.country, dtt.country) > 0
       )
       AND `date` BETWEEN DATE_SUB(CURDATE(), INTERVAL 365 DAY)
                       AND DATE_ADD(CURDATE(), INTERVAL 180 DAY)
@@ -202,11 +194,7 @@ WHERE ds.shop = '合计'
                 OR dtt.daytype LIKE 'LD%'
                 OR dtt.daytype_category = '专享类型'
             )
-            AND (
-                   (ds.country IN ('US', 'UK', 'IT', 'DE', 'FR', 'ES') AND dtt.country = '美国/欧洲')
-                OR (ds.country = 'CA' AND dtt.country = '加拿大')
-                OR (ds.country = 'JP' AND dtt.country = '日本')
-            )
+            AND FIND_IN_SET(ds.country, dtt.country) > 0
       )
   )
   AND ds.date BETWEEN CURDATE()
