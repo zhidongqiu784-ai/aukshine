@@ -71,7 +71,7 @@
           "type": "sql",
           "upstreamRef": "submit_input",
           "branchIndex": null,
-          "sqlFile": "01-提交申请-服务端校验与安全闸.sql",
+          "sqlFile": "../../工作流：发货计划演变-v2-提交申请/02-校验申请与安全区间.sql",
           "configTemplate": {
             "dataSource": "main",
             "sql": "__LOAD_SQL_FILE__",
@@ -284,7 +284,7 @@
           "type": "sql",
           "upstreamRef": "review_input",
           "branchIndex": null,
-          "sqlFile": "02-审核流转-服务端校验与写回.sql",
+          "sqlFile": "../../工作流：发货计划演变-v2-审核流转/02-校验权限并流转状态.sql",
           "configTemplate": {
             "dataSource": "main",
             "sql": "__LOAD_SQL_FILE__",
@@ -432,7 +432,7 @@
           "type": "sql",
           "upstreamRef": null,
           "branchIndex": null,
-          "sqlFile": "03-应用计划-乐观锁写回.sql",
+          "sqlFile": "../../工作流：发货计划演变-v2-应用计划/01-写回模拟发货计划.sql",
           "configTemplate": {
             "dataSource": "main",
             "sql": "__LOAD_SQL_FILE__",
@@ -448,7 +448,7 @@
           "type": "sql",
           "upstreamRef": "apply_plan",
           "branchIndex": null,
-          "sqlFile": "../发货计划演变-v2_应用后定向水位推演.sql",
+          "sqlFile": "../../工作流：发货计划演变-v2-应用计划/02-重算对应ASIN水位.sql",
           "sqlTransform": {
             "replace": [
               ["SET @v2_target_asin = CAST(NULL AS CHAR);", "SET @v2_target_asin = CAST(:asin AS CHAR);"],
@@ -470,7 +470,7 @@
           "type": "sql",
           "upstreamRef": "apply_projection",
           "branchIndex": null,
-          "sqlFile": "04-应用计划-推演完成.sql",
+          "sqlFile": "../../工作流：发货计划演变-v2-应用计划/03-标记应用完成.sql",
           "configTemplate": {
             "dataSource": "main",
             "sql": "__LOAD_SQL_FILE__",
