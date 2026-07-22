@@ -10,7 +10,7 @@
 -- 非下单周生成 A1；下单周继承上一周 A1 并生成 A2。
 -- 旧记录不读取也不修改；首次从本周 W1 起算，后续边界只读取 shipment_plan_v2。
 -- 服务期起点库存只读取 daily_sales.v2_inventory；空值保持候选未就绪，不回退旧 inventory。
--- 写入11个业务字段，并显式写入 created_at、updated_at。
+-- 写入12个业务字段（含建议数量计算快照），并显式写入 created_at、updated_at。
 
 START TRANSACTION;
 
@@ -29,6 +29,7 @@ CREATE TEMPORARY TABLE temp_shipment_plan_v2_weekly_candidates (
     warehouse_days INT,
     add_date DATE,
     plan_source VARCHAR(64),
+    v2_calculation_snapshot JSON,
     INDEX idx_weekly_candidate_plan_id (exact_candidate_plan_id),
     INDEX idx_weekly_candidate_key (asin, country, shop, `date`, plan_source)
 );
@@ -36,7 +37,8 @@ CREATE TEMPORARY TABLE temp_shipment_plan_v2_weekly_candidates (
 INSERT INTO temp_shipment_plan_v2_weekly_candidates (
     exact_candidate_plan_id, exact_candidate_active_change,
     channel, country, shop, shop_id, asin,
-    number, `date`, season, warehouse_days, add_date, plan_source
+    number, `date`, season, warehouse_days, add_date, plan_source,
+    v2_calculation_snapshot
 )
 WITH
 runtime AS (
@@ -701,7 +703,38 @@ SELECT
     cr.candidate_season AS season,
     cr.candidate_warehouse_days AS warehouse_days,
     cr.candidate_add_date AS add_date,
-    'shipment_plan_v2' AS plan_source
+    'shipment_plan_v2' AS plan_source,
+    JSON_OBJECT(
+        'formula_version', 'shipment_plan_v2_weekly_v3.5',
+        'generated_at', DATE_FORMAT(NOW(3), '%Y-%m-%d %H:%i:%s.%f'),
+        'cycle_phase', cr.cycle_phase,
+        'generation_role', cr.generation_role,
+        'service_start_date', DATE_FORMAT(cr.first_service_start_date, '%Y-%m-%d'),
+        'service_end_date', DATE_FORMAT(cr.first_service_end_date, '%Y-%m-%d'),
+        'second_service_start_date', DATE_FORMAT(cr.second_service_start_date, '%Y-%m-%d'),
+        'second_service_end_date', DATE_FORMAT(cr.second_service_end_date, '%Y-%m-%d'),
+        'first_week_demand_days', cr.first_week_demand_days,
+        'second_week_demand_days', cr.second_week_demand_days,
+        'first_week_demand', cr.first_week_demand,
+        'second_week_demand', cr.second_week_demand,
+        'target_demand', CASE
+            WHEN cr.cycle_phase = 'ORDER_WEEK'
+                THEN COALESCE(cr.first_week_demand, 0) + COALESCE(cr.second_week_demand, 0)
+            ELSE COALESCE(cr.first_week_demand, 0) * 2
+        END,
+        'raw_inventory_at_service_start', cr.inventory_at_first_service_start,
+        'inventory_excluding_a1', cr.formula_start_inventory_excluding_a1,
+        'a1_committed_number', cr.a1_committed_number,
+        'gap_before_ceiling', CASE
+            WHEN cr.cycle_phase = 'ORDER_WEEK'
+                THEN (COALESCE(cr.first_week_demand, 0) + COALESCE(cr.second_week_demand, 0))
+                    - cr.formula_start_inventory_excluding_a1
+                    - COALESCE(cr.a1_committed_number, 0)
+            ELSE (COALESCE(cr.first_week_demand, 0) * 2)
+                    - cr.inventory_at_first_service_start
+        END,
+        'suggested_number', cr.candidate_number
+    ) AS v2_calculation_snapshot
 FROM candidate_rows AS cr
 INNER JOIN region_net_calc AS rn
     ON rn.asin = cr.asin
@@ -726,6 +759,7 @@ SET
     target.season = cand.season,
     target.warehouse_days = cand.warehouse_days,
     target.add_date = cand.add_date,
+    target.v2_calculation_snapshot = cand.v2_calculation_snapshot,
     target.updated_at = NOW(3)
 WHERE target.plan_source = 'shipment_plan_v2'
   AND cand.exact_candidate_active_change = 0
@@ -735,7 +769,7 @@ SET @shipment_plan_v2_weekly_updated_rows = ROW_COUNT();
 
 INSERT INTO simulate_shipment (
     channel, country, shop, shop_id, asin,
-    number, date, season, warehouse_days, add_date, plan_source,
+    number, date, season, warehouse_days, add_date, plan_source, v2_calculation_snapshot,
     created_at, updated_at
 )
 SELECT
@@ -750,6 +784,7 @@ SELECT
     cand.warehouse_days,
     cand.add_date,
     cand.plan_source,
+    cand.v2_calculation_snapshot,
     NOW(3) AS created_at,
     NOW(3) AS updated_at
 FROM temp_shipment_plan_v2_weekly_candidates AS cand
