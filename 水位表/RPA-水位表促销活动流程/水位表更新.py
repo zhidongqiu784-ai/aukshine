@@ -125,31 +125,18 @@ def step_2_update_shop_weighted_sales(cursor):
                     country,
                     ROUND(
                         CASE
-                            WHEN total_count BETWEEN 1 AND 3 THEN
-                                AVG(daily_base_sales)
+                            WHEN total_count BETWEEN 1 AND 3 THEN AVG(daily_base_sales)
                             WHEN total_count BETWEEN 4 AND 7 THEN
-                                (
-                                    COALESCE(AVG(CASE WHEN row_num BETWEEN 1 AND CEIL(total_count * 0.3) THEN daily_base_sales END), 0) * 0.7
-                                    + COALESCE(AVG(CASE WHEN row_num > CEIL(total_count * 0.3) THEN daily_base_sales END), 0) * 0.3
-                                )
+                                (AVG(CASE WHEN row_num <= CEIL(total_count*0.3) THEN daily_base_sales END)*0.7
+                                 + AVG(CASE WHEN row_num > CEIL(total_count*0.3) THEN daily_base_sales END)*0.3)
                             WHEN total_count BETWEEN 8 AND 15 THEN
-                                (
-                                    COALESCE(AVG(CASE WHEN row_num BETWEEN 1 AND CEIL(total_count * 0.33) THEN daily_base_sales END), 0) * 0.6
-                                    + COALESCE(AVG(CASE WHEN row_num BETWEEN CEIL(total_count * 0.33) + 1 AND CEIL(total_count * 0.66) THEN daily_base_sales END), 0) * 0.3
-                                    + COALESCE(AVG(CASE WHEN row_num > CEIL(total_count * 0.66) THEN daily_base_sales END), 0) * 0.1
-                                )
-                            WHEN total_count BETWEEN 16 AND 29 THEN
-                                (
-                                    COALESCE(AVG(CASE WHEN row_num BETWEEN 1 AND 7 THEN daily_base_sales END), 0) * 0.55
-                                    + COALESCE(AVG(CASE WHEN row_num BETWEEN 8 AND 15 THEN daily_base_sales END), 0) * 0.35
-                                    + COALESCE(AVG(CASE WHEN row_num BETWEEN 16 AND total_count THEN daily_base_sales END), 0) * 0.1
-                                )
+                                (AVG(CASE WHEN row_num <= CEIL(total_count*0.33) THEN daily_base_sales END)*0.6
+                                 + AVG(CASE WHEN row_num BETWEEN CEIL(total_count*0.33)+1 AND CEIL(total_count*0.66) THEN daily_base_sales END)*0.3
+                                 + AVG(CASE WHEN row_num > CEIL(total_count*0.66) THEN daily_base_sales END)*0.1)
                             ELSE
-                                (
-                                    COALESCE(AVG(CASE WHEN row_num BETWEEN 1 AND 7 THEN daily_base_sales END), 0) * 0.5
-                                    + COALESCE(AVG(CASE WHEN row_num BETWEEN 8 AND 15 THEN daily_base_sales END), 0) * 0.3
-                                    + COALESCE(AVG(CASE WHEN row_num BETWEEN 16 AND 30 THEN daily_base_sales END), 0) * 0.2
-                                )
+                                (AVG(CASE WHEN row_num <= 7 THEN daily_base_sales END)*0.5
+                                 + AVG(CASE WHEN row_num BETWEEN 8 AND 15 THEN daily_base_sales END)*0.3
+                                 + AVG(CASE WHEN row_num BETWEEN 16 AND 30 THEN daily_base_sales END)*0.2)
                         END
                     , 1) AS weighted_sales_value
                 FROM sales_history
@@ -670,6 +657,7 @@ def step_4_1_update_summary_bd_prediction(cursor):
                   SELECT 1
                   FROM datetypetime dtt
                   WHERE dtt.daytype IS NOT NULL
+                    AND dtt.daytype_category <> '固定活动类型'
                     AND dtt.daytype LIKE 'BD%'
                     AND FIND_IN_SET(dtt.daytype, REPLACE(ds.type, '、', ',')) > 0
                       AND FIND_IN_SET(ds.country, dtt.country) > 0
@@ -740,6 +728,7 @@ def step_4_1_update_summary_bd_prediction(cursor):
                   FROM datetypetime dtt
                   WHERE dtt.daytype IS NOT NULL
                     AND FIND_IN_SET(dtt.daytype, REPLACE(ds.type, '、', ',')) > 0
+                    AND dtt.daytype_category <> '固定活动类型'
                     AND (
                            dtt.daytype LIKE 'BD%'
                         OR dtt.daytype LIKE 'LD%'
@@ -766,7 +755,7 @@ def step_4_1_update_summary_bd_prediction(cursor):
                 p.pred_start_date,
                 DATE_ADD(p.pred_start_date, INTERVAL 13 DAY) AS pred_end_date
             FROM predicted_bd p
-            WHERE p.pred_start_date BETWEEN CURDATE()
+            WHERE p.pred_start_date BETWEEN DATE_ADD(CURDATE(), INTERVAL 8 DAY)
                                         AND DATE_ADD(CURDATE(), INTERVAL 180 DAY)
               AND NOT EXISTS (
                   SELECT 1
@@ -808,11 +797,7 @@ def step_4_1_update_summary_bd_prediction(cursor):
             ON ds.asin = pred.asin
            AND ds.country = pred.country
            AND ds.date = pred.pred_date
-        SET ds.type = CASE
-            WHEN ds.type IS NULL OR TRIM(ds.type) = '' THEN 'BD（预测）'
-            WHEN FIND_IN_SET('BD（预测）', REPLACE(ds.type, '、', ',')) > 0 THEN ds.type
-            ELSE CONCAT(ds.type, '、BD（预测）')
-        END
+        SET ds.type = 'BD（预测）'
         WHERE ds.shop = '合计'
           AND (
               ds.type IS NULL
@@ -822,6 +807,7 @@ def step_4_1_update_summary_bd_prediction(cursor):
                   FROM datetypetime dtt
                   WHERE dtt.daytype IS NOT NULL
                     AND FIND_IN_SET(dtt.daytype, REPLACE(ds.type, '、', ',')) > 0
+                    AND dtt.daytype_category <> '固定活动类型'
                     AND (
                            dtt.daytype LIKE 'BD%'
                         OR dtt.daytype LIKE 'LD%'
@@ -834,85 +820,16 @@ def step_4_1_update_summary_bd_prediction(cursor):
                           AND DATE_ADD(CURDATE(), INTERVAL 180 DAY)
         """,
         """
-        WITH RECURSIVE prediction_type_parts AS (
-            SELECT
-                asin,
-                country,
-                shop,
-                `date`,
-                type,
-                SUBSTRING_INDEX(type, '、', 1) AS part_type,
-                CASE
-                    WHEN type LIKE '%、%' THEN SUBSTRING(
-                        type,
-                        CHAR_LENGTH(SUBSTRING_INDEX(type, '、', 1)) + 2
-                    )
-                    ELSE ''
-                END AS rest_type
-            FROM daily_sales
-            WHERE shop = '合计'
-              AND FIND_IN_SET('BD（预测）', REPLACE(type, '、', ',')) > 0
-              AND `date` BETWEEN CURDATE()
-                               AND DATE_ADD(CURDATE(), INTERVAL 180 DAY)
-        
-            UNION ALL
-        
-            SELECT
-                asin,
-                country,
-                shop,
-                `date`,
-                type,
-                SUBSTRING_INDEX(rest_type, '、', 1) AS part_type,
-                CASE
-                    WHEN rest_type LIKE '%、%' THEN SUBSTRING(
-                        rest_type,
-                        CHAR_LENGTH(SUBSTRING_INDEX(rest_type, '、', 1)) + 2
-                    )
-                    ELSE ''
-                END AS rest_type
-            FROM prediction_type_parts
-            WHERE rest_type != ''
-        ),
-        prediction_coefficient_calc AS (
-            SELECT
-                tp.asin,
-                tp.country,
-                tp.shop,
-                tp.`date`,
-                tp.type,
-                EXP(SUM(LN(sc.coefficient))) AS new_coefficient,
-                COUNT(*) AS part_count,
-                SUM(
-                    CASE
-                        WHEN sc.coefficient IS NOT NULL AND sc.coefficient > 0 THEN 1
-                        ELSE 0
-                    END
-                ) AS matched_count
-            FROM prediction_type_parts tp
-            LEFT JOIN sales_coefficient sc
-                ON tp.asin = sc.asin
-               AND tp.country = sc.country
-               AND sc.type = CASE
-                   WHEN tp.part_type = 'BD（预测）' THEN 'BD'
-                   ELSE tp.part_type
-               END
-            GROUP BY
-                tp.asin,
-                tp.country,
-                tp.shop,
-                tp.`date`,
-                tp.type
-        )
         UPDATE daily_sales ds
-        INNER JOIN prediction_coefficient_calc pcc
-            ON ds.asin = pcc.asin
-           AND ds.country = pcc.country
-           AND ds.shop = pcc.shop
-           AND ds.`date` = pcc.`date`
-           AND ds.type = pcc.type
-        SET ds.coefficient = pcc.new_coefficient
-        WHERE pcc.part_count = pcc.matched_count
+        INNER JOIN sales_coefficient sc
+            ON ds.asin = sc.asin
+           AND ds.country = sc.country
+           AND sc.type = 'BD'
+        SET ds.coefficient = sc.coefficient
+        WHERE ds.shop = '合计'
+          AND ds.type = 'BD（预测）'
+          AND ds.`date` BETWEEN CURDATE()
+                            AND DATE_ADD(CURDATE(), INTERVAL 180 DAY)
         """,
         """
         UPDATE daily_sales
@@ -1071,95 +988,6 @@ def step_5_fix_summary_inventory(cursor):
     return execute_sql_list(cursor, "步骤5 修正合计行库存", sql_list)
 
 
-# ================= 步骤6：计算历史加权基准销量 =================
-
-def step_6_update_history_weighted_sales(cursor):
-    sql_list = [
-        """
-        SET @start_date = DATE_SUB(CURDATE(), INTERVAL 30 DAY)
-        """,
-        """
-        SET @end_date = DATE_SUB(CURDATE(), INTERVAL 1 DAY)
-        """,
-        """
-        UPDATE daily_sales AS target_table
-        INNER JOIN (
-            SELECT
-                asin,
-                country,
-                shop,
-                target_date,
-                ROUND(
-                    CASE
-                        WHEN total_count BETWEEN 1 AND 3 THEN avg_sales
-                        WHEN total_count BETWEEN 4 AND 7 THEN avg_sales_p1 * 0.7 + avg_sales_p2 * 0.3
-                        WHEN total_count BETWEEN 8 AND 15 THEN avg_sales_p1 * 0.6 + avg_sales_p2 * 0.3 + avg_sales_p3 * 0.1
-                        ELSE avg_sales_p1 * 0.5 + avg_sales_p2 * 0.3 + avg_sales_p3 * 0.2
-                    END,
-                    1
-                ) AS new_weighted_sales
-            FROM (
-                SELECT
-                    asin,
-                    country,
-                    shop,
-                    target_date,
-                    COUNT(*) AS total_count,
-                    AVG(base_sales) AS avg_sales,
-                    AVG(CASE
-                        WHEN (total_count BETWEEN 4 AND 7 AND rn <= CEIL(total_count * 0.3))
-                          OR (total_count BETWEEN 8 AND 15 AND rn <= CEIL(total_count * 0.33))
-                          OR (total_count >= 16 AND rn <= 7)
-                        THEN base_sales
-                    END) AS avg_sales_p1,
-                    AVG(CASE
-                        WHEN (total_count BETWEEN 4 AND 7 AND rn > CEIL(total_count * 0.3))
-                          OR (total_count BETWEEN 8 AND 15 AND rn > CEIL(total_count * 0.33) AND rn <= CEIL(total_count * 0.66))
-                          OR (total_count >= 16 AND rn BETWEEN 8 AND 15)
-                        THEN base_sales
-                    END) AS avg_sales_p2,
-                    AVG(CASE
-                        WHEN (total_count BETWEEN 8 AND 15 AND rn > CEIL(total_count * 0.66))
-                          OR (total_count >= 16 AND rn > 15)
-                        THEN base_sales
-                    END) AS avg_sales_p3
-                FROM (
-                    SELECT
-                        t.asin,
-                        t.country,
-                        t.shop,
-                        t.date AS target_date,
-                        h.sales / NULLIF(h.coefficient, 0) AS base_sales,
-                        ROW_NUMBER() OVER (
-                            PARTITION BY t.asin, t.country, t.shop, t.date
-                            ORDER BY h.date DESC
-                        ) AS rn,
-                        COUNT(*) OVER (
-                            PARTITION BY t.asin, t.country, t.shop, t.date
-                        ) AS total_count
-                    FROM daily_sales t
-                    INNER JOIN daily_sales h
-                        ON t.asin = h.asin
-                       AND t.country = h.country
-                       AND t.shop = h.shop
-                       AND h.date BETWEEN DATE_SUB(t.date, INTERVAL 30 DAY)
-                                      AND DATE_SUB(t.date, INTERVAL 1 DAY)
-                    WHERE t.date > @start_date
-                      AND t.date <= @end_date
-                ) ranked_data
-                GROUP BY asin, country, shop, target_date, total_count
-            ) final_calc
-        ) AS source_data
-            ON target_table.asin = source_data.asin
-           AND target_table.country = source_data.country
-           AND target_table.shop = source_data.shop
-           AND target_table.date = source_data.target_date
-        SET target_table.weighted_sales = source_data.new_weighted_sales
-        """
-    ]
-    return execute_sql_list(cursor, "步骤6 计算历史加权基准销量", sql_list)
-
-
 # ================= 步骤7：更新预估销量 =================
 
 def step_7_update_maybe_sales(cursor):
@@ -1195,16 +1023,12 @@ def main():
         result["生成或更新合计行"] = step_4_upsert_summary_rows(cursor)
 
         # 步骤4-1：合计行BD预测
-        # 说明：只根据 shop='合计' 的真实BD时间线推演 BD（预测），不再按店铺生成预测。
+        # 说明：只根据 shop='合计' 的真实BD时间线推演 BD（预测）；未来7天内开始的本轮预测跳过。
         result["合计行BD预测"] = step_4_1_update_summary_bd_prediction(cursor)
 
         # 步骤5：修正合计行库存结余
         # 说明：合计行BD预测已经更新 type、coefficient、maybe_sales 后，再递推合计行未来库存。
         result["修正合计行库存"] = step_5_fix_summary_inventory(cursor)
-
-        # 步骤6：计算历史加权基准销量
-        # 说明：以每条数据 date 为当天，计算过去30天到昨天的加权基准销量。
-        result["计算历史加权基准销量"] = step_6_update_history_weighted_sales(cursor)
 
         # 步骤7：更新预估销量
         # 说明：最终按 weighted_sales * coefficient 统一刷新 maybe_sales。

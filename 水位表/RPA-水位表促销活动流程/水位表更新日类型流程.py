@@ -83,6 +83,23 @@ def step_1_reset_daily_sales_type(cursor):
     return execute_sql(cursor, "步骤1 恢复默认类型", sql)
 
 
+# ================= 步骤1.1：固定活动类型按日期覆盖 =================
+
+def step_1_1_apply_fixed_activity_type(cursor):
+    sql = """
+        UPDATE daily_sales ds
+        INNER JOIN datetypetime dtt
+            ON ds.date BETWEEN dtt.startdate AND dtt.enddate
+           AND dtt.daytype_category = '固定活动类型'
+           AND FIND_IN_SET(ds.country, dtt.country) > 0
+        SET ds.type = dtt.daytype
+        WHERE ds.shop != '合计'
+          AND ds.date BETWEEN CURDATE()
+                          AND DATE_ADD(CURDATE(), INTERVAL 180 DAY)
+    """
+    return execute_sql(cursor, "步骤1.1 应用固定活动类型", sql)
+
+
 # ================= 步骤2：真实BD/LD覆盖daily_sales =================
 
 def step_2_update_real_bd_ld(cursor):
@@ -97,24 +114,7 @@ def step_2_update_real_bd_ld(cursor):
                AND ds.date >= DATE(dd.promotion_start_time)
                AND ds.date <= DATE(DATE_SUB(dd.promotion_end_time, INTERVAL 1 SECOND))
 
-            LEFT JOIN datetypetime base_dtt
-            ON (
-                   (ds.country IN ('US', 'UK', 'IT', 'DE', 'FR', 'ES') AND base_dtt.country = '美国/欧洲')
-                   OR (ds.country = 'CA' AND base_dtt.country = '加拿大')
-                   OR (ds.country = 'JP' AND base_dtt.country = '日本')
-               )
-               AND ds.date BETWEEN base_dtt.startdate AND base_dtt.enddate
-               AND FIND_IN_SET(
-                    base_dtt.daytype,
-                    REPLACE(ds.type, '、', ',')
-               ) > 0
-               AND base_dtt.daytype_category = '叠加基础类型'
-
-        SET
-            ds.type = CASE
-                WHEN base_dtt.id IS NOT NULL THEN CONCAT(ds.type, '、', dd.promotion_type)
-                ELSE dd.promotion_type
-            END
+        SET ds.type = dd.promotion_type
         WHERE
             ds.shop != '合计'
             AND ds.date BETWEEN CURDATE()
@@ -136,18 +136,12 @@ def step_3_update_big_event_and_exclusive(cursor):
                AND (
                    (
                        dtt.daytype_category = '大促BDLD'
-                       AND (
-                            ds.type = 'BD'
-                            OR ds.type LIKE '%、BD'
-                       )
+                       AND ds.type = 'BD'
                        AND dtt.daytype LIKE 'BD%'
                    )
                    OR (
                        dtt.daytype_category = '大促BDLD'
-                       AND (
-                            ds.type = 'LD'
-                            OR ds.type LIKE '%、LD'
-                       )
+                       AND ds.type = 'LD'
                        AND dtt.daytype LIKE 'LD%'
                    )
                    OR (
@@ -156,45 +150,7 @@ def step_3_update_big_event_and_exclusive(cursor):
                        AND ds.type NOT LIKE '%LD%'
                    )
                )
-        SET
-            ds.type = CASE
-                WHEN dtt.daytype_category = '大促BDLD'
-                     AND ds.type = 'BD'
-                    THEN dtt.daytype
-
-                WHEN dtt.daytype_category = '大促BDLD'
-                     AND ds.type LIKE '%、BD'
-                    THEN CONCAT(
-                        SUBSTRING_INDEX(
-                            ds.type,
-                            '、',
-                            CHAR_LENGTH(ds.type) - CHAR_LENGTH(REPLACE(ds.type, '、', ''))
-                        ),
-                        '、',
-                        dtt.daytype
-                    )
-
-                WHEN dtt.daytype_category = '大促BDLD'
-                     AND ds.type = 'LD'
-                    THEN dtt.daytype
-
-                WHEN dtt.daytype_category = '大促BDLD'
-                     AND ds.type LIKE '%、LD'
-                    THEN CONCAT(
-                        SUBSTRING_INDEX(
-                            ds.type,
-                            '、',
-                            CHAR_LENGTH(ds.type) - CHAR_LENGTH(REPLACE(ds.type, '、', ''))
-                        ),
-                        '、',
-                        dtt.daytype
-                    )
-
-                WHEN dtt.daytype_category = '专享类型'
-                    THEN dtt.daytype
-
-                ELSE ds.type
-            END
+        SET ds.type = dtt.daytype
         WHERE
             ds.shop != '合计'
             AND ds.date BETWEEN CURDATE()
@@ -329,25 +285,29 @@ def main(args=None):
         #   昨天及以前的历史数据不处理，避免活动取消后误改历史记录。
         result["恢复默认类型"] = step_1_reset_daily_sales_type(cursor)
 
+        # 步骤1.1：固定活动类型按日期覆盖
+        # 作用：
+        #   固定活动类型单独显示，不与日常、旺季、淡季等基础类型叠加。
+        #   后续真实 BD/LD 仍可继续覆盖固定活动类型。
+        result["应用固定活动类型"] = step_1_1_apply_fixed_activity_type(cursor)
+
         # 步骤2：再更新真实 BD / LD
         # 作用：
         #   从 deal_date 表读取真实活动，只处理状态有效的 BD/LD。
         #   有效状态包括：进行中、未开始、已结束、未定、未定义类型。
         #   已取消、待申报的活动不会写入 BD/LD。
         # 结果：
-        #   如果当天没有叠加基础类型，写成 BD 或 LD。
-        #   如果当天已有叠加基础类型，则继续叠加。
-        #   例如：旺季、2026世界杯、BD。
+        #   BD/LD 属于基础活动类型，命中后直接覆盖基础日类型。
+        #   例如：旺季、2026世界杯命中真实 BD 后，最终只显示 BD。
         result["更新真实BD/LD"] = step_2_update_real_bd_ld(cursor)
 
         # 步骤3：修正大促 BD/LD 与专享类型
         # 作用：
         #   根据 datetypetime 表里的分类配置，进一步修正日类型。
         #   例如：把 BD 修正成 BD (7月PD)、BD (黑五网一) 等大促类型。
-        #   如果是复合类型，也保留前面的叠加部分。
-        #   例如：旺季、2026世界杯、BD (7月PD)。
+        #   大促 BD/LD 和专享类型均单独显示，不保留基础叠加部分。
         # 注意：
-        #   专享类型不覆盖包含 BD/LD 的复合类型，避免丢失叠加逻辑。
+        #   专享类型不覆盖真实 BD/LD，真实活动再由大促配置修正名称。
         result["更新大促BD/LD与专享"] = step_3_update_big_event_and_exclusive(cursor)
 
         # 步骤4：最后更新系数
@@ -356,6 +316,7 @@ def main(args=None):
         # 规则：
         #   普通类型直接取对应系数，例如 BD 取 BD 系数。
         #   复合类型按所有组成类型的系数连乘。
+        #   固定活动类型与其他非自动计算类型一样，从 sales_coefficient 读取配置系数。
         #   例如：旺季、2026世界杯、BD = 旺季系数 × 2026世界杯系数 × BD系数。
         # 注意：
         #   系数也只更新今天到未来180天，历史系数不反向覆盖。

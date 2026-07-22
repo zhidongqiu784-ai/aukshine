@@ -35,6 +35,7 @@ real_bd_days AS (
           SELECT 1
           FROM datetypetime dtt
           WHERE dtt.daytype IS NOT NULL
+            AND dtt.daytype_category <> '固定活动类型'
             AND dtt.daytype LIKE 'BD%'
             AND FIND_IN_SET(dtt.daytype, REPLACE(ds.type, '、', ',')) > 0
             AND FIND_IN_SET(ds.country, dtt.country) > 0
@@ -107,6 +108,7 @@ blocked_days AS (
           FROM datetypetime dtt
           WHERE dtt.daytype IS NOT NULL
             AND FIND_IN_SET(dtt.daytype, REPLACE(ds.type, '、', ',')) > 0
+            AND dtt.daytype_category <> '固定活动类型'
             AND (
                    dtt.daytype LIKE 'BD%'
                 OR dtt.daytype LIKE 'LD%'
@@ -133,7 +135,7 @@ valid_predicted_bd AS (
         p.pred_start_date,
         DATE_ADD(p.pred_start_date, INTERVAL 13 DAY) AS pred_end_date
     FROM predicted_bd p
-    WHERE p.pred_start_date BETWEEN CURDATE()
+    WHERE p.pred_start_date BETWEEN DATE_ADD(CURDATE(), INTERVAL 8 DAY)
                                 AND DATE_ADD(CURDATE(), INTERVAL 180 DAY)
       AND NOT EXISTS (
           SELECT 1
@@ -173,11 +175,7 @@ INNER JOIN temp_summary_bd_prediction_days pred
     ON ds.asin = pred.asin
    AND ds.country = pred.country
    AND ds.date = pred.pred_date
-SET ds.type = CASE
-    WHEN ds.type IS NULL OR TRIM(ds.type) = '' THEN 'BD（预测）'
-    WHEN FIND_IN_SET('BD（预测）', REPLACE(ds.type, '、', ',')) > 0 THEN ds.type
-    ELSE CONCAT(ds.type, '、BD（预测）')
-END
+SET ds.type = 'BD（预测）'
 WHERE ds.shop = '合计'
   AND ds.asin = :asin
   AND ds.country = :country
@@ -189,6 +187,7 @@ WHERE ds.shop = '合计'
           FROM datetypetime dtt
           WHERE dtt.daytype IS NOT NULL
             AND FIND_IN_SET(dtt.daytype, REPLACE(ds.type, '、', ',')) > 0
+            AND dtt.daytype_category <> '固定活动类型'
             AND (
                    dtt.daytype LIKE 'BD%'
                 OR dtt.daytype LIKE 'LD%'
@@ -200,96 +199,25 @@ WHERE ds.shop = '合计'
   AND ds.date BETWEEN CURDATE()
                   AND DATE_ADD(CURDATE(), INTERVAL 180 DAY);
 
-WITH RECURSIVE prediction_type_parts AS (
-    SELECT
-        asin,
-        country,
-        shop,
-        `date`,
-        type,
-        SUBSTRING_INDEX(type, '、', 1) AS part_type,
-        CASE
-            WHEN type LIKE '%、%' THEN SUBSTRING(
-                type,
-                CHAR_LENGTH(SUBSTRING_INDEX(type, '、', 1)) + 2
-            )
-            ELSE ''
-        END AS rest_type
-    FROM daily_sales
-    WHERE shop = '合计'
-      AND asin = :asin
-      AND country = :country
-      AND FIND_IN_SET('BD（预测）', REPLACE(type, '、', ',')) > 0
-      AND `date` BETWEEN CURDATE()
-                       AND DATE_ADD(CURDATE(), INTERVAL 180 DAY)
-
-    UNION ALL
-
-    SELECT
-        asin,
-        country,
-        shop,
-        `date`,
-        type,
-        SUBSTRING_INDEX(rest_type, '、', 1) AS part_type,
-        CASE
-            WHEN rest_type LIKE '%、%' THEN SUBSTRING(
-                rest_type,
-                CHAR_LENGTH(SUBSTRING_INDEX(rest_type, '、', 1)) + 2
-            )
-            ELSE ''
-        END AS rest_type
-    FROM prediction_type_parts
-    WHERE rest_type != ''
-),
-prediction_coefficient_calc AS (
-    SELECT
-        tp.asin,
-        tp.country,
-        tp.shop,
-        tp.`date`,
-        tp.type,
-        EXP(SUM(LN(sc.coefficient))) AS new_coefficient,
-        COUNT(*) AS part_count,
-        SUM(
-            CASE
-                WHEN sc.coefficient IS NOT NULL AND sc.coefficient > 0 THEN 1
-                ELSE 0
-            END
-        ) AS matched_count
-    FROM prediction_type_parts tp
-    LEFT JOIN sales_coefficient sc
-        ON tp.asin = sc.asin
-       AND tp.country = sc.country
-       AND sc.type = CASE
-           WHEN tp.part_type = 'BD（预测）' THEN 'BD'
-           ELSE tp.part_type
-       END
-    GROUP BY
-        tp.asin,
-        tp.country,
-        tp.shop,
-        tp.`date`,
-        tp.type
-)
 UPDATE daily_sales ds
-INNER JOIN prediction_coefficient_calc pcc
-    ON ds.asin = pcc.asin
-   AND ds.country = pcc.country
-   AND ds.shop = pcc.shop
-   AND ds.`date` = pcc.`date`
-   AND ds.type = pcc.type
-SET ds.coefficient = pcc.new_coefficient
-WHERE ds.asin = :asin
+INNER JOIN sales_coefficient sc
+    ON ds.asin = sc.asin
+   AND ds.country = sc.country
+   AND sc.type = 'BD'
+SET ds.coefficient = sc.coefficient
+WHERE ds.shop = '合计'
+  AND ds.type = 'BD（预测）'
+  AND ds.asin = :asin
   AND ds.country = :country
-  AND pcc.part_count = pcc.matched_count;
+  AND ds.`date` BETWEEN CURDATE()
+                    AND DATE_ADD(CURDATE(), INTERVAL 180 DAY);
 
 UPDATE daily_sales
 SET maybe_sales = weighted_sales * coefficient
 WHERE shop = '合计'
       AND asin = :asin
       AND country = :country
-  AND FIND_IN_SET('BD（预测）', REPLACE(type, '、', ',')) > 0
+  AND type = 'BD（预测）'
   AND date BETWEEN CURDATE()
               AND DATE_ADD(CURDATE(), INTERVAL 180 DAY);
 

@@ -78,8 +78,27 @@ async function run() {
     { value: '专享类型', label: '专享类型' },
     { value: '大促BDLD', label: '大促BDLD' },
     { value: '基础活动类型', label: '基础活动类型' },
+    { value: '固定活动类型', label: '固定活动类型' },
     { value: '不参与', label: '不参与' },
   ];
+
+  const autoDayPalette = [
+    { bg: '#eef2ff', fg: '#4338ca' },
+    { bg: '#ecfeff', fg: '#0e7490' },
+    { bg: '#fff1f2', fg: '#be123c' },
+    { bg: '#fffbeb', fg: '#a16207' },
+    { bg: '#f0f9ff', fg: '#0369a1' },
+    { bg: '#f5f3ff', fg: '#6d28d9' },
+    { bg: '#ecfdf5', fg: '#047857' },
+    { bg: '#fdf4ff', fg: '#a21caf' },
+  ];
+  const autoDayColor = value => {
+    let hash = 0;
+    Array.from(String(value || '')).forEach(char => {
+      hash = (hash * 31 + char.codePointAt(0)) >>> 0;
+    });
+    return autoDayPalette[hash % autoDayPalette.length];
+  };
 
   const dayPill = v => {
     const s = String(v || '');
@@ -91,7 +110,8 @@ async function run() {
     if (s.indexOf('旺季') >= 0) return pill('#eff6ff', '#1d4ed8', s);
     if (s.indexOf('淡季') >= 0) return pill('#ecfdf5', '#047857', s);
     if (s.indexOf('BD') >= 0 || s.indexOf('LD') >= 0) return pill('#ecfeff', '#0e7490', s);
-    return pill('#f4f4f5', '#52525b', s);
+    const color = autoDayColor(s);
+    return pill(color.bg, color.fg, s);
   };
   const categoryPill = v => {
     if (v === '基础类型') return pill(C.blueBg, C.blue, v);
@@ -99,6 +119,7 @@ async function run() {
     if (v === '专享类型') return pill(C.amberBg, C.amber, v);
     if (v === '大促BDLD') return pill(C.redBg, C.red, v);
     if (v === '基础活动类型') return pill('#ecfeff', '#0e7490', v);
+    if (v === '固定活动类型') return pill('#f5f3ff', '#6d28d9', v);
     if (v === '不参与') return pill(C.grayBg, C.gray, v);
     return pill(C.grayBg, C.gray, fmt(v));
   };
@@ -166,7 +187,9 @@ async function run() {
       React.createElement('div', { style: { fontSize: 12, color: C.muted, lineHeight: 1.7, margin: '2px 0 12px' } }, '按区域(' + (regionSummary || '加载中') + ')分别配置活动日期与初始系数，支持手动添加。', React.createElement('span', { style: { color: '#a1a1aa' } }, '采运部维护 · 改动将生效于后续联动板块')),
       React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 } }, React.createElement('span', { style: { fontSize: 12, color: C.muted } }, '当前区域'), React.createElement(Select, { size: 'small', value: region, style: { width: 150 }, options: regionOptions, onChange: setRegion }), React.createElement(Button, { size: 'small', type: 'primary', disabled: !region, style: { marginLeft: 'auto' }, onClick: () => { const row = { id: '__new', region, day_type: '', category: '基础类型', start_date: '', end_date: '', coef: 1 }; setEditingId('__new'); setDraft(row); } }, '+ 添加')),
       loading ? React.createElement(Spin, null) : React.createElement(Table, { rowClassName: (r, i) => i % 2 ? 'aok-row-odd' : 'aok-row-even', size: 'small', columns, dataSource: data, rowKey: 'id', pagination: false, scroll: { x: 850 }, bordered: true }),
-      React.createElement('div', { style: { background: '#eff6ff', borderLeft: '3px solid #2563eb', borderRadius: 6, padding: '10px 14px', fontSize: 12, lineHeight: 1.7, marginTop: 12 } }, '现状:ERP 已实现此功能。优化点:活动日期的抓取完全依赖领星促销记录,"蹭 BD"等非官方活动抓不到,需要通过 异常销量识别 + 人工补标解决。')));
+      React.createElement('div', { style: { background: '#eff6ff', borderLeft: '3px solid #2563eb', borderRadius: 6, padding: '10px 14px', fontSize: 12, lineHeight: 1.7, marginTop: 12, whiteSpace: 'normal', overflowWrap: 'anywhere' } },
+        React.createElement('strong', { style: { color: '#1d4ed8' } }, '分类说明：'),
+        '基础类型用于日常；叠加基础类型可以组合；基础活动类型的系数自动计算；固定活动类型按日期单独生效；大促BDLD用于修正真实BD/LD；专享类型单独生效；不参与类型不进入日类型计算。除基础活动类型外，其余系数均使用配置值。')));
   }
   ctx.render(React.createElement(App));
 }
