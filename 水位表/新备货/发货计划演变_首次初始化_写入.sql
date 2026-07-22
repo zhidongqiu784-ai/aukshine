@@ -1,18 +1,20 @@
 -- One-time initialization write SQL. Review the read-only candidate SQL before running.
 -- Production write: run manually in DataGrip; never schedule this file.
--- 一次性首次初始化写入：从本周独立建立 W1/A1。
+-- 一次性首次初始化写入：保留已有 shipment_plan_v2，并补齐当前窗口 W1-W7。
 -- Inserts 11 business fields plus created_at and updated_at.
 -- 仅供操作人员在 DataGrip 手动执行，不得加入定时任务。
 
--- 发货计划演变 v2：v3.5 完整算法定时工作流候选 SQL
+-- 发货计划演变 v2：v3.5 七周首次初始化写入 SQL
 -- 数据库：MySQL 8.x
 -- 算法标识：shipment_plan_v2
--- 本 SQL 将本周 READY 候选直接写入 simulate_shipment。
+-- 本 SQL 将 W1-W7 中缺失的 READY 候选直接写入 simulate_shipment。
 -- 使用单条 INSERT ... WITH ... SELECT 原子写入，不调用逐行接口。
 -- 入仓天数统一读取 v3_cfg_cycle_param：
 --   淡季 warehouse_off；旺季 warehouse_peak。
--- 非下单周生成 A1；下单周继承上一周 A1 并生成 A2。
--- 旧记录不读取也不修改；首次从本周 W1 起算，后续边界只读取 shipment_plan_v2。
+-- 非下单槽生成 A1；下单槽继承前一槽已有或本次算出的 A1 并生成 A2。
+-- 精确日期已有的新算法记录只作承诺输入；旧算法记录不读取也不修改。
+-- 服务期起点库存读取 daily_sales.v2_inventory，并叠加本次初始化已生成的前序周候选量；
+-- 空值保持候选未就绪，不回退旧 inventory。
 -- 写入11个业务字段，并显式写入 created_at、updated_at。
 
 START TRANSACTION;
@@ -22,7 +24,7 @@ INSERT INTO simulate_shipment (
     number, date, season, warehouse_days, add_date, plan_source,
     created_at, updated_at
 )
-WITH
+WITH RECURSIVE
 runtime AS (
     SELECT
         CURDATE() AS snapshot_date,
@@ -32,13 +34,45 @@ runtime AS (
 run_phase AS (
     SELECT
         r.*,
-        CASE
-            WHEN MOD(TIMESTAMPDIFF(WEEK, r.order_week_anchor, r.run_monday), 2) = 0
-                THEN 'ORDER_WEEK'
-            ELSE 'NON_ORDER_WEEK'
-        END AS cycle_phase,
         DATE_ADD(r.run_monday, INTERVAL 7 DAY) AS w1_start_date
     FROM runtime AS r
+),
+week_slots (week_no) AS (
+    SELECT 1
+    UNION ALL
+    SELECT week_no + 1
+    FROM week_slots
+    WHERE week_no < 7
+),
+run_calendar_seed AS (
+    SELECT
+        rp.snapshot_date,
+        rp.run_monday,
+        rp.order_week_anchor,
+        rp.w1_start_date,
+        ws.week_no,
+        DATE_ADD(
+            rp.run_monday,
+            INTERVAL ((ws.week_no - 1) * 7) DAY
+        ) AS slot_run_monday,
+        DATE_ADD(
+            rp.w1_start_date,
+            INTERVAL ((ws.week_no - 1) * 7) DAY
+        ) AS candidate_ship_date
+    FROM run_phase AS rp
+    CROSS JOIN week_slots AS ws
+),
+run_calendar AS (
+    SELECT
+        rcs.*,
+        CASE
+            WHEN MOD(
+                TIMESTAMPDIFF(WEEK, rcs.order_week_anchor, rcs.slot_run_monday),
+                2
+            ) = 0 THEN 'ORDER_WEEK'
+            ELSE 'NON_ORDER_WEEK'
+        END AS cycle_phase
+    FROM run_calendar_seed AS rcs
 ),
 
 -- 商品基础集合严格承接“水位表一栏 SQL”：当天合计行 + 有效 ASIN，且型号必须存在。
@@ -134,21 +168,13 @@ receiver_snapshot AS (
     FROM today_total_ranked AS tr
 ),
 
--- 店铺集合承接销量表格：当天 inventory_base 中该 ASIN + country 的真实店铺。
+-- v3.5 / 决策 23：计划只在区域合计层生成，具体店铺由后续人工分配。
 shop_seed AS (
-    SELECT DISTINCT
-        ib.asin,
-        ib.country,
-        ib.shop
-    FROM inventory_base AS ib
-    CROSS JOIN run_phase AS rp
-    INNER JOIN base_target AS bt
-        ON bt.asin = ib.asin
-       AND bt.country = ib.country
-    WHERE DATE(ib.`date`) = rp.snapshot_date
-      AND ib.shop IS NOT NULL
-      AND TRIM(ib.shop) <> ''
-      AND ib.shop <> '合计'
+    SELECT
+        bt.asin,
+        bt.country,
+        '合计' AS shop
+    FROM base_target AS bt
 ),
 shop_lookup AS (
     SELECT
@@ -174,14 +200,31 @@ default_logistics AS (
     GROUP BY cfg.site
 ),
 
--- 新算法边界只读取 shipment_plan_v2；旧模拟计划不得参与日期、数量或字段取值。
-latest_v2_boundary AS (
+-- 七周初始化只在当前 W1-W7 窗口内工作；已有精确日期记录只作为承诺输入，不会重写。
+existing_slot_ranked AS (
     SELECT
+        rc.week_no,
+        s.id,
         s.asin,
         s.country,
         s.shop,
-        MAX(s.add_date) AS latest_add_date
+        s.`date` AS existing_ship_date,
+        s.add_date AS existing_add_date,
+        s.season AS existing_season,
+        s.warehouse_days AS existing_warehouse_days,
+        COUNT(*) OVER (
+            PARTITION BY s.asin, s.country, s.shop, s.`date`
+        ) AS existing_match_count,
+        SUM(COALESCE(s.number, 0)) OVER (
+            PARTITION BY s.asin, s.country, s.shop, s.`date`
+        ) AS existing_number,
+        ROW_NUMBER() OVER (
+            PARTITION BY s.asin, s.country, s.shop, s.`date`
+            ORDER BY s.id DESC
+        ) AS rn
     FROM simulate_shipment AS s
+    INNER JOIN run_calendar AS rc
+        ON s.`date` = rc.candidate_ship_date
     WHERE s.plan_source = 'shipment_plan_v2'
       AND s.asin IS NOT NULL
       AND TRIM(s.asin) <> ''
@@ -189,53 +232,24 @@ latest_v2_boundary AS (
       AND TRIM(s.country) <> ''
       AND s.shop IS NOT NULL
       AND TRIM(s.shop) <> ''
-      AND s.`date` IS NOT NULL
-      AND s.add_date IS NOT NULL
-    GROUP BY s.asin, s.country, s.shop
 ),
-latest_v2_ranked AS (
+existing_slot AS (
     SELECT
-        s.id,
-        s.asin,
-        s.country,
-        s.shop,
-        s.`date` AS latest_ship_date,
-        s.add_date AS latest_add_date,
-        s.number AS latest_row_number,
-        ROW_NUMBER() OVER (
-            PARTITION BY s.asin, s.country, s.shop
-            ORDER BY s.`date` DESC, s.id DESC
-        ) AS rn
-    FROM simulate_shipment AS s
-    INNER JOIN latest_v2_boundary AS lb
-        ON lb.asin = s.asin
-       AND lb.country = s.country
-       AND lb.shop = s.shop
-       AND lb.latest_add_date = s.add_date
-    WHERE s.plan_source = 'shipment_plan_v2'
+        esr.week_no,
+        esr.id AS existing_id,
+        esr.asin,
+        esr.country,
+        esr.shop,
+        esr.existing_ship_date,
+        esr.existing_add_date,
+        esr.existing_season,
+        esr.existing_warehouse_days,
+        esr.existing_match_count,
+        esr.existing_number
+    FROM existing_slot_ranked AS esr
+    WHERE esr.rn = 1
 ),
-latest_v2_plan AS (
-    SELECT
-        lr.id,
-        lr.asin,
-        lr.country,
-        lr.shop,
-        lr.latest_ship_date,
-        lr.latest_add_date,
-        (
-            SELECT COALESCE(SUM(COALESCE(same_day.number, 0)), 0)
-            FROM simulate_shipment AS same_day
-            WHERE same_day.asin = lr.asin
-              AND same_day.country = lr.country
-              AND same_day.shop = lr.shop
-              AND same_day.`date` = lr.latest_ship_date
-              AND same_day.add_date = lr.latest_add_date
-              AND same_day.plan_source = 'shipment_plan_v2'
-        ) AS latest_committed_number
-    FROM latest_v2_ranked AS lr
-    WHERE lr.rn = 1
-),
-plan_seed AS (
+plan_grid AS (
     SELECT
         ss.asin,
         ss.country,
@@ -248,51 +262,41 @@ plan_seed AS (
         END AS channel,
         dl.logistics_days,
         dl.logistics_match_count,
-        lv.latest_ship_date,
-        lv.latest_add_date,
-        CASE WHEN lv.id IS NULL THEN NULL ELSE 'shipment_plan_v2' END AS latest_plan_source,
-        COALESCE(lv.latest_committed_number, 0) AS latest_committed_number
+        rc.snapshot_date,
+        rc.run_monday,
+        rc.order_week_anchor,
+        rc.w1_start_date,
+        rc.week_no,
+        rc.slot_run_monday,
+        rc.cycle_phase,
+        rc.candidate_ship_date,
+        es.existing_id,
+        COALESCE(es.existing_match_count, 0) AS existing_match_count,
+        es.existing_number,
+        es.existing_add_date,
+        es.existing_season,
+        es.existing_warehouse_days
     FROM shop_seed AS ss
+    CROSS JOIN run_calendar AS rc
     LEFT JOIN shop_lookup AS sl
         ON sl.country = ss.country
        AND sl.shop = ss.shop
     LEFT JOIN default_logistics AS dl
         ON dl.country = ss.country
-    LEFT JOIN latest_v2_plan AS lv
-        ON lv.asin = ss.asin
-       AND lv.country = ss.country
-       AND lv.shop = ss.shop
-),
-ship_calc AS (
-    SELECT
-        lp.*,
-        rp.snapshot_date,
-        rp.run_monday,
-        rp.order_week_anchor,
-        rp.cycle_phase,
-        rp.w1_start_date,
-        CASE
-            WHEN lp.latest_ship_date IS NULL THEN rp.w1_start_date
-            WHEN DATE_ADD(lp.latest_ship_date, INTERVAL 7 DAY) > rp.run_monday
-                THEN DATE_ADD(lp.latest_ship_date, INTERVAL 7 DAY)
-            ELSE DATE_ADD(
-                rp.run_monday,
-                INTERVAL (
-                    MOD(WEEKDAY(lp.latest_ship_date) - WEEKDAY(rp.run_monday) + 6, 7) + 1
-                ) DAY
-            )
-        END AS candidate_ship_date
-    FROM plan_seed AS lp
-    CROSS JOIN run_phase AS rp
+    LEFT JOIN existing_slot AS es
+        ON es.asin = ss.asin
+       AND es.country = ss.country
+       AND es.shop = ss.shop
+       AND es.week_no = rc.week_no
 ),
 transport_calc AS (
     SELECT
-        sc.*,
+        pg.*,
         CASE
-            WHEN sc.logistics_days IS NULL THEN NULL
-            ELSE DATE_ADD(sc.candidate_ship_date, INTERVAL sc.logistics_days DAY)
+            WHEN pg.logistics_days IS NULL THEN NULL
+            ELSE DATE_ADD(pg.candidate_ship_date, INTERVAL pg.logistics_days DAY)
         END AS candidate_arrival_date
-    FROM ship_calc AS sc
+    FROM plan_grid AS pg
 ),
 season_calc AS (
     SELECT
@@ -327,46 +331,33 @@ warehouse_calc AS (
     LEFT JOIN v3_cfg_cycle_param AS cp
         ON cp.site = sc.country
 ),
-service_window AS (
+a1_service_window AS (
     SELECT
         wc.*,
-        CASE
-            WHEN wc.cycle_phase = 'ORDER_WEEK'
-                THEN DATE_ADD(wc.latest_add_date, INTERVAL 7 DAY)
-            ELSE DATE_ADD(wc.candidate_add_date, INTERVAL 7 DAY)
-        END AS first_service_start_date,
-        CASE
-            WHEN wc.cycle_phase = 'ORDER_WEEK'
-                THEN DATE_ADD(wc.latest_add_date, INTERVAL 13 DAY)
-            ELSE DATE_ADD(wc.candidate_add_date, INTERVAL 13 DAY)
-        END AS first_service_end_date,
-        CASE
-            WHEN wc.cycle_phase = 'ORDER_WEEK'
-                THEN DATE_ADD(wc.candidate_add_date, INTERVAL 7 DAY)
-            ELSE NULL
-        END AS second_service_start_date,
-        CASE
-            WHEN wc.cycle_phase = 'ORDER_WEEK'
-                THEN DATE_ADD(wc.candidate_add_date, INTERVAL 13 DAY)
-            ELSE NULL
-        END AS second_service_end_date,
-        CASE
-            WHEN wc.cycle_phase = 'ORDER_WEEK' THEN wc.latest_ship_date
-            ELSE wc.candidate_ship_date
-        END AS batch_first_ship_date
+        CAST(NULL AS DATE) AS latest_ship_date,
+        CAST(NULL AS DATE) AS latest_add_date,
+        CAST(NULL AS CHAR(32)) AS latest_plan_source,
+        CAST(NULL AS DECIMAL(20, 4)) AS latest_committed_number,
+        CAST(NULL AS CHAR(64)) AS previous_a1_status,
+        DATE_ADD(wc.candidate_add_date, INTERVAL 7 DAY) AS first_service_start_date,
+        DATE_ADD(wc.candidate_add_date, INTERVAL 13 DAY) AS first_service_end_date,
+        CAST(NULL AS DATE) AS second_service_start_date,
+        CAST(NULL AS DATE) AS second_service_end_date,
+        wc.candidate_ship_date AS batch_first_ship_date
     FROM warehouse_calc AS wc
 ),
-demand_calc AS (
+a1_demand_calc AS (
     SELECT
         sw.*,
         (
-            SELECT MAX(ds.inventory)
+            SELECT MAX(ds.v2_inventory)
             FROM daily_sales AS ds
             WHERE ds.asin = sw.asin
               AND ds.country = sw.country
               AND ds.shop = sw.shop
               AND DATE(ds.`date`) = sw.first_service_start_date
         ) AS inventory_at_first_service_start,
+        CAST(NULL AS DECIMAL(20, 4)) AS inventory_at_second_service_start,
         (
             SELECT SUM(COALESCE(ds.maybe_sales, ds.weighted_sales, 0))
             FROM daily_sales AS ds
@@ -383,66 +374,203 @@ demand_calc AS (
               AND ds.shop = sw.shop
               AND DATE(ds.`date`) BETWEEN sw.first_service_start_date AND sw.first_service_end_date
         ) AS first_week_demand_days,
-        CASE
-            WHEN sw.cycle_phase = 'ORDER_WEEK' THEN (
-                SELECT SUM(COALESCE(ds.maybe_sales, ds.weighted_sales, 0))
-                FROM daily_sales AS ds
-                WHERE ds.asin = sw.asin
-                  AND ds.country = sw.country
-                  AND ds.shop = sw.shop
-                  AND DATE(ds.`date`) BETWEEN sw.second_service_start_date AND sw.second_service_end_date
-            )
-            ELSE NULL
-        END AS second_week_demand,
-        CASE
-            WHEN sw.cycle_phase = 'ORDER_WEEK' THEN (
-                SELECT COUNT(DISTINCT DATE(ds.`date`))
-                FROM daily_sales AS ds
-                WHERE ds.asin = sw.asin
-                  AND ds.country = sw.country
-                  AND ds.shop = sw.shop
-                  AND DATE(ds.`date`) BETWEEN sw.second_service_start_date AND sw.second_service_end_date
-            )
-            ELSE NULL
-        END AS second_week_demand_days
-    FROM service_window AS sw
+        CAST(NULL AS DECIMAL(20, 4)) AS second_week_demand,
+        CAST(NULL AS UNSIGNED) AS second_week_demand_days
+    FROM a1_service_window AS sw
 ),
-formula_calc AS (
+a1_formula_calc AS (
     SELECT
         dc.*,
+        dc.inventory_at_first_service_start AS formula_start_inventory_excluding_a1,
+        dc.first_week_demand AS latest_demand,
+        CAST(NULL AS DECIMAL(20, 4)) AS a1_committed_number,
         CASE
-            WHEN dc.cycle_phase = 'ORDER_WEEK'
-                THEN dc.inventory_at_first_service_start - dc.latest_committed_number
-            ELSE dc.inventory_at_first_service_start
-        END AS formula_start_inventory_excluding_a1,
-        CASE
-            WHEN dc.cycle_phase = 'ORDER_WEEK'
-                THEN COALESCE(dc.first_week_demand, 0) + COALESCE(dc.second_week_demand, 0)
-            ELSE dc.first_week_demand
-        END AS latest_demand,
-        CASE
-            WHEN dc.cycle_phase = 'ORDER_WEEK' THEN dc.latest_committed_number
-            ELSE NULL
-        END AS a1_committed_number,
-        CASE
-            WHEN dc.cycle_phase = 'NON_ORDER_WEEK'
-             AND dc.logistics_days IS NOT NULL
+            WHEN dc.logistics_days IS NOT NULL
              AND dc.candidate_warehouse_days IS NOT NULL
-             AND (dc.latest_add_date IS NULL OR dc.candidate_add_date > dc.latest_add_date)
+             AND dc.candidate_add_date IS NOT NULL
              AND dc.first_week_demand_days = 7
              AND dc.inventory_at_first_service_start IS NOT NULL
                 THEN CAST(
                     CEIL(
                         GREATEST(
                             0,
-                            dc.first_week_demand - dc.inventory_at_first_service_start
+                            (dc.first_week_demand * 2) - dc.inventory_at_first_service_start
                         )
                     ) AS SIGNED
                 )
-            WHEN dc.cycle_phase = 'ORDER_WEEK'
+            ELSE NULL
+        END AS candidate_number,
+        CAST(NULL AS DECIMAL(20, 4)) AS n2_unfloored,
+        CAST(NULL AS DECIMAL(20, 4)) AS a1_commitment_deviation
+    FROM a1_demand_calc AS dc
+),
+a1_supply_status AS (
+    SELECT
+        af.*,
+        CASE
+            WHEN af.existing_match_count > 1 THEN 'EXACT_CANDIDATE_DUPLICATE'
+            WHEN af.existing_match_count = 1 AND af.existing_add_date IS NULL
+                THEN 'EXISTING_A1_ADD_DATE_MISSING'
+            WHEN af.existing_match_count = 1 THEN 'EXISTING'
+            WHEN COALESCE(af.logistics_match_count, 0) = 0 THEN 'CHANNEL_CONFIG_MISSING'
+            WHEN af.logistics_match_count <> 1 THEN 'CHANNEL_CONFIG_DUPLICATE'
+            WHEN af.channel IS NULL OR TRIM(af.channel) = '' THEN 'CHANNEL_MISSING'
+            WHEN af.logistics_days IS NULL THEN 'LOGISTICS_DAYS_MISSING'
+            WHEN af.candidate_warehouse_days IS NULL THEN 'WAREHOUSE_DAYS_MISSING'
+            WHEN af.candidate_add_date IS NULL THEN 'ADD_DATE_UNAVAILABLE'
+            WHEN af.first_week_demand_days <> 7 THEN 'FIRST_SERVICE_WEEK_INCOMPLETE'
+            WHEN af.inventory_at_first_service_start IS NULL THEN 'START_INVENTORY_MISSING'
+            WHEN af.candidate_number IS NULL THEN 'FORMULA_NOT_READY'
+            ELSE 'READY'
+        END AS supply_status
+    FROM a1_formula_calc AS af
+),
+slot_a1_supply AS (
+    SELECT
+        aps.asin,
+        aps.country,
+        aps.shop,
+        aps.week_no,
+        aps.candidate_ship_date AS supply_ship_date,
+        CASE
+            WHEN aps.supply_status = 'EXISTING' THEN aps.existing_add_date
+            WHEN aps.supply_status = 'READY' THEN aps.candidate_add_date
+            ELSE NULL
+        END AS supply_add_date,
+        CASE
+            WHEN aps.supply_status = 'EXISTING' THEN aps.existing_number
+            WHEN aps.supply_status = 'READY' THEN aps.candidate_number
+            ELSE NULL
+        END AS supply_number,
+        CASE
+            WHEN aps.supply_status IN ('EXISTING', 'READY') THEN 'shipment_plan_v2'
+            ELSE NULL
+        END AS supply_plan_source,
+        aps.supply_status
+    FROM a1_supply_status AS aps
+),
+prior_a1_supply AS (
+    SELECT
+        s.asin,
+        s.country,
+        s.shop,
+        0 AS week_no,
+        rp.run_monday AS supply_ship_date,
+        CASE WHEN COUNT(*) = 1 THEN MAX(s.add_date) ELSE NULL END AS supply_add_date,
+        CASE WHEN COUNT(*) = 1 THEN SUM(COALESCE(s.number, 0)) ELSE NULL END AS supply_number,
+        CASE
+            WHEN COUNT(*) = 1 AND MAX(s.add_date) IS NOT NULL THEN 'shipment_plan_v2'
+            ELSE NULL
+        END AS supply_plan_source,
+        CASE
+            WHEN COUNT(*) > 1 THEN 'EXACT_CANDIDATE_DUPLICATE'
+            WHEN MAX(s.add_date) IS NULL THEN 'EXISTING_A1_ADD_DATE_MISSING'
+            ELSE 'EXISTING'
+        END AS supply_status
+    FROM simulate_shipment AS s
+    CROSS JOIN run_phase AS rp
+    INNER JOIN shop_seed AS ss
+        ON ss.asin = s.asin
+       AND ss.country = s.country
+       AND ss.shop = s.shop
+    WHERE s.plan_source = 'shipment_plan_v2'
+      AND s.`date` = rp.run_monday
+    GROUP BY s.asin, s.country, s.shop, rp.run_monday
+),
+a1_supply AS (
+    SELECT * FROM slot_a1_supply
+    UNION ALL
+    SELECT * FROM prior_a1_supply
+),
+order_service_window AS (
+    SELECT
+        wc.*,
+        pas.supply_ship_date AS latest_ship_date,
+        pas.supply_add_date AS latest_add_date,
+        pas.supply_plan_source AS latest_plan_source,
+        pas.supply_number AS latest_committed_number,
+        pas.supply_status AS previous_a1_status,
+        DATE_ADD(pas.supply_add_date, INTERVAL 7 DAY) AS first_service_start_date,
+        DATE_ADD(pas.supply_add_date, INTERVAL 13 DAY) AS first_service_end_date,
+        DATE_ADD(wc.candidate_add_date, INTERVAL 7 DAY) AS second_service_start_date,
+        DATE_ADD(wc.candidate_add_date, INTERVAL 13 DAY) AS second_service_end_date,
+        pas.supply_ship_date AS batch_first_ship_date
+    FROM warehouse_calc AS wc
+    LEFT JOIN a1_supply AS pas
+        ON pas.asin = wc.asin
+       AND pas.country = wc.country
+       AND pas.shop = wc.shop
+       AND pas.week_no = wc.week_no - 1
+    WHERE 1 = 0
+),
+order_demand_calc AS (
+    SELECT
+        sw.*,
+        (
+            SELECT MAX(ds.v2_inventory)
+            FROM daily_sales AS ds
+            WHERE ds.asin = sw.asin
+              AND ds.country = sw.country
+              AND ds.shop = sw.shop
+              AND DATE(ds.`date`) = sw.first_service_start_date
+        ) AS inventory_at_first_service_start,
+        (
+            SELECT MAX(ds.v2_inventory)
+            FROM daily_sales AS ds
+            WHERE ds.asin = sw.asin
+              AND ds.country = sw.country
+              AND ds.shop = sw.shop
+              AND DATE(ds.`date`) = sw.second_service_start_date
+        ) AS inventory_at_second_service_start,
+        (
+            SELECT SUM(COALESCE(ds.maybe_sales, ds.weighted_sales, 0))
+            FROM daily_sales AS ds
+            WHERE ds.asin = sw.asin
+              AND ds.country = sw.country
+              AND ds.shop = sw.shop
+              AND DATE(ds.`date`) BETWEEN sw.first_service_start_date AND sw.first_service_end_date
+        ) AS first_week_demand,
+        (
+            SELECT COUNT(DISTINCT DATE(ds.`date`))
+            FROM daily_sales AS ds
+            WHERE ds.asin = sw.asin
+              AND ds.country = sw.country
+              AND ds.shop = sw.shop
+              AND DATE(ds.`date`) BETWEEN sw.first_service_start_date AND sw.first_service_end_date
+        ) AS first_week_demand_days,
+        (
+            SELECT SUM(COALESCE(ds.maybe_sales, ds.weighted_sales, 0))
+            FROM daily_sales AS ds
+            WHERE ds.asin = sw.asin
+              AND ds.country = sw.country
+              AND ds.shop = sw.shop
+              AND DATE(ds.`date`) BETWEEN sw.second_service_start_date AND sw.second_service_end_date
+        ) AS second_week_demand,
+        (
+            SELECT COUNT(DISTINCT DATE(ds.`date`))
+            FROM daily_sales AS ds
+            WHERE ds.asin = sw.asin
+              AND ds.country = sw.country
+              AND ds.shop = sw.shop
+              AND DATE(ds.`date`) BETWEEN sw.second_service_start_date AND sw.second_service_end_date
+        ) AS second_week_demand_days
+    FROM order_service_window AS sw
+),
+order_formula_calc AS (
+    SELECT
+        dc.*,
+        dc.inventory_at_first_service_start - dc.latest_committed_number
+            AS formula_start_inventory_excluding_a1,
+        COALESCE(dc.first_week_demand, 0) + COALESCE(dc.second_week_demand, 0)
+            AS latest_demand,
+        dc.latest_committed_number AS a1_committed_number,
+        CASE
+            WHEN dc.previous_a1_status IN ('EXISTING', 'READY')
              AND dc.latest_plan_source = 'shipment_plan_v2'
              AND dc.logistics_days IS NOT NULL
              AND dc.candidate_warehouse_days IS NOT NULL
+             AND dc.candidate_add_date IS NOT NULL
+             AND dc.latest_add_date IS NOT NULL
              AND dc.candidate_add_date > dc.latest_add_date
              AND dc.first_week_demand_days = 7
              AND dc.second_week_demand_days = 7
@@ -455,7 +583,8 @@ formula_calc AS (
                                 dc.first_week_demand + dc.second_week_demand
                             )
                             - (
-                                dc.inventory_at_first_service_start - dc.latest_committed_number
+                                dc.inventory_at_first_service_start
+                                - dc.latest_committed_number
                             )
                             - dc.latest_committed_number
                         )
@@ -463,52 +592,81 @@ formula_calc AS (
                 )
             ELSE NULL
         END AS candidate_number,
+        (
+            COALESCE(dc.first_week_demand, 0) + COALESCE(dc.second_week_demand, 0)
+        ) - (
+            dc.inventory_at_first_service_start - dc.latest_committed_number
+        ) AS n2_unfloored,
         CASE
-            WHEN dc.cycle_phase = 'ORDER_WEEK'
-                THEN (
-                    COALESCE(dc.first_week_demand, 0) + COALESCE(dc.second_week_demand, 0)
-                ) - (
-                    dc.inventory_at_first_service_start - dc.latest_committed_number
-                )
-            ELSE NULL
-        END AS n2_unfloored,
-        CASE
-            WHEN dc.cycle_phase = 'ORDER_WEEK'
-             AND dc.inventory_at_first_service_start IS NOT NULL
+            WHEN dc.inventory_at_first_service_start IS NOT NULL
              AND dc.first_week_demand IS NOT NULL
                 THEN dc.latest_committed_number
                      - GREATEST(
                          0,
                          dc.first_week_demand
-                         - (dc.inventory_at_first_service_start - dc.latest_committed_number)
+                         - (
+                             dc.inventory_at_first_service_start
+                             - dc.latest_committed_number
+                         )
                      )
             ELSE NULL
         END AS a1_commitment_deviation
-    FROM demand_calc AS dc
+    FROM order_demand_calc AS dc
+),
+formula_calc AS (
+    SELECT * FROM a1_formula_calc
+    UNION ALL
+    SELECT * FROM order_formula_calc
+),
+formula_sequence_calc AS (
+    SELECT
+        fc.*,
+        @seq_same_key := IF(
+            @seq_prev_key = CONCAT(fc.asin, '|', fc.country, '|', fc.shop),
+            1,
+            0
+        ) AS seq_same_key,
+        @seq_previous_candidate := IF(@seq_same_key = 1, @seq_cumulative_candidate, 0) AS seq_previous_candidate,
+        @seq_service_demand := COALESCE(fc.first_week_demand, 0) * 2 AS sequential_service_demand,
+        @seq_raw_inventory := fc.inventory_at_first_service_start
+            AS sequential_raw_inventory_at_service_start,
+        @seq_effective_inventory := CASE
+            WHEN @seq_raw_inventory IS NULL THEN NULL
+            ELSE @seq_raw_inventory + @seq_previous_candidate
+        END AS sequential_inventory_at_service_start,
+        @seq_candidate := CASE
+            WHEN fc.first_week_demand_days <> 7 THEN NULL
+            WHEN @seq_effective_inventory IS NULL THEN NULL
+            ELSE CAST(
+                CEIL(GREATEST(0, @seq_service_demand - @seq_effective_inventory))
+                AS SIGNED
+            )
+        END AS sequential_candidate_number,
+        @seq_cumulative_candidate := @seq_previous_candidate + COALESCE(@seq_candidate, 0)
+            AS seq_cumulative_candidate,
+        @seq_prev_key := CONCAT(fc.asin, '|', fc.country, '|', fc.shop) AS seq_set_key
+    FROM (
+        SELECT *
+        FROM formula_calc
+        ORDER BY country, asin, shop, week_no
+    ) AS fc
+    CROSS JOIN (
+        SELECT
+            @seq_prev_key := '',
+            @seq_cumulative_candidate := 0,
+            @seq_same_key := 0,
+            @seq_previous_candidate := 0,
+            @seq_service_demand := 0,
+            @seq_raw_inventory := NULL,
+            @seq_effective_inventory := NULL,
+            @seq_candidate := NULL
+    ) AS seq_vars
 ),
 guard_calc AS (
     SELECT
         fc.*,
-        EXISTS (
-            SELECT 1
-            FROM simulate_shipment AS exact_row
-            WHERE exact_row.asin = fc.asin
-              AND exact_row.country = fc.country
-              AND exact_row.shop = fc.shop
-              AND exact_row.`date` = fc.candidate_ship_date
-              AND exact_row.plan_source = 'shipment_plan_v2'
-        ) AS exact_candidate_exists,
-        EXISTS (
-            SELECT 1
-            FROM simulate_shipment AS weekly_guard
-            WHERE weekly_guard.asin = fc.asin
-              AND weekly_guard.country = fc.country
-              AND weekly_guard.shop = fc.shop
-              AND weekly_guard.plan_source = 'shipment_plan_v2'
-              AND weekly_guard.created_at >= fc.run_monday
-              AND weekly_guard.created_at < DATE_ADD(fc.run_monday, INTERVAL 7 DAY)
-        ) AS generated_in_run_week
-    FROM formula_calc AS fc
+        CASE WHEN fc.existing_match_count > 0 THEN 1 ELSE 0 END AS exact_candidate_exists
+    FROM formula_sequence_calc AS fc
 ),
 candidate_rows AS (
     SELECT
@@ -518,53 +676,80 @@ candidate_rows AS (
             ELSE 'A1_FIRST_WEEK'
         END AS generation_role,
         CASE
-            WHEN gc.shop_id IS NULL THEN 'SHOP_ID_MISSING'
-            WHEN gc.shop_match_count <> 1 THEN 'SHOP_ID_AMBIGUOUS'
+            WHEN gc.existing_match_count > 1 THEN 'EXACT_CANDIDATE_DUPLICATE'
+            WHEN gc.existing_match_count = 1 THEN 'EXACT_CANDIDATE_ALREADY_EXISTS'
             WHEN COALESCE(gc.logistics_match_count, 0) = 0 THEN 'CHANNEL_CONFIG_MISSING'
             WHEN gc.logistics_match_count <> 1 THEN 'CHANNEL_CONFIG_DUPLICATE'
             WHEN gc.channel IS NULL OR TRIM(gc.channel) = '' THEN 'CHANNEL_MISSING'
             WHEN gc.logistics_days IS NULL THEN 'LOGISTICS_DAYS_MISSING'
             WHEN gc.candidate_warehouse_days IS NULL THEN 'WAREHOUSE_DAYS_MISSING'
             WHEN gc.candidate_add_date IS NULL THEN 'ADD_DATE_UNAVAILABLE'
-            WHEN gc.latest_add_date IS NOT NULL
-             AND gc.candidate_add_date <= gc.latest_add_date THEN 'ADD_DATE_NOT_AFTER_LATEST'
-            WHEN gc.cycle_phase = 'ORDER_WEEK'
-             AND COALESCE(gc.latest_plan_source, '') <> 'shipment_plan_v2'
-                THEN 'A1_FROM_PREVIOUS_WEEK_MISSING'
             WHEN gc.first_week_demand_days <> 7 THEN 'FIRST_SERVICE_WEEK_INCOMPLETE'
-            WHEN gc.cycle_phase = 'ORDER_WEEK' AND gc.second_week_demand_days <> 7
-                THEN 'SECOND_SERVICE_WEEK_INCOMPLETE'
-            WHEN gc.inventory_at_first_service_start IS NULL THEN 'START_INVENTORY_MISSING'
-            WHEN gc.candidate_number IS NULL THEN 'FORMULA_NOT_READY'
-            WHEN gc.exact_candidate_exists = 1 THEN 'EXACT_CANDIDATE_ALREADY_EXISTS'
-            WHEN gc.generated_in_run_week = 1 THEN 'ALREADY_GENERATED_IN_RUN_WEEK'
+            WHEN gc.inventory_at_first_service_start IS NULL
+                THEN 'START_INVENTORY_MISSING'
+            WHEN gc.sequential_candidate_number IS NULL THEN 'FORMULA_NOT_READY'
             ELSE 'READY'
         END AS generation_status
     FROM guard_calc AS gc
 ),
-
--- 区域层汇总。quantity_receive 和净额均是 ASIN + country 口径，不能按店铺重复求和。
+horizon_plan_rows AS (
+    SELECT
+        s.asin,
+        s.country,
+        s.shop,
+        s.`date` AS ship_date,
+        COALESCE(s.number, 0) AS plan_number
+    FROM simulate_shipment AS s
+    CROSS JOIN run_phase AS rp
+    WHERE s.plan_source = 'shipment_plan_v2'
+      AND s.shop = '合计'
+      AND s.`date` >= rp.w1_start_date
+      AND s.`date` < DATE_ADD(rp.w1_start_date, INTERVAL 49 DAY)
+    UNION ALL
+    SELECT
+        cr.asin,
+        cr.country,
+        cr.shop,
+        cr.candidate_ship_date AS ship_date,
+        cr.sequential_candidate_number AS plan_number
+    FROM candidate_rows AS cr
+    WHERE cr.generation_status = 'READY'
+),
 region_candidate_rollup AS (
     SELECT
         cr.asin,
         cr.country,
         cr.snapshot_date,
         cr.run_monday,
+        cr.week_no,
+        cr.slot_run_monday,
         cr.cycle_phase,
         cr.w1_start_date,
+        cr.candidate_ship_date,
         MIN(cr.batch_first_ship_date) AS min_batch_first_ship_date,
         MAX(cr.batch_first_ship_date) AS max_batch_first_ship_date,
         COUNT(*) AS region_candidate_shop_count,
-        SUM(CASE WHEN cr.generation_status = 'READY' THEN 1 ELSE 0 END) AS region_ready_shop_count,
+        SUM(
+            CASE
+                WHEN cr.generation_status IN ('READY', 'EXACT_CANDIDATE_ALREADY_EXISTS')
+                    THEN 1
+                ELSE 0
+            END
+        ) AS region_ready_shop_count,
         SUM(
             CASE
                 WHEN cr.cycle_phase = 'ORDER_WEEK' THEN cr.latest_committed_number
-                ELSE cr.candidate_number
+                WHEN cr.generation_status = 'EXACT_CANDIDATE_ALREADY_EXISTS'
+                    THEN cr.existing_number
+                ELSE cr.sequential_candidate_number
             END
         ) AS region_a1_number,
         SUM(
             CASE
-                WHEN cr.cycle_phase = 'ORDER_WEEK' THEN cr.candidate_number
+                WHEN cr.cycle_phase = 'ORDER_WEEK'
+                 AND cr.generation_status = 'EXACT_CANDIDATE_ALREADY_EXISTS'
+                    THEN cr.existing_number
+                WHEN cr.cycle_phase = 'ORDER_WEEK' THEN cr.sequential_candidate_number
                 ELSE 0
             END
         ) AS region_a2_number
@@ -574,8 +759,11 @@ region_candidate_rollup AS (
         cr.country,
         cr.snapshot_date,
         cr.run_monday,
+        cr.week_no,
+        cr.slot_run_monday,
         cr.cycle_phase,
-        cr.w1_start_date
+        cr.w1_start_date,
+        cr.candidate_ship_date
 ),
 region_order_calc AS (
     SELECT
@@ -586,15 +774,12 @@ region_order_calc AS (
         END AS batch_week_aligned,
         CASE
             WHEN rr.min_batch_first_ship_date = rr.max_batch_first_ship_date THEN (
-                SELECT COALESCE(SUM(GREATEST(COALESCE(s.number, 0), 0)), 0)
-                FROM simulate_shipment AS s
-                WHERE s.asin = rr.asin
-                  AND s.country = rr.country
-                  AND s.plan_source = 'shipment_plan_v2'
-                  AND s.shop IS NOT NULL
-                  AND s.shop <> '合计'
-                  AND s.`date` >= rr.w1_start_date
-                  AND s.`date` < rr.min_batch_first_ship_date
+                SELECT COALESCE(SUM(GREATEST(COALESCE(hp.plan_number, 0), 0)), 0)
+                FROM horizon_plan_rows AS hp
+                WHERE hp.asin = rr.asin
+                  AND hp.country = rr.country
+                  AND hp.ship_date >= rr.w1_start_date
+                  AND hp.ship_date < rr.min_batch_first_ship_date
             )
             ELSE NULL
         END AS earlier_committed_number
@@ -614,10 +799,7 @@ region_net_calc AS (
         CASE
             WHEN rs.asin IS NULL THEN NULL
             WHEN ro.batch_week_aligned = 0 THEN NULL
-            ELSE GREATEST(
-                0,
-                rs.quantity_receive - ro.earlier_committed_number
-            )
+            ELSE GREATEST(0, rs.quantity_receive - ro.earlier_committed_number)
         END AS unfulfilled_order_remaining,
         CASE
             WHEN ro.cycle_phase <> 'ORDER_WEEK' THEN NULL
@@ -629,16 +811,14 @@ region_net_calc AS (
                 0,
                 ro.region_a1_number
                 + ro.region_a2_number
-                - GREATEST(
-                    0,
-                    rs.quantity_receive - ro.earlier_committed_number
-                )
+                - GREATEST(0, rs.quantity_receive - ro.earlier_committed_number)
             )
         END AS net_order_number,
         CASE
             WHEN rs.asin IS NULL THEN 'TODAY_TOTAL_ROW_MISSING'
             WHEN ro.batch_week_aligned = 0 THEN 'SHOP_BATCH_WEEK_NOT_ALIGNED'
-            WHEN ro.region_ready_shop_count <> ro.region_candidate_shop_count THEN 'SHOP_CANDIDATE_NOT_ALL_READY'
+            WHEN ro.region_ready_shop_count <> ro.region_candidate_shop_count
+                THEN 'SHOP_CANDIDATE_NOT_ALL_READY'
             WHEN rs.quantity_receive > 0 AND rs.rpa_assignment_status <> 'PASS'
                 THEN CONCAT('RPA_ASSIGNMENT_', rs.rpa_assignment_status)
             WHEN ro.cycle_phase <> 'ORDER_WEEK' THEN 'WAIT_FOR_ORDER_WEEK'
@@ -653,9 +833,9 @@ SELECT
     cr.channel,
     cr.country,
     cr.shop,
-    cr.shop_id,
+    NULL AS shop_id,
     cr.asin,
-    cr.candidate_number AS `number`,
+    cr.sequential_candidate_number AS `number`,
     cr.candidate_ship_date AS `date`,
     cr.candidate_season AS season,
     cr.candidate_warehouse_days AS warehouse_days,
@@ -664,20 +844,11 @@ SELECT
     NOW(3) AS created_at,
     NOW(3) AS updated_at
 FROM candidate_rows AS cr
-INNER JOIN region_net_calc AS rn
-    ON rn.asin = cr.asin
-   AND rn.country = cr.country
-   AND rn.snapshot_date = cr.snapshot_date
-   AND rn.run_monday = cr.run_monday
 WHERE cr.generation_status = 'READY'
-  AND (
-      cr.cycle_phase = 'NON_ORDER_WEEK'
-      OR rn.region_net_status = 'READY'
-  )
-ORDER BY cr.country, cr.asin, cr.shop;
+ORDER BY cr.country, cr.asin, cr.week_no, cr.shop;
 
 SELECT ROW_COUNT() AS inserted_rows;
 COMMIT;
 
 -- sku_1, sid_msku and msku are intentionally not inserted.
--- Re-running is protected by v2 date and run-week idempotency guards.
+-- Re-running is protected by the exact v2 country + asin + shop + date guard.

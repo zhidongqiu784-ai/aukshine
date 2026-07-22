@@ -1,0 +1,517 @@
+{
+  "format": "nocobase-workflow-deployment-plan/v1",
+  "environment": "production",
+  "defaultEnabled": false,
+  "contracts": {
+    "roleKeys": ["sale", "lead", "ops", "final"],
+    "submitActions": ["NUMBER", "DATE", "CHANNEL", "MIXED"],
+    "reviewActions": ["APPROVE", "REJECT"],
+    "statuses": [
+      "PENDING_SUPERVISOR",
+      "PENDING_PROCUREMENT",
+      "PENDING_FINAL",
+      "APPLY_PENDING",
+      "APPLYING",
+      "APPLIED",
+      "REJECTED"
+    ],
+    "gateResults": ["NOT_APPLICABLE", "SAFE_OR_NOT_WORSE", "OUT"],
+    "projectionStatuses": ["WAITING_APPROVAL", "PENDING", "OK", "FAILED"]
+  },
+  "knownReferences": {
+    "hourlyProjectionWorkflow": {
+      "title": "更新水位表",
+      "id": 375895468081152,
+      "key": "xp7rq5lgncz",
+      "node10Key": "q0thhufe1cs",
+      "enabledAtAssetBuild": false
+    }
+  },
+  "placeholderRules": [
+    "每个节点必须串行创建并回读真实 key。",
+    "把下游 configTemplate 中 __*_KEY__ 替换为刚回读的真实 node.key。",
+    "sqlFile 表示将 UTF-8 SQL 文件全文放入 SQL 节点 config.sql，不是 NocoBase 原生字段。",
+    "所有 workflow 创建时 enabled=false；本清单不授权启用。"
+  ],
+  "workflows": [
+    {
+      "ref": "submit",
+      "title": "发货计划演变-v2-提交申请",
+      "type": "custom-action",
+      "sync": true,
+      "enabled": false,
+      "config": { "type": 0 },
+      "nodes": [
+        {
+          "ref": "submit_input",
+          "type": "json-query",
+          "upstreamRef": null,
+          "branchIndex": null,
+          "configTemplate": {
+            "engine": "jmespath",
+            "source": "{{$context.data}}",
+            "expression": "values",
+            "model": [
+              { "path": "request_uuid", "label": "请求唯一标识" },
+              { "path": "bundle_id", "label": "整包申请标识" },
+              { "path": "plan_id", "label": "计划ID" },
+              { "path": "change_kind", "label": "前端变更类型提示" },
+              { "path": "proposed_number", "label": "拟议数量" },
+              { "path": "proposed_date", "label": "拟议发货日期" },
+              { "path": "proposed_channel", "label": "拟议渠道" },
+              { "path": "reason_type", "label": "理由类型" },
+              { "path": "reason", "label": "补充理由" },
+              { "path": "simulation_evidence", "label": "前端模拟证据" },
+              { "path": "acting_role", "label": "操作透镜" }
+            ]
+          }
+        },
+        {
+          "ref": "submit_validate",
+          "type": "sql",
+          "upstreamRef": "submit_input",
+          "branchIndex": null,
+          "sqlFile": "01-提交申请-服务端校验与安全闸.sql",
+          "configTemplate": {
+            "dataSource": "main",
+            "sql": "__LOAD_SQL_FILE__",
+            "variables": [
+              { "name": "actor_user_id", "value": "{{$context.user.id}}" },
+              { "name": "acting_role", "value": "{{$jobsMapByNodeKey.__SUBMIT_INPUT_KEY__.acting_role}}" },
+              { "name": "request_uuid", "value": "{{$jobsMapByNodeKey.__SUBMIT_INPUT_KEY__.request_uuid}}" },
+              { "name": "bundle_id", "value": "{{$jobsMapByNodeKey.__SUBMIT_INPUT_KEY__.bundle_id}}" },
+              { "name": "plan_id", "value": "{{$jobsMapByNodeKey.__SUBMIT_INPUT_KEY__.plan_id}}" },
+              { "name": "change_kind", "value": "{{$jobsMapByNodeKey.__SUBMIT_INPUT_KEY__.change_kind}}" },
+              { "name": "proposed_number", "value": "{{$jobsMapByNodeKey.__SUBMIT_INPUT_KEY__.proposed_number}}" },
+              { "name": "proposed_date", "value": "{{$jobsMapByNodeKey.__SUBMIT_INPUT_KEY__.proposed_date}}" },
+              { "name": "proposed_channel", "value": "{{$jobsMapByNodeKey.__SUBMIT_INPUT_KEY__.proposed_channel}}" },
+              { "name": "reason_type", "value": "{{$jobsMapByNodeKey.__SUBMIT_INPUT_KEY__.reason_type}}" },
+              { "name": "reason", "value": "{{$jobsMapByNodeKey.__SUBMIT_INPUT_KEY__.reason}}" }
+            ],
+            "withMeta": false
+          }
+        },
+        {
+          "ref": "submit_result",
+          "type": "json-query",
+          "upstreamRef": "submit_validate",
+          "branchIndex": null,
+          "configTemplate": {
+            "engine": "jmespath",
+            "source": "{{$jobsMapByNodeKey.__SUBMIT_VALIDATE_KEY__}}",
+            "expression": "[-1][0]",
+            "model": [
+              { "path": "allow" },
+              { "path": "error_message" },
+              { "path": "request_uuid" },
+              { "path": "bundle_id" },
+              { "path": "plan_id" },
+              { "path": "asin" },
+              { "path": "country" },
+              { "path": "shop" },
+              { "path": "week_code" },
+              { "path": "change_kind" },
+              { "path": "original_number" },
+              { "path": "proposed_number" },
+              { "path": "original_date" },
+              { "path": "proposed_date" },
+              { "path": "original_channel" },
+              { "path": "proposed_channel" },
+              { "path": "reason_type" },
+              { "path": "reason" },
+              { "path": "gate_result" },
+              { "path": "status" },
+              { "path": "row_version" },
+              { "path": "requester_user_id" },
+              { "path": "requester_username" },
+              { "path": "requester_department" },
+              { "path": "sale_owner" },
+              { "path": "product_label" },
+              { "path": "projection_status" },
+              { "path": "acting_role" },
+              { "path": "max_risk_delta" }
+            ]
+          }
+        },
+        {
+          "ref": "submit_allow",
+          "type": "condition",
+          "upstreamRef": "submit_result",
+          "branchIndex": null,
+          "configTemplate": {
+            "rejectOnFalse": false,
+            "engine": "basic",
+            "calculation": {
+              "group": {
+                "type": "and",
+                "calculations": [
+                  {
+                    "calculator": "equal",
+                    "operands": ["{{$jobsMapByNodeKey.__SUBMIT_RESULT_KEY__.allow}}", 1]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "ref": "submit_create",
+          "type": "create",
+          "upstreamRef": "submit_allow",
+          "branchIndex": 1,
+          "configTemplate": {
+            "collection": "shipment_plan_change_v2",
+            "usingAssignFormSchema": false,
+            "assignFormSchema": {},
+            "params": {
+              "values": {
+                "request_uuid": "{{$jobsMapByNodeKey.__SUBMIT_RESULT_KEY__.request_uuid}}",
+                "bundle_id": "{{$jobsMapByNodeKey.__SUBMIT_RESULT_KEY__.bundle_id}}",
+                "plan_id": "{{$jobsMapByNodeKey.__SUBMIT_RESULT_KEY__.plan_id}}",
+                "asin": "{{$jobsMapByNodeKey.__SUBMIT_RESULT_KEY__.asin}}",
+                "country": "{{$jobsMapByNodeKey.__SUBMIT_RESULT_KEY__.country}}",
+                "shop": "{{$jobsMapByNodeKey.__SUBMIT_RESULT_KEY__.shop}}",
+                "week_code": "{{$jobsMapByNodeKey.__SUBMIT_RESULT_KEY__.week_code}}",
+                "change_kind": "{{$jobsMapByNodeKey.__SUBMIT_RESULT_KEY__.change_kind}}",
+                "original_number": "{{$jobsMapByNodeKey.__SUBMIT_RESULT_KEY__.original_number}}",
+                "proposed_number": "{{$jobsMapByNodeKey.__SUBMIT_RESULT_KEY__.proposed_number}}",
+                "original_date": "{{$jobsMapByNodeKey.__SUBMIT_RESULT_KEY__.original_date}}",
+                "proposed_date": "{{$jobsMapByNodeKey.__SUBMIT_RESULT_KEY__.proposed_date}}",
+                "original_channel": "{{$jobsMapByNodeKey.__SUBMIT_RESULT_KEY__.original_channel}}",
+                "proposed_channel": "{{$jobsMapByNodeKey.__SUBMIT_RESULT_KEY__.proposed_channel}}",
+                "reason_type": "{{$jobsMapByNodeKey.__SUBMIT_RESULT_KEY__.reason_type}}",
+                "reason": "{{$jobsMapByNodeKey.__SUBMIT_RESULT_KEY__.reason}}",
+                "simulation_evidence": "{{$jobsMapByNodeKey.__SUBMIT_INPUT_KEY__.simulation_evidence}}",
+                "gate_result": "{{$jobsMapByNodeKey.__SUBMIT_RESULT_KEY__.gate_result}}",
+                "status": "{{$jobsMapByNodeKey.__SUBMIT_RESULT_KEY__.status}}",
+                "row_version": 0,
+                "requester_user_id": "{{$jobsMapByNodeKey.__SUBMIT_RESULT_KEY__.requester_user_id}}",
+                "requester_username": "{{$jobsMapByNodeKey.__SUBMIT_RESULT_KEY__.requester_username}}",
+                "requester_department": "{{$jobsMapByNodeKey.__SUBMIT_RESULT_KEY__.requester_department}}",
+                "sale_owner": "{{$jobsMapByNodeKey.__SUBMIT_RESULT_KEY__.sale_owner}}",
+                "product_label": "{{$jobsMapByNodeKey.__SUBMIT_RESULT_KEY__.product_label}}",
+                "projection_status": "{{$jobsMapByNodeKey.__SUBMIT_RESULT_KEY__.projection_status}}"
+              },
+              "appends": []
+            }
+          }
+        },
+        {
+          "ref": "submit_log",
+          "type": "create",
+          "upstreamRef": "submit_create",
+          "branchIndex": null,
+          "configTemplate": {
+            "collection": "shipment_plan_change_log_v2",
+            "usingAssignFormSchema": false,
+            "assignFormSchema": {},
+            "params": {
+              "values": {
+                "change_id": "{{$jobsMapByNodeKey.__SUBMIT_CREATE_KEY__.id}}",
+                "bundle_id": "{{$jobsMapByNodeKey.__SUBMIT_CREATE_KEY__.bundle_id}}",
+                "request_uuid": "{{$jobsMapByNodeKey.__SUBMIT_CREATE_KEY__.request_uuid}}",
+                "action": "SUBMIT",
+                "from_status": null,
+                "to_status": "{{$jobsMapByNodeKey.__SUBMIT_CREATE_KEY__.status}}",
+                "actor_user_id": "{{$context.user.id}}",
+                "actor_username": "{{$context.user.username}}",
+                "acting_role": "{{$jobsMapByNodeKey.__SUBMIT_RESULT_KEY__.acting_role}}",
+                "actor_department": "{{$context.user.department}}",
+                "comment": "{{$jobsMapByNodeKey.__SUBMIT_CREATE_KEY__.reason}}",
+                "before_json": null,
+                "after_json": "{{$jobsMapByNodeKey.__SUBMIT_CREATE_KEY__}}",
+                "result": "OK",
+                "error_message": null,
+                "occurred_at": "{{$system.now}}"
+              },
+              "appends": []
+            }
+          }
+        },
+        {
+          "ref": "submit_success_message",
+          "type": "response-message",
+          "upstreamRef": "submit_log",
+          "branchIndex": null,
+          "configTemplate": { "message": "修改申请已提交" }
+        },
+        {
+          "ref": "submit_error_message",
+          "type": "response-message",
+          "upstreamRef": "submit_allow",
+          "branchIndex": 0,
+          "configTemplate": {
+            "message": "{{$jobsMapByNodeKey.__SUBMIT_RESULT_KEY__.error_message}}"
+          }
+        },
+        {
+          "ref": "submit_error_end",
+          "type": "end",
+          "upstreamRef": "submit_error_message",
+          "branchIndex": null,
+          "configTemplate": { "endStatus": -1 }
+        }
+      ]
+    },
+    {
+      "ref": "review",
+      "title": "发货计划演变-v2-审核流转",
+      "type": "custom-action",
+      "sync": true,
+      "enabled": false,
+      "config": { "type": 0 },
+      "nodes": [
+        {
+          "ref": "review_input",
+          "type": "json-query",
+          "upstreamRef": null,
+          "branchIndex": null,
+          "configTemplate": {
+            "engine": "jmespath",
+            "source": "{{$context.data}}",
+            "expression": "values",
+            "model": [
+              { "path": "change_id" },
+              { "path": "action" },
+              { "path": "expected_row_version" },
+              { "path": "comment" },
+              { "path": "acting_role" }
+            ]
+          }
+        },
+        {
+          "ref": "review_transition",
+          "type": "sql",
+          "upstreamRef": "review_input",
+          "branchIndex": null,
+          "sqlFile": "02-审核流转-服务端校验与写回.sql",
+          "configTemplate": {
+            "dataSource": "main",
+            "sql": "__LOAD_SQL_FILE__",
+            "variables": [
+              { "name": "actor_user_id", "value": "{{$context.user.id}}" },
+              { "name": "acting_role", "value": "{{$jobsMapByNodeKey.__REVIEW_INPUT_KEY__.acting_role}}" },
+              { "name": "change_id", "value": "{{$jobsMapByNodeKey.__REVIEW_INPUT_KEY__.change_id}}" },
+              { "name": "action", "value": "{{$jobsMapByNodeKey.__REVIEW_INPUT_KEY__.action}}" },
+              { "name": "expected_row_version", "value": "{{$jobsMapByNodeKey.__REVIEW_INPUT_KEY__.expected_row_version}}" },
+              { "name": "comment", "value": "{{$jobsMapByNodeKey.__REVIEW_INPUT_KEY__.comment}}" },
+              { "name": "audit_log_id", "value": "{{$system.genSnowflakeId}}" }
+            ],
+            "withMeta": false
+          }
+        },
+        {
+          "ref": "review_result",
+          "type": "json-query",
+          "upstreamRef": "review_transition",
+          "branchIndex": null,
+          "configTemplate": {
+            "engine": "jmespath",
+            "source": "{{$jobsMapByNodeKey.__REVIEW_TRANSITION_KEY__}}",
+            "expression": "[-1][0]",
+            "model": [
+              { "path": "allow" },
+              { "path": "error_message" },
+              { "path": "change_id" },
+              { "path": "next_status" },
+              { "path": "next_row_version" },
+              { "path": "should_trigger_apply" }
+            ]
+          }
+        },
+        {
+          "ref": "review_allow",
+          "type": "condition",
+          "upstreamRef": "review_result",
+          "branchIndex": null,
+          "configTemplate": {
+            "rejectOnFalse": false,
+            "engine": "basic",
+            "calculation": {
+              "group": {
+                "type": "and",
+                "calculations": [
+                  {
+                    "calculator": "equal",
+                    "operands": ["{{$jobsMapByNodeKey.__REVIEW_RESULT_KEY__.allow}}", 1]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "ref": "review_success_message",
+          "type": "response-message",
+          "upstreamRef": "review_allow",
+          "branchIndex": 1,
+          "configTemplate": { "message": "审核动作已完成" }
+        },
+        {
+          "ref": "review_apply_branch",
+          "type": "condition",
+          "upstreamRef": "review_success_message",
+          "branchIndex": null,
+          "configTemplate": {
+            "rejectOnFalse": false,
+            "engine": "basic",
+            "calculation": {
+              "group": {
+                "type": "and",
+                "calculations": [
+                  {
+                    "calculator": "equal",
+                    "operands": ["{{$jobsMapByNodeKey.__REVIEW_RESULT_KEY__.should_trigger_apply}}", 1]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "ref": "review_trigger_apply",
+          "type": "update",
+          "upstreamRef": "review_apply_branch",
+          "branchIndex": 1,
+          "configTemplate": {
+            "collection": "shipment_plan_change_v2",
+            "usingAssignFormSchema": false,
+            "assignFormSchema": {},
+            "params": {
+              "individualHooks": true,
+              "filter": {
+                "$and": [
+                  { "id": { "$eq": "{{$jobsMapByNodeKey.__REVIEW_RESULT_KEY__.change_id}}" } },
+                  { "status": { "$eq": "APPLY_PENDING" } },
+                  { "row_version": { "$eq": "{{$jobsMapByNodeKey.__REVIEW_RESULT_KEY__.next_row_version}}" } }
+                ]
+              },
+              "values": { "projection_status": "PENDING" }
+            }
+          }
+        },
+        {
+          "ref": "review_error_message",
+          "type": "response-message",
+          "upstreamRef": "review_allow",
+          "branchIndex": 0,
+          "configTemplate": {
+            "message": "{{$jobsMapByNodeKey.__REVIEW_RESULT_KEY__.error_message}}"
+          }
+        },
+        {
+          "ref": "review_error_end",
+          "type": "end",
+          "upstreamRef": "review_error_message",
+          "branchIndex": null,
+          "configTemplate": { "endStatus": -1 }
+        }
+      ]
+    },
+    {
+      "ref": "apply",
+      "title": "发货计划演变-v2-应用计划",
+      "type": "collection",
+      "sync": false,
+      "enabled": false,
+      "config": {
+        "collection": "shipment_plan_change_v2",
+        "mode": 3,
+        "changed": ["projection_status"],
+        "condition": {
+          "$and": [
+            { "status": { "$eq": "APPLY_PENDING" } },
+            { "projection_status": { "$eq": "PENDING" } }
+          ]
+        },
+        "appends": []
+      },
+      "nodes": [
+        {
+          "ref": "apply_plan",
+          "type": "sql",
+          "upstreamRef": null,
+          "branchIndex": null,
+          "sqlFile": "03-应用计划-乐观锁写回.sql",
+          "configTemplate": {
+            "dataSource": "main",
+            "sql": "__LOAD_SQL_FILE__",
+            "variables": [
+              { "name": "change_id", "value": "{{$context.data.id}}" },
+              { "name": "audit_log_id", "value": "{{$system.genSnowflakeId}}" }
+            ],
+            "withMeta": false
+          }
+        },
+        {
+          "ref": "apply_projection",
+          "type": "sql",
+          "upstreamRef": "apply_plan",
+          "branchIndex": null,
+          "sqlFile": "../发货计划演变-v2_应用后定向水位推演.sql",
+          "sqlTransform": {
+            "replace": [
+              ["SET @v2_target_asin = CAST(NULL AS CHAR);", "SET @v2_target_asin = CAST(:asin AS CHAR);"],
+              ["SET @v2_target_country = CAST(NULL AS CHAR);", "SET @v2_target_country = CAST(:country AS CHAR);"]
+            ]
+          },
+          "configTemplate": {
+            "dataSource": "main",
+            "sql": "__LOAD_AND_TRANSFORM_SQL_FILE__",
+            "variables": [
+              { "name": "asin", "value": "{{$context.data.asin}}" },
+              { "name": "country", "value": "{{$context.data.country}}" }
+            ],
+            "withMeta": false
+          }
+        },
+        {
+          "ref": "apply_finish",
+          "type": "sql",
+          "upstreamRef": "apply_projection",
+          "branchIndex": null,
+          "sqlFile": "04-应用计划-推演完成.sql",
+          "configTemplate": {
+            "dataSource": "main",
+            "sql": "__LOAD_SQL_FILE__",
+            "variables": [
+              { "name": "change_id", "value": "{{$context.data.id}}" },
+              { "name": "audit_log_id", "value": "{{$system.genSnowflakeId}}" }
+            ],
+            "withMeta": false
+          }
+        }
+      ]
+    },
+    {
+      "ref": "request_guard",
+      "title": "发货计划演变-v2-申请表全局保护",
+      "type": "request-interception",
+      "sync": true,
+      "enabled": false,
+      "config": {
+        "collection": "shipment_plan_change_v2",
+        "global": true,
+        "actions": ["create", "update", "destroy"]
+      },
+      "nodes": [
+        {
+          "ref": "request_guard_message",
+          "type": "response-message",
+          "upstreamRef": null,
+          "branchIndex": null,
+          "configTemplate": {
+            "message": "请通过发货计划演变页面操作，禁止直接增删改申请记录。"
+          }
+        },
+        {
+          "ref": "request_guard_end",
+          "type": "end",
+          "upstreamRef": "request_guard_message",
+          "branchIndex": null,
+          "configTemplate": { "endStatus": -1 }
+        }
+      ]
+    }
+  ]
+}

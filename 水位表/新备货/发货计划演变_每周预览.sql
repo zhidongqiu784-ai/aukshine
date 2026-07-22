@@ -1,17 +1,25 @@
--- 一次性首次初始化生成候选：从 2026-07-13 非下单周独立建立 W1/A1。
--- 返回全部 READY 候选的 11 个创建字段，不直接 INSERT。
--- 仅供手动测试工作流使用，不得加入定时任务；正式周期继续使用原“发货计划演变_定时生成.sql”。
-
--- 发货计划演变 v2：v3.5 完整算法定时工作流候选 SQL
+-- 发货计划演变 v2：v3.5 完整算法诊断预览 SQL
+-- 本文件只读，不直接 INSERT，也不用于 simulate_shipment:create 字段映射。
 -- 数据库：MySQL 8.x
 -- 算法标识：shipment_plan_v2
--- 本 SQL 只返回本周允许创建的候选记录，不直接 INSERT。
--- 工作流须循环返回数组并调用 POST /api/simulate_shipment:create。
--- 入仓天数统一读取 v3_cfg_cycle_param：
---   淡季 warehouse_off；旺季 warehouse_peak。
--- 非下单周生成 A1；下单周继承上一周 A1 并生成 A2。
--- 旧记录不读取也不修改；首次从本周 W1 起算，后续边界只读取 shipment_plan_v2。
--- 最终输出严格限定为 simulate_shipment:create 的 11 个业务字段。
+--
+-- 业务口径：
+--   1. 每周一只新增一个前沿周；2026-07-06 为下单周锚点，之后单双周交替。
+--   2. 非下单周生成首周 A1；下单周读取上一周已落库的 A1，生成次周 A2。
+--   3. A2 = max(0, 最新两周服务期需求 - 最新起点库存位置 - A1)。
+--   4. quantity_receive 只从当天 daily_sales 的 ASIN + country + shop='合计' 读取一次。
+--   5. 未交货订单余量 = quantity_receive - W1 至下单批前一周已承诺发货量。
+--   6. 本期需下单净额 = max(0, A1 + A2 - 未交货订单余量)。
+--   7. quantity_receive 已由 RPA 分配给同 model + country 下，status 属于
+--      普通/新品/重点且 weighted_sales 最高的非变体 ASIN；本 SQL 只校验，不重新分配。
+--
+-- 当前数据限制：daily_sales 只有未交货总量，没有采购单预计出厂日期，故无法执行
+-- “按预计出厂日 FIFO、晚到订单不得占用早期发货周”的逐单匹配。本预览按总量顺序占用，
+-- 并在 factory_date_match_status 中明确标记该限制。
+--
+-- 新算法完全独立：商品与店铺来自本周事实表，首次从本周 W1 起算；
+-- 后续日期与数量边界只读取 shipment_plan_v2，不读取或修改旧模拟计划。
+-- 服务期起点库存只读取 daily_sales.v2_inventory；空值保持候选未就绪，不回退旧 inventory。
 
 WITH
 runtime AS (
@@ -125,21 +133,13 @@ receiver_snapshot AS (
     FROM today_total_ranked AS tr
 ),
 
--- 店铺集合承接销量表格：当天 inventory_base 中该 ASIN + country 的真实店铺。
+-- v3.5 / 决策 23：计划只在区域合计层生成，具体店铺由后续人工分配。
 shop_seed AS (
-    SELECT DISTINCT
-        ib.asin,
-        ib.country,
-        ib.shop
-    FROM inventory_base AS ib
-    CROSS JOIN run_phase AS rp
-    INNER JOIN base_target AS bt
-        ON bt.asin = ib.asin
-       AND bt.country = ib.country
-    WHERE DATE(ib.`date`) = rp.snapshot_date
-      AND ib.shop IS NOT NULL
-      AND TRIM(ib.shop) <> ''
-      AND ib.shop <> '合计'
+    SELECT
+        bt.asin,
+        bt.country,
+        '合计' AS shop
+    FROM base_target AS bt
 ),
 shop_lookup AS (
     SELECT
@@ -173,6 +173,7 @@ latest_v2_boundary AS (
         s.shop,
         MAX(s.add_date) AS latest_add_date
     FROM simulate_shipment AS s
+    CROSS JOIN run_phase AS rp
     WHERE s.plan_source = 'shipment_plan_v2'
       AND s.asin IS NOT NULL
       AND TRIM(s.asin) <> ''
@@ -182,6 +183,11 @@ latest_v2_boundary AS (
       AND TRIM(s.shop) <> ''
       AND s.`date` IS NOT NULL
       AND s.add_date IS NOT NULL
+      AND (
+          s.created_at IS NULL
+          OR s.created_at < rp.run_monday
+          OR s.created_at >= DATE_ADD(rp.run_monday, INTERVAL 7 DAY)
+      )
     GROUP BY s.asin, s.country, s.shop
 ),
 latest_v2_ranked AS (
@@ -198,12 +204,18 @@ latest_v2_ranked AS (
             ORDER BY s.`date` DESC, s.id DESC
         ) AS rn
     FROM simulate_shipment AS s
+    CROSS JOIN run_phase AS rp
     INNER JOIN latest_v2_boundary AS lb
         ON lb.asin = s.asin
        AND lb.country = s.country
        AND lb.shop = s.shop
        AND lb.latest_add_date = s.add_date
     WHERE s.plan_source = 'shipment_plan_v2'
+      AND (
+          s.created_at IS NULL
+          OR s.created_at < rp.run_monday
+          OR s.created_at >= DATE_ADD(rp.run_monday, INTERVAL 7 DAY)
+      )
 ),
 latest_v2_plan AS (
     SELECT
@@ -351,7 +363,7 @@ demand_calc AS (
     SELECT
         sw.*,
         (
-            SELECT MAX(ds.inventory)
+            SELECT MAX(ds.v2_inventory)
             FROM daily_sales AS ds
             WHERE ds.asin = sw.asin
               AND ds.country = sw.country
@@ -426,7 +438,7 @@ formula_calc AS (
                     CEIL(
                         GREATEST(
                             0,
-                            dc.first_week_demand - dc.inventory_at_first_service_start
+                            (dc.first_week_demand * 2) - dc.inventory_at_first_service_start
                         )
                     ) AS SIGNED
                 )
@@ -480,6 +492,17 @@ formula_calc AS (
 guard_calc AS (
     SELECT
         fc.*,
+        (
+            SELECT exact_row.id
+            FROM simulate_shipment AS exact_row
+            WHERE exact_row.asin = fc.asin
+              AND exact_row.country = fc.country
+              AND exact_row.shop = fc.shop
+              AND exact_row.`date` = fc.candidate_ship_date
+              AND exact_row.plan_source = 'shipment_plan_v2'
+            ORDER BY exact_row.id DESC
+            LIMIT 1
+        ) AS exact_candidate_plan_id,
         EXISTS (
             SELECT 1
             FROM simulate_shipment AS exact_row
@@ -509,8 +532,6 @@ candidate_rows AS (
             ELSE 'A1_FIRST_WEEK'
         END AS generation_role,
         CASE
-            WHEN gc.shop_id IS NULL THEN 'SHOP_ID_MISSING'
-            WHEN gc.shop_match_count <> 1 THEN 'SHOP_ID_AMBIGUOUS'
             WHEN COALESCE(gc.logistics_match_count, 0) = 0 THEN 'CHANNEL_CONFIG_MISSING'
             WHEN gc.logistics_match_count <> 1 THEN 'CHANNEL_CONFIG_DUPLICATE'
             WHEN gc.channel IS NULL OR TRIM(gc.channel) = '' THEN 'CHANNEL_MISSING'
@@ -527,8 +548,7 @@ candidate_rows AS (
                 THEN 'SECOND_SERVICE_WEEK_INCOMPLETE'
             WHEN gc.inventory_at_first_service_start IS NULL THEN 'START_INVENTORY_MISSING'
             WHEN gc.candidate_number IS NULL THEN 'FORMULA_NOT_READY'
-            WHEN gc.exact_candidate_exists = 1 THEN 'EXACT_CANDIDATE_ALREADY_EXISTS'
-            WHEN gc.generated_in_run_week = 1 THEN 'ALREADY_GENERATED_IN_RUN_WEEK'
+            WHEN gc.generated_in_run_week = 1 AND gc.exact_candidate_exists = 0 THEN 'ALREADY_GENERATED_IN_RUN_WEEK'
             ELSE 'READY'
         END AS generation_status
     FROM guard_calc AS gc
@@ -582,8 +602,7 @@ region_order_calc AS (
                 WHERE s.asin = rr.asin
                   AND s.country = rr.country
                   AND s.plan_source = 'shipment_plan_v2'
-                  AND s.shop IS NOT NULL
-                  AND s.shop <> '合计'
+                  AND s.shop = '合计'
                   AND s.`date` >= rr.w1_start_date
                   AND s.`date` < rr.min_batch_first_ship_date
             )
@@ -641,29 +660,149 @@ region_net_calc AS (
        AND rs.country = ro.country
 )
 SELECT
+    CASE
+        WHEN cr.generation_status <> 'READY' THEN '跳过'
+        WHEN cr.exact_candidate_plan_id IS NULL THEN '新增'
+        WHEN EXISTS (
+            SELECT 1
+            FROM shipment_plan_change_v2 AS ch
+            WHERE ch.plan_id = cr.exact_candidate_plan_id
+              AND ch.status IN (
+                  'PENDING_SUPERVISOR',
+                  'PENDING_PROCUREMENT',
+                  'PENDING_FINAL',
+                  'APPLY_PENDING',
+                  'APPLYING',
+                  'APPLIED'
+              )
+        ) THEN '跳过-审批中或已应用'
+        WHEN EXISTS (
+            SELECT 1
+            FROM simulate_shipment AS existing_plan
+            WHERE existing_plan.id = cr.exact_candidate_plan_id
+              AND existing_plan.shippment_id IS NOT NULL
+              AND TRIM(existing_plan.shippment_id) <> ''
+        ) THEN '跳过-已关联真实发货单'
+        ELSE '更新'
+    END AS write_action_zh,
+    cr.exact_candidate_plan_id,
+    -- simulate_shipment:create 对应业务字段（预览不写入）
     cr.channel,
     cr.country,
     cr.shop,
-    cr.shop_id,
+    NULL AS shop_id,
     cr.asin,
     cr.candidate_number AS `number`,
     cr.candidate_ship_date AS `date`,
     cr.candidate_season AS season,
     cr.candidate_warehouse_days AS warehouse_days,
     cr.candidate_add_date AS add_date,
-    'shipment_plan_v2' AS plan_source
+    'shipment_plan_v2' AS plan_source,
+
+    -- 本次运行与边界
+    cr.snapshot_date,
+    cr.run_monday,
+    cr.cycle_phase,
+    cr.generation_role,
+    cr.generation_status,
+    CASE cr.generation_status
+        WHEN 'CHANNEL_CONFIG_MISSING' THEN '站点未配置默认海运普线'
+        WHEN 'CHANNEL_CONFIG_DUPLICATE' THEN '站点存在多条默认海运普线配置'
+        WHEN 'CHANNEL_MISSING' THEN '物流渠道缺失'
+        WHEN 'LOGISTICS_DAYS_MISSING' THEN '物流渠道时效配置缺失'
+        WHEN 'WAREHOUSE_DAYS_MISSING' THEN '入仓天数配置缺失'
+        WHEN 'ADD_DATE_UNAVAILABLE' THEN '无法计算预计入库日期'
+        WHEN 'ADD_DATE_NOT_AFTER_LATEST' THEN '候选入库日期未晚于现有最新日期'
+        WHEN 'A1_FROM_PREVIOUS_WEEK_MISSING' THEN '下单周缺少上一周首周承诺计划'
+        WHEN 'FIRST_SERVICE_WEEK_INCOMPLETE' THEN '第一服务周预测数据不足七天'
+        WHEN 'SECOND_SERVICE_WEEK_INCOMPLETE' THEN '第二服务周预测数据不足七天'
+        WHEN 'START_INVENTORY_MISSING' THEN '服务期起点库存缺失'
+        WHEN 'FORMULA_NOT_READY' THEN '计划数量公式所需数据未准备完成'
+        WHEN 'EXACT_CANDIDATE_ALREADY_EXISTS' THEN '相同日期的新算法计划已存在'
+        WHEN 'ALREADY_GENERATED_IN_RUN_WEEK' THEN '本运行周已经生成过新算法计划'
+        WHEN 'READY' THEN '可生成'
+        ELSE CONCAT('未识别状态：', COALESCE(cr.generation_status, '空值'))
+    END AS generation_status_zh,
+    cr.latest_ship_date,
+    cr.latest_add_date,
+    cr.latest_plan_source,
+    cr.latest_committed_number,
+    cr.shop_match_count,
+    cr.logistics_match_count,
+
+    -- A1 / A2 公式追溯
+    cr.first_service_start_date,
+    cr.first_service_end_date,
+    cr.second_service_start_date,
+    cr.second_service_end_date,
+    cr.first_week_demand,
+    cr.second_week_demand,
+    cr.latest_demand,
+    cr.inventory_at_first_service_start,
+    cr.formula_start_inventory_excluding_a1,
+    cr.a1_committed_number,
+    cr.n2_unfloored,
+    cr.a1_commitment_deviation,
+
+    -- ASIN + country 区域净额；同一区域的每个店铺行会重复展示，只能取一次。
+    'ASIN_COUNTRY_TAKE_ONCE' AS region_metric_scope,
+    rn.min_batch_first_ship_date AS region_batch_first_ship_date,
+    rn.batch_week_aligned,
+    rn.region_candidate_shop_count,
+    rn.region_ready_shop_count,
+    rn.region_a1_number,
+    rn.region_a2_number,
+    rn.earlier_committed_number,
+    rn.quantity_receive,
+    rn.unfulfilled_order_remaining,
+    rn.net_order_number,
+    rn.region_net_status,
+    CASE rn.region_net_status
+        WHEN 'TODAY_TOTAL_ROW_MISSING' THEN '当天合计销量记录缺失'
+        WHEN 'SHOP_BATCH_WEEK_NOT_ALIGNED' THEN '同区域店铺下单批周次不一致'
+        WHEN 'SHOP_CANDIDATE_NOT_ALL_READY' THEN '同区域仍有店铺候选计划未准备完成'
+        WHEN 'WAIT_FOR_ORDER_WEEK' THEN '当前为非下单周，等待下单周计算净额'
+        WHEN 'READY' THEN '区域净下单量可计算'
+        WHEN 'RPA_ASSIGNMENT_NO_OPEN_ORDER' THEN '未交货订单分配校验：当前没有未交货订单'
+        WHEN 'RPA_ASSIGNMENT_MODEL_MISSING' THEN '未交货订单分配校验失败：型号缺失'
+        WHEN 'RPA_ASSIGNMENT_ASIN_STATUS_INELIGIBLE' THEN '未交货订单分配校验失败：ASIN状态不符合分配条件'
+        WHEN 'RPA_ASSIGNMENT_MULTIPLE_RECEIVERS' THEN '未交货订单分配校验失败：同型号存在多个接收ASIN'
+        WHEN 'RPA_ASSIGNMENT_NOT_MAX_WEIGHTED_SALES' THEN '未交货订单分配校验失败：未分配给加权销量最高的ASIN'
+        WHEN 'RPA_ASSIGNMENT_DUPLICATE_TODAY_TOTAL_ROW' THEN '未交货订单分配校验失败：当天合计记录重复'
+        ELSE CONCAT('未识别状态：', COALESCE(rn.region_net_status, '空值'))
+    END AS region_net_status_zh,
+
+    -- RPA 分配审计
+    rn.receiver_model,
+    rn.asin_status AS receiver_asin_status,
+    rn.receiver_weighted_sales,
+    rn.eligible_max_weighted_sales,
+    rn.positive_receiver_count_same_model,
+    rn.today_total_row_count,
+    rn.rpa_assignment_status,
+    CASE rn.rpa_assignment_status
+        WHEN 'NO_OPEN_ORDER' THEN '当前没有未交货订单'
+        WHEN 'MODEL_MISSING' THEN '型号缺失'
+        WHEN 'ASIN_STATUS_INELIGIBLE' THEN 'ASIN状态不符合普通、新品或重点的分配条件'
+        WHEN 'MULTIPLE_RECEIVERS' THEN '同国家同型号存在多个未交货订单接收ASIN'
+        WHEN 'NOT_MAX_WEIGHTED_SALES' THEN '未交货订单未分配给加权销量最高的合格ASIN'
+        WHEN 'DUPLICATE_TODAY_TOTAL_ROW' THEN '当天ASIN国家合计记录重复'
+        WHEN 'PASS' THEN '未交货订单分配校验通过'
+        ELSE CONCAT('未识别状态：', COALESCE(rn.rpa_assignment_status, '空值'))
+    END AS rpa_assignment_status_zh,
+    'AGGREGATE_ONLY_NO_FACTORY_DATE' AS factory_date_match_status,
+    '仅有未交货汇总量，尚未按采购单预计出厂日期逐单匹配' AS factory_date_match_status_zh
 FROM candidate_rows AS cr
 INNER JOIN region_net_calc AS rn
     ON rn.asin = cr.asin
    AND rn.country = cr.country
    AND rn.snapshot_date = cr.snapshot_date
    AND rn.run_monday = cr.run_monday
-WHERE cr.generation_status = 'READY'
-  AND (
-      cr.cycle_phase = 'NON_ORDER_WEEK'
-      OR rn.region_net_status = 'READY'
-  )
 ORDER BY cr.country, cr.asin, cr.shop;
 
--- HTTP 请求节点只发送以上 11 个字段；sku_1、sid_msku、msku 不生成也不发送。
--- SQL 节点测试结果如为 [记录数组, 元数据]，循环目标必须选择第 1 项记录数组。
+-- 正式工作流只允许把以下 11 个业务字段映射给 simulate_shipment:create：
+-- channel, country, shop, shop_id, asin,
+-- number, date, season, warehouse_days, add_date, plan_source
+--
+-- 使用正式 SQL 前还必须增加过滤：generation_status = 'READY'。
+-- 本预览故意保留未就绪行，方便查看缺失数据和阻断原因。

@@ -1,31 +1,48 @@
--- Formal weekly shipment_plan_v2 write SQL. Use only in the Monday workflow.
--- Production write with idempotency guards; do not run ad hoc.
+-- Formal weekly shipment_plan_v2 upsert SQL. Use only in the Monday workflow.
+-- Production write with refresh guards; do not run ad hoc.
 -- 发货计划演变 v2：v3.5 完整算法定时工作流候选 SQL
 -- 数据库：MySQL 8.x
 -- 算法标识：shipment_plan_v2
--- 本 SQL 将本周 READY 候选直接写入 simulate_shipment。
--- 使用单条 INSERT ... WITH ... SELECT 原子写入，不调用逐行接口。
+-- 本 SQL 将本周 READY 候选更新插入 simulate_shipment。
+-- 已存在且未锁定的 shipment_plan_v2 记录会刷新；缺失记录会新增。
 -- 入仓天数统一读取 v3_cfg_cycle_param：
 --   淡季 warehouse_off；旺季 warehouse_peak。
 -- 非下单周生成 A1；下单周继承上一周 A1 并生成 A2。
 -- 旧记录不读取也不修改；首次从本周 W1 起算，后续边界只读取 shipment_plan_v2。
+-- 服务期起点库存只读取 daily_sales.v2_inventory；空值保持候选未就绪，不回退旧 inventory。
 -- 写入11个业务字段，并显式写入 created_at、updated_at。
 
 START TRANSACTION;
 
-INSERT INTO simulate_shipment (
+DROP TEMPORARY TABLE IF EXISTS temp_shipment_plan_v2_weekly_candidates;
+CREATE TEMPORARY TABLE temp_shipment_plan_v2_weekly_candidates (
+    exact_candidate_plan_id BIGINT NULL,
+    exact_candidate_active_change TINYINT NOT NULL DEFAULT 0,
+    channel VARCHAR(255),
+    country VARCHAR(64),
+    shop VARCHAR(255),
+    shop_id BIGINT NULL,
+    asin VARCHAR(64),
+    number INT,
+    `date` DATE,
+    season VARCHAR(32),
+    warehouse_days INT,
+    add_date DATE,
+    plan_source VARCHAR(64),
+    INDEX idx_weekly_candidate_plan_id (exact_candidate_plan_id),
+    INDEX idx_weekly_candidate_key (asin, country, shop, `date`, plan_source)
+);
+
+INSERT INTO temp_shipment_plan_v2_weekly_candidates (
+    exact_candidate_plan_id, exact_candidate_active_change,
     channel, country, shop, shop_id, asin,
-    number, date, season, warehouse_days, add_date, plan_source,
-    created_at, updated_at
+    number, `date`, season, warehouse_days, add_date, plan_source
 )
 WITH
 runtime AS (
     SELECT
         CURDATE() AS snapshot_date,
-        DATE_ADD(
-            CURDATE(),
-            INTERVAL MOD(7 - WEEKDAY(CURDATE()), 7) DAY
-        ) AS run_monday,
+        DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY) AS run_monday,
         DATE('2026-07-06') AS order_week_anchor
 ),
 run_phase AS (
@@ -133,21 +150,13 @@ receiver_snapshot AS (
     FROM today_total_ranked AS tr
 ),
 
--- 店铺集合承接销量表格：当天 inventory_base 中该 ASIN + country 的真实店铺。
+-- v3.5 / 决策 23：计划只在区域合计层生成，具体店铺由后续人工分配。
 shop_seed AS (
-    SELECT DISTINCT
-        ib.asin,
-        ib.country,
-        ib.shop
-    FROM inventory_base AS ib
-    CROSS JOIN run_phase AS rp
-    INNER JOIN base_target AS bt
-        ON bt.asin = ib.asin
-       AND bt.country = ib.country
-    WHERE DATE(ib.`date`) = rp.snapshot_date
-      AND ib.shop IS NOT NULL
-      AND TRIM(ib.shop) <> ''
-      AND ib.shop <> '合计'
+    SELECT
+        bt.asin,
+        bt.country,
+        '合计' AS shop
+    FROM base_target AS bt
 ),
 shop_lookup AS (
     SELECT
@@ -181,6 +190,7 @@ latest_v2_boundary AS (
         s.shop,
         MAX(s.add_date) AS latest_add_date
     FROM simulate_shipment AS s
+    CROSS JOIN run_phase AS rp
     WHERE s.plan_source = 'shipment_plan_v2'
       AND s.asin IS NOT NULL
       AND TRIM(s.asin) <> ''
@@ -190,6 +200,11 @@ latest_v2_boundary AS (
       AND TRIM(s.shop) <> ''
       AND s.`date` IS NOT NULL
       AND s.add_date IS NOT NULL
+      AND (
+          s.created_at IS NULL
+          OR s.created_at < rp.run_monday
+          OR s.created_at >= DATE_ADD(rp.run_monday, INTERVAL 7 DAY)
+      )
     GROUP BY s.asin, s.country, s.shop
 ),
 latest_v2_ranked AS (
@@ -206,12 +221,18 @@ latest_v2_ranked AS (
             ORDER BY s.`date` DESC, s.id DESC
         ) AS rn
     FROM simulate_shipment AS s
+    CROSS JOIN run_phase AS rp
     INNER JOIN latest_v2_boundary AS lb
         ON lb.asin = s.asin
        AND lb.country = s.country
        AND lb.shop = s.shop
        AND lb.latest_add_date = s.add_date
     WHERE s.plan_source = 'shipment_plan_v2'
+      AND (
+          s.created_at IS NULL
+          OR s.created_at < rp.run_monday
+          OR s.created_at >= DATE_ADD(rp.run_monday, INTERVAL 7 DAY)
+      )
 ),
 latest_v2_plan AS (
     SELECT
@@ -359,7 +380,7 @@ demand_calc AS (
     SELECT
         sw.*,
         (
-            SELECT MAX(ds.inventory)
+            SELECT MAX(ds.v2_inventory)
             FROM daily_sales AS ds
             WHERE ds.asin = sw.asin
               AND ds.country = sw.country
@@ -434,7 +455,7 @@ formula_calc AS (
                     CEIL(
                         GREATEST(
                             0,
-                            dc.first_week_demand - dc.inventory_at_first_service_start
+                            (dc.first_week_demand * 2) - dc.inventory_at_first_service_start
                         )
                     ) AS SIGNED
                 )
@@ -488,6 +509,17 @@ formula_calc AS (
 guard_calc AS (
     SELECT
         fc.*,
+        (
+            SELECT exact_row.id
+            FROM simulate_shipment AS exact_row
+            WHERE exact_row.asin = fc.asin
+              AND exact_row.country = fc.country
+              AND exact_row.shop = fc.shop
+              AND exact_row.`date` = fc.candidate_ship_date
+              AND exact_row.plan_source = 'shipment_plan_v2'
+            ORDER BY exact_row.id DESC
+            LIMIT 1
+        ) AS exact_candidate_plan_id,
         EXISTS (
             SELECT 1
             FROM simulate_shipment AS exact_row
@@ -517,8 +549,6 @@ candidate_rows AS (
             ELSE 'A1_FIRST_WEEK'
         END AS generation_role,
         CASE
-            WHEN gc.shop_id IS NULL THEN 'SHOP_ID_MISSING'
-            WHEN gc.shop_match_count <> 1 THEN 'SHOP_ID_AMBIGUOUS'
             WHEN COALESCE(gc.logistics_match_count, 0) = 0 THEN 'CHANNEL_CONFIG_MISSING'
             WHEN gc.logistics_match_count <> 1 THEN 'CHANNEL_CONFIG_DUPLICATE'
             WHEN gc.channel IS NULL OR TRIM(gc.channel) = '' THEN 'CHANNEL_MISSING'
@@ -535,8 +565,7 @@ candidate_rows AS (
                 THEN 'SECOND_SERVICE_WEEK_INCOMPLETE'
             WHEN gc.inventory_at_first_service_start IS NULL THEN 'START_INVENTORY_MISSING'
             WHEN gc.candidate_number IS NULL THEN 'FORMULA_NOT_READY'
-            WHEN gc.exact_candidate_exists = 1 THEN 'EXACT_CANDIDATE_ALREADY_EXISTS'
-            WHEN gc.generated_in_run_week = 1 THEN 'ALREADY_GENERATED_IN_RUN_WEEK'
+            WHEN gc.generated_in_run_week = 1 AND gc.exact_candidate_exists = 0 THEN 'ALREADY_GENERATED_IN_RUN_WEEK'
             ELSE 'READY'
         END AS generation_status
     FROM guard_calc AS gc
@@ -590,8 +619,7 @@ region_order_calc AS (
                 WHERE s.asin = rr.asin
                   AND s.country = rr.country
                   AND s.plan_source = 'shipment_plan_v2'
-                  AND s.shop IS NOT NULL
-                  AND s.shop <> '合计'
+                  AND s.shop = '合计'
                   AND s.`date` >= rr.w1_start_date
                   AND s.`date` < rr.min_batch_first_ship_date
             )
@@ -649,19 +677,31 @@ region_net_calc AS (
        AND rs.country = ro.country
 )
 SELECT
+    cr.exact_candidate_plan_id,
+    EXISTS (
+        SELECT 1
+        FROM shipment_plan_change_v2 AS ch
+        WHERE ch.plan_id = cr.exact_candidate_plan_id
+          AND ch.status IN (
+              'PENDING_SUPERVISOR',
+              'PENDING_PROCUREMENT',
+              'PENDING_FINAL',
+              'APPLY_PENDING',
+              'APPLYING',
+              'APPLIED'
+          )
+    ) AS exact_candidate_active_change,
     cr.channel,
     cr.country,
     cr.shop,
-    cr.shop_id,
+    NULL AS shop_id,
     cr.asin,
     cr.candidate_number AS `number`,
     cr.candidate_ship_date AS `date`,
     cr.candidate_season AS season,
     cr.candidate_warehouse_days AS warehouse_days,
     cr.candidate_add_date AS add_date,
-    'shipment_plan_v2' AS plan_source,
-    NOW(3) AS created_at,
-    NOW(3) AS updated_at
+    'shipment_plan_v2' AS plan_source
 FROM candidate_rows AS cr
 INNER JOIN region_net_calc AS rn
     ON rn.asin = cr.asin
@@ -675,8 +715,54 @@ WHERE cr.generation_status = 'READY'
   )
 ORDER BY cr.country, cr.asin, cr.shop;
 
-SELECT ROW_COUNT() AS inserted_rows;
+UPDATE simulate_shipment AS target
+INNER JOIN temp_shipment_plan_v2_weekly_candidates AS cand
+    ON cand.exact_candidate_plan_id = target.id
+SET
+    target.channel = cand.channel,
+    target.shop_id = COALESCE(cand.shop_id, target.shop_id),
+    target.number = cand.number,
+    target.`date` = cand.`date`,
+    target.season = cand.season,
+    target.warehouse_days = cand.warehouse_days,
+    target.add_date = cand.add_date,
+    target.updated_at = NOW(3)
+WHERE target.plan_source = 'shipment_plan_v2'
+  AND cand.exact_candidate_active_change = 0
+  AND (target.shippment_id IS NULL OR TRIM(target.shippment_id) = '');
+
+SET @shipment_plan_v2_weekly_updated_rows = ROW_COUNT();
+
+INSERT INTO simulate_shipment (
+    channel, country, shop, shop_id, asin,
+    number, date, season, warehouse_days, add_date, plan_source,
+    created_at, updated_at
+)
+SELECT
+    cand.channel,
+    cand.country,
+    cand.shop,
+    cand.shop_id,
+    cand.asin,
+    cand.number,
+    cand.`date`,
+    cand.season,
+    cand.warehouse_days,
+    cand.add_date,
+    cand.plan_source,
+    NOW(3) AS created_at,
+    NOW(3) AS updated_at
+FROM temp_shipment_plan_v2_weekly_candidates AS cand
+WHERE cand.exact_candidate_plan_id IS NULL;
+
+SET @shipment_plan_v2_weekly_inserted_rows = ROW_COUNT();
+
+SELECT
+    @shipment_plan_v2_weekly_updated_rows AS updated_rows,
+    @shipment_plan_v2_weekly_inserted_rows AS inserted_rows;
+
+DROP TEMPORARY TABLE IF EXISTS temp_shipment_plan_v2_weekly_candidates;
 COMMIT;
 
 -- sku_1, sid_msku and msku are intentionally not inserted.
--- Re-running is protected by v2 date and run-week idempotency guards.
+-- Re-running refreshes unlocked v2 suggestions and inserts missing candidates.
