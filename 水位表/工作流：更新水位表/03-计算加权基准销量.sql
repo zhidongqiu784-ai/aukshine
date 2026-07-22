@@ -30,23 +30,18 @@ JOIN (
             country,
             ROUND(
                 CASE
-                    WHEN total_count BETWEEN 1 AND 3 THEN
-                        AVG(daily_base_sales)
+                    WHEN total_count BETWEEN 1 AND 3 THEN AVG(daily_base_sales)
                     WHEN total_count BETWEEN 4 AND 7 THEN
-                        (COALESCE(AVG(CASE WHEN row_num BETWEEN 1 AND CEIL(total_count*0.3) THEN daily_base_sales END), 0) * 0.7 +
-                         COALESCE(AVG(CASE WHEN row_num > CEIL(total_count*0.3) THEN daily_base_sales END), 0) * 0.3)
+                        (AVG(CASE WHEN row_num <= CEIL(total_count*0.3) THEN daily_base_sales END)*0.7
+                         + AVG(CASE WHEN row_num > CEIL(total_count*0.3) THEN daily_base_sales END)*0.3)
                     WHEN total_count BETWEEN 8 AND 15 THEN
-                        (COALESCE(AVG(CASE WHEN row_num BETWEEN 1 AND CEIL(total_count*0.33) THEN daily_base_sales END), 0) * 0.6 +
-                         COALESCE(AVG(CASE WHEN row_num BETWEEN CEIL(total_count*0.33)+1 AND CEIL(total_count*0.66) THEN daily_base_sales END), 0) * 0.3 +
-                         COALESCE(AVG(CASE WHEN row_num > CEIL(total_count*0.66) THEN daily_base_sales END), 0) * 0.1)
-                    WHEN total_count BETWEEN 16 AND 29 THEN
-                        (COALESCE(AVG(CASE WHEN row_num BETWEEN 1 AND 7 THEN daily_base_sales END), 0) * 0.55 +
-                         COALESCE(AVG(CASE WHEN row_num BETWEEN 8 AND 15 THEN daily_base_sales END), 0) * 0.35 +
-                         COALESCE(AVG(CASE WHEN row_num BETWEEN 16 AND total_count THEN daily_base_sales END), 0) * 0.1)
+                        (AVG(CASE WHEN row_num <= CEIL(total_count*0.33) THEN daily_base_sales END)*0.6
+                         + AVG(CASE WHEN row_num BETWEEN CEIL(total_count*0.33)+1 AND CEIL(total_count*0.66) THEN daily_base_sales END)*0.3
+                         + AVG(CASE WHEN row_num > CEIL(total_count*0.66) THEN daily_base_sales END)*0.1)
                     ELSE
-                        (COALESCE(AVG(CASE WHEN row_num BETWEEN 1 AND 7 THEN daily_base_sales END), 0) * 0.5 +
-                         COALESCE(AVG(CASE WHEN row_num BETWEEN 8 AND 15 THEN daily_base_sales END), 0) * 0.3 +
-                         COALESCE(AVG(CASE WHEN row_num BETWEEN 16 AND 30 THEN daily_base_sales END), 0) * 0.2)
+                        (AVG(CASE WHEN row_num <= 7 THEN daily_base_sales END)*0.5
+                         + AVG(CASE WHEN row_num BETWEEN 8 AND 15 THEN daily_base_sales END)*0.3
+                         + AVG(CASE WHEN row_num BETWEEN 16 AND 30 THEN daily_base_sales END)*0.2)
                 END
             , 1) AS weighted_sales_value
         FROM sales_history

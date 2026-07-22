@@ -148,12 +148,15 @@ SELECT
 
     bc.total_add, bc.total_on_the_way,
 
-    FLOOR(
-        bc.max_coefficient * COALESCE(
-            w.weighted_sales,
-            ROUND(bc.total_maybe_sales / NULLIF(bc.max_coefficient, 0), 1),
+    CAST(
+        ROUND(
+            bc.max_coefficient * COALESCE(
+                w.weighted_sales,
+                ROUND(bc.total_maybe_sales / NULLIF(bc.max_coefficient, 0), 1),
+                0
+            ),
             0
-        )
+        ) AS SIGNED
     ) AS maybe_sales,
 
     bc.overseas_warehouse_test_product, bc.overseas_warehouse_new_product, bc.max_coeff_type,

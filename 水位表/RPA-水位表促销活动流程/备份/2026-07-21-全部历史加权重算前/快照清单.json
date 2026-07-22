@@ -1,0 +1,12 @@
+{
+    "createdAt":  "2026-07-21 17:18:23 +08:00",
+    "source":  "NocoBase main",
+    "historyRows":  3541,
+    "expectedRecalculableRows":  3511,
+    "expectedWeightedChanges":  66,
+    "scope":  [
+                  "FR|B0GRB39S7G",
+                  "JP|B0CJVFJMVF",
+                  "US|B0FB3P6H48"
+              ]
+}
