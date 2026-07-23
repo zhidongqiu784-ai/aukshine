@@ -128,14 +128,12 @@ def read_sql_logged(query, conn, name):
     return df
 
 
-# ================= 创建普通中间表 =================
+# ================= 创建临时中间表 =================
 def create_work_valid_combinations(conn, cursor, table_name):
-    print(f"\n[2/9] 创建中间表 {table_name} ...")
-
-    cursor.execute(f"DROP TABLE IF EXISTS {table_name}")
+    print(f"\n[2/9] 创建临时中间表 {table_name} ...")
 
     create_sql = f"""
-        CREATE TABLE {table_name} AS
+        CREATE TEMPORARY TABLE {table_name} AS
         SELECT DISTINCT
             cs.shop,
             cs.country,
@@ -213,6 +211,7 @@ def generate_sales_forecast():
     work_suffix = int(time.time())
     work_table = f"tmp_valid_combinations_{work_suffix}"
     woot_asin_table = f"tmp_woot_asins_{work_suffix}"
+    woot_asin_lookup_table = f"tmp_woot_asins_lookup_{work_suffix}"
 
     print_title(f"开始生成数据: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"本次中间表名: {work_table}")
@@ -373,9 +372,8 @@ def generate_sales_forecast():
 
             # 6. Woot 历史
             print("\n[6/9] 生成 Woot 历史数据 (shop='woot')...")
-            cursor.execute(f"DROP TABLE IF EXISTS {woot_asin_table}")
             cursor.execute(f"""
-                CREATE TABLE {woot_asin_table} AS
+                CREATE TEMPORARY TABLE {woot_asin_table} AS
                 SELECT DISTINCT
                     ws.country,
                     ws.asin,
@@ -402,6 +400,16 @@ def generate_sales_forecast():
                 CREATE INDEX idx_woot_{work_suffix}_asin
                 ON {woot_asin_table} (asin)
             """)
+            # MySQL 同一条查询不能重复打开同一临时表，创建独立副本供子查询使用。
+            cursor.execute(f"""
+                CREATE TEMPORARY TABLE {woot_asin_lookup_table} AS
+                SELECT DISTINCT asin
+                FROM {woot_asin_table}
+            """)
+            cursor.execute(f"""
+                CREATE INDEX idx_woot_lookup_{work_suffix}_asin
+                ON {woot_asin_lookup_table} (asin)
+            """)
 
             woot_historical_query = f"""
                 SELECT
@@ -426,7 +434,7 @@ def generate_sales_forecast():
                     FROM order_list ol
                     JOIN (
                         SELECT DISTINCT asin
-                        FROM {woot_asin_table}
+                        FROM {woot_asin_lookup_table}
                     ) wa2
                       ON wa2.asin = ol.asin
                     JOIN sku sk ON sk.sku = ol.sku
@@ -453,9 +461,10 @@ def generate_sales_forecast():
             print_df_preview(woot_historical_all, "woot_historical_all", 20)
 
             # 用完删除中间表
-            cursor.execute(f"DROP TABLE IF EXISTS {work_table}")
-            cursor.execute(f"DROP TABLE IF EXISTS {woot_asin_table}")
-            print(f"\n已删除中间表: {work_table}")
+            cursor.execute(f"DROP TEMPORARY TABLE IF EXISTS {work_table}")
+            cursor.execute(f"DROP TEMPORARY TABLE IF EXISTS {woot_asin_table}")
+            cursor.execute(f"DROP TEMPORARY TABLE IF EXISTS {woot_asin_lookup_table}")
+            print(f"\n已删除临时中间表: {work_table}, {woot_asin_table}, {woot_asin_lookup_table}")
 
         woot_historical = woot_historical_all[woot_historical_all['model'].notna()].copy()
         print(f"过滤后 Woot 历史数据数: {len(woot_historical):,}")
@@ -552,12 +561,8 @@ def generate_sales_forecast():
         return final_data
 
     finally:
-        try:
-            with get_db_conn() as (conn2, cursor2):
-                cursor2.execute(f"DROP TABLE IF EXISTS {work_table}")
-                cursor2.execute(f"DROP TABLE IF EXISTS {woot_asin_table}")
-        except:
-            pass
+        # 发生异常时连接上下文会关闭，MySQL 会自动清理该连接创建的临时表。
+        pass
 
 
 # ================= 写库 =================
@@ -678,3 +683,4 @@ def main():
         print_title("执行失败", 80)
         print(str(e))
         print(traceback.format_exc())
+        raise
