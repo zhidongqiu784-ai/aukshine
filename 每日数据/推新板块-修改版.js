@@ -237,6 +237,10 @@
 
   const PAGE_SIZE_OPTIONS = ['10','20','50','100'];
   const DEFAULT_PAGE_SIZE = 20;
+  const normalizePageSize = (value) => {
+    const normalized = Number(value);
+    return PAGE_SIZE_OPTIONS.includes(String(normalized)) ? normalized : DEFAULT_PAGE_SIZE;
+  };
 
   const KW_ROLE_ORDER = ['主推', '辅1', '辅2', '辅3', '辅4'];
 
@@ -441,9 +445,9 @@
     date: '每天自动生成从今天起未来 3 个月的日期。',
     model: '每天自动从 ASIN 表同步型号。',
     sale_owner: '每天自动从 ASIN 表同步销售负责人。',
-    activity_annotation: `活动标注\n${DAILY_SYNC_TOOLTIP_TEXT}`,
+    activity_annotation: '自动同步领星的BD/LD，其他如专享/coupon等需要手动填写',
     daily_price: `购物车价格\n${DAILY_SYNC_TOOLTIP_TEXT}`,
-    promotion_days: `推广天数\n${DAILY_SYNC_TOOLTIP_TEXT}`,
+    promotion_days: '该每天5:30同步，该站点下的asin开售天数',
     list_price: `LP/WP/TP\n${DAILY_SYNC_TOOLTIP_TEXT}`,
     selling_accounts: `售卖账号\n${DAILY_SYNC_TOOLTIP_TEXT}`,
   };
@@ -1094,6 +1098,7 @@
         name: normalizeColumnViewName(id, view.name),
         type: view.type || (isDefaultColumnViewId(id) ? 'default' : 'custom'),
         payload: view.payload,
+        pageSize: view.pageSize == null ? null : normalizePageSize(view.pageSize),
         kwSubFieldHeaderColors: normalizeKwSubFieldHeaderColors(view.kwSubFieldHeaderColors || view.kw_sub_field_header_colors),
         updated_at: view.updated_at || null,
       };
@@ -1107,6 +1112,7 @@
           name: normalizeColumnViewName(id),
           type: 'default',
           payload: legacyPayload || buildColumnPayload(INITIAL_COLUMNS.map((c) => ({ ...c }))),
+          pageSize: null,
           kwSubFieldHeaderColors: {},
           updated_at: null,
         };
@@ -1235,6 +1241,7 @@
       name: DEFAULT_COLUMN_VIEW_LABELS.default_1,
       type: 'default',
       payload: Array.isArray(defaultView?.payload) ? defaultView.payload : [],
+      pageSize: normalizePageSize(defaultView?.pageSize),
       kwSubFieldHeaderColors: normalizeKwSubFieldHeaderColors(defaultView?.kwSubFieldHeaderColors),
       updated_at: defaultView?.updated_at || new Date().toISOString(),
     };
@@ -1271,6 +1278,7 @@
       name: DEFAULT_COLUMN_VIEW_LABELS.default_1,
       type: 'default',
       payload: Array.isArray(defaultView?.payload) ? defaultView.payload : [],
+      pageSize: normalizePageSize(defaultView?.pageSize),
       kwSubFieldHeaderColors: normalizeKwSubFieldHeaderColors(defaultView?.kwSubFieldHeaderColors),
       updated_at: new Date().toISOString(),
     };
@@ -2853,6 +2861,7 @@
     const [sortConfig, setSortConfig]           = useState({ key: 'daily_date', dir: 'asc' });
     const [curPage, setCurPage]                 = useState(1);
     const [pageSize, setPageSize]               = useState(DEFAULT_PAGE_SIZE);
+    const [columnViewReady, setColumnViewReady] = useState(false);
     const [total, setTotal]                     = useState(0);
     const [collapsedGroups, setCollapsedGroups] = useState({ daily: true, weekly: true, keyword_tracking: true, tool: true });
     const [editingCell, setEditingCell]         = useState(null);
@@ -3208,7 +3217,12 @@
         setColumnViewsLocal(state.views);
         setActiveColumnViewLocal(state.activeViewId);
         const activeView = state.views.find((view) => view.id === state.activeViewId) || state.views[0];
+        const savedPageSize = normalizePageSize(activeView?.pageSize);
+        pageSizeRef.current = savedPageSize;
+        setPageSize(savedPageSize);
+        setCurPage(1);
         applyColumnViewToLocal(activeView || { payload: getColumnViewPayload(state, state.activeViewId), kwSubFieldHeaderColors: {} });
+        setColumnViewReady(true);
       })();
     }, [applyColumnViewToLocal, setActiveColumnViewLocal, setColumnViewsLocal]);
 
@@ -3338,6 +3352,7 @@
           name: DEFAULT_COLUMN_VIEW_LABELS.default_1,
           type: 'default',
           payload,
+          pageSize: normalizePageSize(pageSizeRef.current),
           kwSubFieldHeaderColors: normalizeKwSubFieldHeaderColors(kwSubFieldHeaderColors),
           updated_at: new Date().toISOString(),
         };
@@ -3405,6 +3420,7 @@
           name: DEFAULT_COLUMN_VIEW_LABELS.default_1,
           type: 'default',
           payload,
+          pageSize: normalizePageSize(pageSizeRef.current),
           kwSubFieldHeaderColors: normalizeKwSubFieldHeaderColors(kwSubFieldHeaderColors),
           updated_at: now,
         };
@@ -5113,7 +5129,11 @@
       } finally { setLoading(false); }
     }, [filterAsin, filterCountry, hasRequiredUrlParams, getDateRange, buildDynamicKwCols, getDailySort, buildMergedRows, shouldShowWeeklySummary, loadWeeklySummaryRowsForDailyRows, interleaveWeeklySummaryRows, syncKeywordActualReviewQtyFromRefunds, showKwOptionalFields]);
 
-    useEffect(() => { setCurPage(1); loadData({ page: 1 }); }, [loadData]);
+    useEffect(() => {
+      if (!columnViewReady) return;
+      setCurPage(1);
+      loadData({ page: 1, size: pageSizeRef.current });
+    }, [columnViewReady, loadData]);
 
     const persistWeeklySummariesForChangedRows = useCallback(async (rows) => {
       const changedRows = (Array.isArray(rows) ? rows : [])
@@ -5200,6 +5220,7 @@
 
     const onPageChange = useCallback((page, size) => {
       if (size !== pageSizeRef.current) {
+        pageSizeRef.current = size;
         setCurPage(1);
         setPageSize(size);
         loadData({ page: 1, size, skipFormula: true });
@@ -6865,65 +6886,141 @@
       ],
       writeBackField: `new_eval_words_daily.${sub.key}`,
     });
-    const renderTooltipFormula = (formula) => {
-      const lines = Array.isArray(formula)
-        ? (formula.length ? formula : ['直接展示该指标值'])
-        : String(formula || '直接展示该指标值').split(/\r?\n/);
-      return React.createElement('div', { style: { marginBottom: '6px' } }, lines.map((line, idx) =>
-        React.createElement('div', {
-          key: `formula_${idx}`,
-          style: { marginTop: idx === 0 ? 0 : '4px' },
-        }, line)
-      ));
+    const splitTooltipText = (value) => {
+      const text = Array.isArray(value) ? value.join('\n') : String(value || '').trim();
+      if (!text) return [];
+      const lines = text.match(/[^。！？\n]+[。！？]?/g) || [text];
+      return lines.map((line) => line.trim()).filter(Boolean);
     };
-    const renderTooltip = ({ title, formula, emptyTitle = '为空情况：', emptyRules = [], fields = [], writeBackField, hideEmptyRules = false, hideFieldMapping = false, sourceInfos = [] }) => React.createElement('div', {
-      style: {
-        maxWidth: '360px',
-        fontSize: '13px',
-        lineHeight: 1.6,
-        color: 'inherit',
+    const tooltipSectionTitleStyle = {
+      marginBottom: '5px',
+      color: '#bae0ff',
+      fontSize: '12px',
+      fontWeight: 800,
+      letterSpacing: '0.02em',
+    };
+    const tooltipBodyStyle = {
+      color: 'rgba(255,255,255,0.92)',
+      fontSize: '13px',
+      lineHeight: 1.7,
+      whiteSpace: 'normal',
+      wordBreak: 'break-word',
+      overflowWrap: 'anywhere',
+      textWrap: 'pretty',
+    };
+    const tooltipFieldRowStyle = {
+      display: 'grid',
+      gridTemplateColumns: '92px minmax(0, 1fr)',
+      gap: '7px',
+      alignItems: 'start',
+    };
+    const tooltipCodeStyle = {
+      padding: '1px 5px',
+      borderRadius: '4px',
+      background: 'rgba(255,255,255,0.08)',
+      color: 'rgba(255,255,255,0.9)',
+      fontFamily: 'monospace',
+      whiteSpace: 'normal',
+      wordBreak: 'break-all',
+    };
+    const renderTooltip = ({ title, formula, emptyTitle = '为空情况：', emptyRules = [], fields = [], writeBackField, hideEmptyRules = false, hideFieldMapping = false, sourceInfos = [] }) => {
+      const formulaLines = splitTooltipText(formula || '直接展示该指标值');
+      const resolvedEmptyRules = emptyRules.length ? emptyRules : ['无特殊为空情况'];
+      return React.createElement('div', {
+        onClick: (e) => e.stopPropagation(),
+        onMouseDown: (e) => e.stopPropagation(),
+        style: {
+          width: '440px',
+          maxWidth: 'calc(100vw - 56px)',
+          color: 'inherit',
+          WebkitFontSmoothing: 'antialiased',
+        },
       },
-    },
-      React.createElement('div', { style: { fontWeight: 700, marginBottom: '6px' } }, title),
-      renderTooltipFormula(formula),
-      !hideEmptyRules && React.createElement('div', { style: { marginBottom: '2px' } }, emptyTitle),
-      !hideEmptyRules && React.createElement('ul', { style: { margin: '0 0 10px 18px', padding: 0 } },
-        (emptyRules.length ? emptyRules : ['无特殊为空情况']).map((rule, idx) =>
-          React.createElement('li', { key: `empty_${idx}` }, rule)
-        )
-      ),
-      IS_ADMIN && React.createElement('hr', { style: { border: 0, borderTop: '1px solid rgba(255,255,255,0.22)', margin: '8px 0' } }),
-      IS_ADMIN && React.createElement('div', { style: { fontSize: '12px', opacity: 0.75, lineHeight: 1.55 } },
-        React.createElement('div', { style: { fontWeight: 700, marginBottom: '4px' } }, '🔧 字段说明（开发用）'),
-        Array.isArray(sourceInfos) && sourceInfos.map((source, idx) => React.createElement('div', {
-          key: `source_${idx}`,
+        React.createElement('div', {
           style: {
-            marginBottom: '6px',
-            paddingBottom: '6px',
-            borderBottom: idx === sourceInfos.length - 1 ? 'none' : '1px dashed rgba(255,255,255,0.18)',
+            paddingBottom: '9px',
+            borderBottom: '1px solid rgba(255,255,255,0.2)',
+            color: '#fff',
+            fontSize: '14px',
+            fontWeight: 800,
+            lineHeight: 1.45,
+            textWrap: 'balance',
+          },
+        }, title),
+        React.createElement('div', { style: { paddingTop: '10px' } },
+          React.createElement('div', { style: tooltipSectionTitleStyle }, '取值与计算规则'),
+          React.createElement('div', { style: { display: 'grid', gap: '4px' } },
+            formulaLines.map((line, idx) => React.createElement('div', {
+              key: `formula_${idx}`,
+              style: tooltipBodyStyle,
+            }, line))
+          )
+        ),
+        !hideEmptyRules && React.createElement('div', {
+          style: {
+            marginTop: '10px',
+            padding: '8px 10px',
+            borderRadius: '6px',
+            background: 'rgba(255,255,255,0.08)',
           },
         },
-          React.createElement('div', null,
-            React.createElement('span', null, '来源工作流：'),
-            React.createElement('code', { style: { fontFamily: 'monospace', whiteSpace: 'normal', wordBreak: 'break-all' } }, source.workflow)
-          ),
-          source.schedule && React.createElement('div', null, `执行时间：${source.schedule}`),
-          source.scope && React.createElement('div', null, `适用站点：${source.scope}`),
-          React.createElement('div', null,
-            React.createElement('span', null, 'SQL 节点：'),
-            React.createElement('code', { style: { fontFamily: 'monospace', whiteSpace: 'normal', wordBreak: 'break-all' } }, source.node)
+          React.createElement('div', { style: { ...tooltipSectionTitleStyle, color: '#ffd591' } }, emptyTitle),
+          React.createElement('ul', {
+            style: {
+              ...tooltipBodyStyle,
+              margin: '0 0 0 18px',
+              padding: 0,
+            },
+          }, resolvedEmptyRules.map((rule, idx) => React.createElement('li', {
+            key: `empty_${idx}`,
+            style: { marginTop: idx === 0 ? 0 : '3px', paddingLeft: '2px' },
+          }, rule)))
+        ),
+        IS_ADMIN && React.createElement('div', {
+          style: {
+            marginTop: '10px',
+            paddingTop: '9px',
+            borderTop: '1px solid rgba(255,255,255,0.2)',
+            color: 'rgba(255,255,255,0.72)',
+            fontSize: '12px',
+            lineHeight: 1.65,
+          },
+        },
+          React.createElement('div', { style: { ...tooltipSectionTitleStyle, color: '#b7eb8f' } }, '🔧 字段说明（开发用）'),
+          React.createElement('div', { style: { display: 'grid', gap: '5px' } },
+            ...sourceInfos.flatMap((source, idx) => [
+              React.createElement('div', { key: `source_workflow_${idx}`, style: tooltipFieldRowStyle },
+                React.createElement('span', { style: { color: 'rgba(255,255,255,0.62)' } }, '来源工作流'),
+                React.createElement('code', { style: tooltipCodeStyle }, source.workflow)
+              ),
+              source.schedule && React.createElement('div', { key: `source_schedule_${idx}`, style: tooltipFieldRowStyle },
+                React.createElement('span', { style: { color: 'rgba(255,255,255,0.62)' } }, '执行时间'),
+                React.createElement('span', null, source.schedule)
+              ),
+              source.scope && React.createElement('div', { key: `source_scope_${idx}`, style: tooltipFieldRowStyle },
+                React.createElement('span', { style: { color: 'rgba(255,255,255,0.62)' } }, '适用站点'),
+                React.createElement('span', null, source.scope)
+              ),
+              React.createElement('div', { key: `source_node_${idx}`, style: tooltipFieldRowStyle },
+                React.createElement('span', { style: { color: 'rgba(255,255,255,0.62)' } }, 'SQL 节点'),
+                React.createElement('code', { style: tooltipCodeStyle }, source.node)
+              ),
+            ].filter(Boolean)),
+            ...(!hideFieldMapping ? (fields.length ? fields : [{ label: '字段', field: '无' }]).map((item, idx) => React.createElement('div', {
+              key: `field_${idx}`,
+              style: tooltipFieldRowStyle,
+            },
+              React.createElement('span', { style: { color: 'rgba(255,255,255,0.62)' } }, item.label),
+              React.createElement('code', { style: tooltipCodeStyle }, item.field)
+            )) : []),
+            !hideFieldMapping && React.createElement('div', { style: tooltipFieldRowStyle },
+              React.createElement('span', { style: { color: 'rgba(255,255,255,0.62)' } }, '写回字段'),
+              React.createElement('code', { style: tooltipCodeStyle }, writeBackField || '无')
+            )
           )
-        )),
-        !hideFieldMapping && (fields.length ? fields : [{ label: '字段', field: '无' }]).map((item, idx) => React.createElement('div', { key: `field_${idx}` },
-          React.createElement('span', null, `${item.label}：`),
-          React.createElement('code', { style: { fontFamily: 'monospace', whiteSpace: 'normal', wordBreak: 'break-all' } }, item.field)
-        )),
-        !hideFieldMapping && React.createElement('div', { style: { marginTop: '4px' } },
-          React.createElement('span', null, '写回字段：'),
-          React.createElement('code', { style: { fontFamily: 'monospace', whiteSpace: 'normal', wordBreak: 'break-all' } }, writeBackField || '无')
         )
-      )
-    );
+      );
+    };
     const renderHeaderText = (label) => {
       if (label === '整体关键词位实际') {
         return React.createElement(React.Fragment, null,
@@ -6936,7 +7033,8 @@
     const renderHeaderLabel = (label, tooltipData, style = {}) => React.createElement(Tooltip, {
       title: tooltipData ? renderTooltip(tooltipData) : label,
       placement: 'top',
-      overlayStyle: { maxWidth: '360px' },
+      overlayStyle: { maxWidth: '480px' },
+      overlayInnerStyle: { padding: '12px 14px', borderRadius: '8px' },
       mouseEnterDelay: 0.15,
     }, React.createElement('span', {
       style: {
@@ -7073,7 +7171,7 @@
     const primaryColorLegendItems = PRESET_COLORS.slice(0, 4);
     const extraColorLegendItems = PRESET_COLORS.slice(4);
     const renderColorLegendItem = (pc, index) => {
-      const label = index === 0 ? '默认自动取，也可手动复核' : pc.label;
+      const label = index === 0 ? '默认自动抓取，也可手动复核' : pc.label;
       return React.createElement('div', {
         key: pc.value,
         style: { display: 'flex', alignItems: 'center', gap: '2px' },
@@ -7336,7 +7434,8 @@
                         formulaTooltip && React.createElement(Tooltip, {
                           title: renderTooltip(formulaTooltip),
                           placement: 'top',
-                          overlayStyle: { maxWidth: '360px' },
+                          overlayStyle: { maxWidth: '480px' },
+                          overlayInnerStyle: { padding: '12px 14px', borderRadius: '8px' },
                           mouseEnterDelay: 0.15,
                         },
                           React.createElement('span', {
