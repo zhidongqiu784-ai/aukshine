@@ -2534,11 +2534,6 @@
           )
         : React.createElement('div', null,
             selector,
-            React.createElement('div', {
-              style: { marginBottom: 12, padding: '10px 12px', background: '#f6ffed', border: '1px solid #b7eb8f', borderRadius: 6, color: '#3f6600', lineHeight: 1.6 },
-            },
-              '这里管理的是推新板块同一批关键词；在这里新增、修改或删除，推新板块会同步变化。'
-            ),
             React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '1fr 120px 56px', gap: 8, marginBottom: 10 } },
               React.createElement(Input, {
                 value: newName,
