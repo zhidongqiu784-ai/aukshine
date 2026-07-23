@@ -397,7 +397,7 @@ SELECT IF(
     0
 );
 
--- 合计递推严格复用节点 08 的缺货重启规则。
+-- 与普通库存口径一致：缺货期间未成交需求不结转；正补货到达时从本次补货量重新起算。
 CREATE TEMPORARY TABLE temp_v2_inventory_prediction AS
 WITH RECURSIVE inventory_calc AS (
     SELECT
@@ -422,8 +422,8 @@ WITH RECURSIVE inventory_calc AS (
              AND (previous.calc_inventory - previous.demand) < 0
             THEN CAST(input.v2_add AS SIGNED)
             ELSE previous.calc_inventory
-                 - previous.demand
-                 + CAST(COALESCE(input.v2_add, 0) AS SIGNED)
+                - previous.demand
+                + CAST(COALESCE(input.v2_add, 0) AS SIGNED)
         END AS calc_inventory,
         CAST(input.demand AS SIGNED) AS demand
     FROM temp_v2_projection_input AS input

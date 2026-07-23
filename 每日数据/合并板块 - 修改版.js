@@ -444,6 +444,40 @@
   const NUM_FIELDS = new Set(['star_rating','number_of_comments','promotion_days','promo_days_40d','promo_days_90d','lp_duration_days','rsg_number','target_gap','target_order_qty','target_subcategory_rank','sales','zirandan','guanggaodan','ranking','ad_direct_order_quantity','indirect_order_volume','impressions','page_views_total','organic_traffic','return_count','return_goods_count','flash_sale_qty','flash_sale_days','prev_rank','reviews_count','promotion_volume','b2b_volume','sessions','sessions_mobile','zongliuliang','guanggaodianji','zirandianji','cpu','cpa','cpc','cpo','page_views','page_views_mobile','offsite_bg_orders','offsite_xx_orders','offsite_acc_orders','total_offsite_orders','onsite_organic_orders','onsite_ad_orders']);
   const DATE_FIELDS = new Set(['date','updatedAt']);
   const ALL_NUMERIC = new Set([...MONEY_FIELDS, ...RATE_FIELDS, ...NUM_FIELDS]);
+  const TREND_CHART_FIELDS = [
+    { key:'weekly_sales',                   src:'weekly', field:'sales',                   label:'实际总单量',                group:'fixed',              axis:'left',  valueType:'integer' },
+    { key:'weekly_zongliuliang',            src:'weekly', field:'zongliuliang',            label:'汇总流量-会话量',          group:'traffic_conversion', axis:'left',  valueType:'integer' },
+    { key:'weekly_session_conversion_rate', src:'weekly', field:'session_conversion_rate', label:'会话转化率',                group:'traffic_conversion', axis:'right', valueType:'percent' },
+    { key:'weekly_adv_rate',                src:'weekly', field:'adv_rate',                label:'广告订单量占比',            group:'ad_data',            axis:'right', valueType:'percent' },
+    { key:'weekly_impressions',             src:'weekly', field:'impressions',             label:'曝光量',                    group:'ad_data',            axis:'left',  valueType:'integer' },
+    { key:'weekly_guanggaodianji',          src:'weekly', field:'guanggaodianji',          label:'广告点击量',                group:'ad_data',            axis:'left',  valueType:'integer' },
+    { key:'weekly_guanggaohuafei',          src:'weekly', field:'guanggaohuafei',          label:'广告花费',                  group:'ad_data',            axis:'left',  valueType:'decimal' },
+    { key:'weekly_guanggaodan',             src:'weekly', field:'guanggaodan',             label:'广告总单量',                group:'ad_data',            axis:'left',  valueType:'integer' },
+    { key:'weekly_ctr',                     src:'weekly', field:'ctr',                     label:'CTR',                       group:'ad_data',            axis:'right', valueType:'percent' },
+    { key:'weekly_cpc',                     src:'weekly', field:'cpc',                     label:'CPC',                       group:'ad_data',            axis:'left',  valueType:'decimal' },
+    { key:'weekly_acos',                    src:'weekly', field:'acos',                    label:'ACOS',                      group:'ad_data',            axis:'right', valueType:'percent' },
+    { key:'weekly_guanggaocvr',             src:'weekly', field:'guanggaocvr',             label:'CVR',                       group:'ad_data',            axis:'right', valueType:'percent' },
+    { key:'weekly_cpa',                     src:'weekly', field:'cpa',                     label:'CPA',                       group:'ad_data',            axis:'left',  valueType:'decimal' },
+    { key:'weekly_cpu',                     src:'weekly', field:'cpu',                     label:'CPU',                       group:'ad_data',            axis:'left',  valueType:'decimal' },
+    { key:'profit_tacos',                   src:'profit', field:'tacos',                   label:'TACOS',                     group:'ad_data',            axis:'right', valueType:'percent' },
+    { key:'profit_net_profit_local',        src:'profit', field:'net_profit_local',        label:'纯利润（当地币）',           group:'profit',             axis:'left',  valueType:'decimal' },
+    { key:'profit_profit_margin',           src:'profit', field:'profit_margin',           label:'利润率（忽略coupon使用率）', group:'profit',             axis:'right', valueType:'percent' },
+    { key:'profit_cumulative_break_even',   src:'profit', field:'cumulative_break_even',   label:'累计盈亏平衡（当地币）',     group:'profit',             axis:'left',  valueType:'decimal' },
+  ];
+  const TREND_CHART_FIELD_GROUPS = [
+    { key:'fixed',              label:'固定列' },
+    { key:'traffic_conversion', label:'流量结构&转化' },
+    { key:'ad_data',            label:'广告数据' },
+    { key:'profit',             label:'利润数据' },
+  ];
+  const TREND_CHART_DEFAULT_FIELD_KEYS = ['weekly_sales', 'weekly_zongliuliang', 'weekly_session_conversion_rate'];
+  const TREND_CHART_LINE_COLORS = ['#38BDF8','#F59E0B','#34D399','#FB7185','#A78BFA','#F97316','#22D3EE','#E879F9','#84CC16','#FACC15','#60A5FA','#F472B6'];
+  const TREND_CHART_DATE_MODE_OPTIONS = [
+    { value:'available', label:'已有数据日期' },
+    { value:'7d',        label:'近7天' },
+    { value:'30d',       label:'近30天' },
+    { value:'custom',    label:'自定义日期' },
+  ];
 
   const isBlankLike = (v) => v === null || v === undefined || v === '';
   const toFormulaNumber = (v) => {
@@ -525,6 +559,90 @@
   const getPricingScenarioMonthlyCogs = (pricingScenarioMap, asinCountry, price, scenarioType) => {
     const key = toPricingScenarioLookupKey(asinCountry, price, scenarioType);
     return key ? pricingScenarioMap[key]?.monthly_cogs ?? null : null;
+  };
+  const parseStoredSchemeArray = (value) => {
+    if (Array.isArray(value)) return value;
+    if (typeof value !== 'string' || !value.trim()) return [];
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (_error) {
+      return [];
+    }
+  };
+  const pricingScenarioTimestamp = (candidate) => {
+    const parsed = Date.parse(candidate?.matchedAt || '');
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+  const pricingScenarioIdRank = (candidate) => {
+    const parsed = Number(candidate?.recordId);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+  const shouldReplacePricingScenario = (current, candidate) => {
+    if (!current) return true;
+    if (candidate.sourceRank !== current.sourceRank) return candidate.sourceRank > current.sourceRank;
+    if (pricingScenarioTimestamp(candidate) !== pricingScenarioTimestamp(current)) {
+      return pricingScenarioTimestamp(candidate) > pricingScenarioTimestamp(current);
+    }
+    return pricingScenarioIdRank(candidate) > pricingScenarioIdRank(current);
+  };
+  const addPricingScenarioCandidate = (map, candidate) => {
+    const key = toPricingScenarioLookupKey(candidate.asin_country, candidate.price_with_tax, candidate.scenario_type);
+    if (!key || !shouldReplacePricingScenario(map[key], candidate)) return;
+    map[key] = candidate;
+  };
+  const buildPricingScenarioLookupMap = (rows) => {
+    const map = {};
+    (Array.isArray(rows) ? rows : []).forEach((row) => {
+      const asinCountry = String(row?.asin_country || '').trim().toUpperCase();
+      const rowTimestamp = row?.updatedAt || row?.updated_at || row?.createdAt || row?.created_at || null;
+
+      parseStoredSchemeArray(row?.kept_pricing_schemes).forEach((scheme) => {
+        addPricingScenarioCandidate(map, {
+          asin_country: asinCountry,
+          scenario_type: 'normal',
+          price_with_tax: scheme?.discountPrice,
+          net_price: scheme?.netRevenue ?? null,
+          monthly_cogs: scheme?.breakdown?.procurementCost ?? null,
+          gross_profit: scheme?.unitProfit ?? null,
+          review_return_amount: null,
+          source: 'json',
+          sourceRank: 2,
+          matchedAt: scheme?.keptAt || rowTimestamp,
+          recordId: row?.id,
+        });
+      });
+
+      parseStoredSchemeArray(row?.kept_testing_schemes).forEach((scheme) => {
+        addPricingScenarioCandidate(map, {
+          asin_country: asinCountry,
+          scenario_type: 'review',
+          price_with_tax: scheme?.evaluationPrice,
+          net_price: scheme?.netRevenue ?? null,
+          monthly_cogs: null,
+          gross_profit: scheme?.paybackProfit ?? null,
+          review_return_amount: scheme?.buyerRefund ?? null,
+          source: 'json',
+          sourceRank: 2,
+          matchedAt: scheme?.keptAt || rowTimestamp,
+          recordId: row?.id,
+        });
+      });
+
+      const legacyType = String(row?.scenario_type || '').trim().toLowerCase();
+      if (legacyType === 'normal' || legacyType === 'review') {
+        addPricingScenarioCandidate(map, {
+          ...row,
+          asin_country: asinCountry,
+          scenario_type: legacyType,
+          source: 'legacy',
+          sourceRank: 1,
+          matchedAt: rowTimestamp,
+          recordId: row?.id,
+        });
+      }
+    });
+    return map;
   };
   const toNegativeMoney = (value) => {
     const n = toFormulaNumber(value);
@@ -825,7 +943,7 @@
 
   const SQL_UPDATED_FIELD_TEXT = {
     'daily.date': '每天自动生成从今天起未来 3 个月的日期。',
-    'daily.activity_annotation': '每天5:30更新',
+    'daily.activity_annotation': '每天5:30更新，自动同步领星的BD/LD，其他如专享/coupon等需要手动填写',
     'daily.daily_price': `购物车价格\n${DAILY_SYNC_TOOLTIP_TEXT}`,
     'daily.list_price': `LP/WP/TP\n${DAILY_SYNC_TOOLTIP_TEXT}`,
     'daily.star_rating': `星级\n${DAILY_SYNC_TOOLTIP_TEXT}`,
@@ -1101,28 +1219,28 @@
     },
     gross_revenue_local: {
       title: '成交额-算费率',
-      formula: '（实际总单量 - ①测评单）× 成交额-去掉税费（按折后售价匹配） + ①测评单 × 成交额-去掉税费（按测评折后价匹配）。',
-      emptyRules: ['实际总单量为空', '折后售价未匹配到成交额-去掉税费', '①测评单不为 0 时，测评折后价未匹配到成交额-去掉税费'],
+      formula: '（实际总单量 - ①测评单）× 普通订单成交售价（不含税）（按折后售价匹配） + ①测评单 × 测评订单成交售价（不含税） （按测评折后价匹配）。',
+      emptyRules: ['实际总单量为空', '普通订单成交售价（不含税）未匹配', '①测评单不为 0 时，测评订单成交售价（不含税）未匹配'],
       fields: [
         { label: '实际总单量', field: 'weekly_performance.sales' },
         { label: '①测评单', field: 'daily_asins.rsg_number' },
         { label: '折后售价', field: 'daily_asins.price_after_discount' },
         { label: '测评折后价', field: 'daily_order_link_tracking.review_discounted_price' },
-        { label: '按折后售价匹配成交额-去掉税费', field: 'daily_asins.asin_country = pricing_scenarios.asin_country; daily_asins.price_after_discount = pricing_scenarios.price_with_tax; pricing_scenarios.scenario_type = normal; return pricing_scenarios.net_price' },
-        { label: '按测评折后价匹配成交额-去掉税费', field: 'daily_asins.asin_country = pricing_scenarios.asin_country; daily_order_link_tracking.review_discounted_price = pricing_scenarios.price_with_tax; pricing_scenarios.scenario_type = review; return pricing_scenarios.net_price' },
+        { label: '普通订单成交售价（不含税）', field: 'JSON：kept_pricing_schemes[].discountPrice 匹配后取 netRevenue；旧数据回退：price_with_tax 匹配后取 net_price' },
+        { label: '测评订单成交售价（不含税）', field: 'JSON：kept_testing_schemes[].evaluationPrice 匹配后取 netRevenue；旧数据回退：price_with_tax 匹配后取 net_price' },
       ],
       writeBackField: 'daily_profit.gross_revenue_local',
     },
     net_revenue_local: {
       title: '净销售额（当地币）-算利润',
-      formula: '成交额-算费率 - （实际总单量 - ①测评单）× 成交额-去掉税费（按折后售价匹配） × 0.93 × 全新品退款占比。',
-      emptyRules: ['成交额-算费率为空', '实际总单量为空', '折后售价未匹配到成交额-去掉税费', '全新品退款占比为空'],
+      formula: '成交额-算费率 - （实际总单量 - ①测评单）× 成交售价（不含税）× 0.93 × 全新品退款占比 （按折后售价匹配）。',
+      emptyRules: ['成交额-算费率为空', '实际总单量为空', '成交售价（不含税）未匹配', '全新品退款占比为空'],
       fields: [
         { label: '成交额-算费率', field: 'daily_profit.gross_revenue_local' },
         { label: '实际总单量', field: 'weekly_performance.sales' },
         { label: '①测评单', field: 'daily_asins.rsg_number' },
         { label: '折后售价', field: 'daily_asins.price_after_discount' },
-        { label: '按折后售价匹配成交额-去掉税费', field: 'daily_asins.asin_country = pricing_scenarios.asin_country; daily_asins.price_after_discount = pricing_scenarios.price_with_tax; pricing_scenarios.scenario_type = normal; return pricing_scenarios.net_price' },
+        { label: '成交售价（不含税）', field: 'JSON：kept_pricing_schemes[].discountPrice 匹配后取 netRevenue；旧数据回退：price_with_tax 匹配后取 net_price' },
         { label: '全新品退款占比', field: 'daily_asins.asin_country = product_config.asin_country; return product_config.refund_rate_new' },
       ],
       writeBackField: 'daily_profit.net_revenue_local',
@@ -3018,6 +3136,354 @@
     );
   };
 
+  const formatTrendChartValue = (value, valueType) => {
+    const number = toFormulaNumber(value);
+    if (number == null) return '-';
+    if (valueType === 'percent') return `${(number * 100).toFixed(2).replace(/\.?0+$/, '')}%`;
+    if (valueType === 'integer' && Number.isInteger(number)) return number.toLocaleString('zh-CN');
+    return Math.abs(number) >= 1000
+      ? number.toLocaleString('zh-CN', { maximumFractionDigits: 0 })
+      : number.toLocaleString('zh-CN', { maximumFractionDigits: 2 });
+  };
+
+  const MergedTrendLineChart = ({ dates, series }) => {
+    const width = 1560;
+    const height = 700;
+    const margin = { top: 58, right: 118, bottom: 116, left: 118 };
+    const plotWidth = width - margin.left - margin.right;
+    const plotHeight = height - margin.top - margin.bottom;
+    const safeDates = Array.isArray(dates) ? dates : [];
+    const safeSeries = (Array.isArray(series) ? series : []).filter((item) => item.data.some((value) => toFormulaNumber(value) != null));
+    const [hoverIndex, setHoverIndex] = useState(null);
+
+    if (!safeDates.length || !safeSeries.length) {
+      return React.createElement('div', {
+        style: { minHeight: '360px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', background: '#111827', border: '1px solid #1f2937', borderRadius: '8px', fontSize: '16px' },
+      }, '所选条件没有真实数据');
+    }
+
+    const buildScale = (values, integerOnly = false) => {
+      const clean = values.map(toFormulaNumber).filter((value) => value != null);
+      if (!clean.length) return null;
+      let min = Math.min(...clean);
+      let max = Math.max(...clean);
+      if (integerOnly) {
+        if (min === max && min === 0) return { min: 0, max: 1, step: 1, integerOnly: true };
+        const span = Math.max(1, max - min || Math.abs(max) || Math.abs(min));
+        const paddedMin = min < 0 ? min - span * 0.08 : 0;
+        const paddedMax = max > 0 ? max + span * 0.08 : 0;
+        const roughStep = Math.max(1, (paddedMax - paddedMin) / 4);
+        const magnitude = 10 ** Math.floor(Math.log10(roughStep));
+        const normalized = roughStep / magnitude;
+        const niceNormalized = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 2.5 ? 2.5 : normalized <= 5 ? 5 : 10;
+        const step = Math.max(1, Math.ceil(niceNormalized * magnitude));
+        const scaleMin = paddedMin < 0 ? Math.floor(paddedMin / step) * step : 0;
+        const scaleMax = paddedMax > 0 ? Math.ceil(paddedMax / step) * step : 0;
+        return { min: scaleMin, max: scaleMax === scaleMin ? scaleMin + step : scaleMax, step, integerOnly: true };
+      }
+      if (min === max) {
+        if (min === 0) return { min: 0, max: 1 };
+        const pad = Math.max(Math.abs(min) * 0.12, 1);
+        return min > 0 ? { min: 0, max: min + pad } : { min: min - pad, max: 0 };
+      }
+      const pad = (max - min) * 0.08;
+      min = min < 0 ? min - pad : 0;
+      max = max > 0 ? max + pad : 0;
+      return { min, max: max === min ? min + 1 : max };
+    };
+    const leftSeries = safeSeries.filter((item) => item.axis === 'left');
+    const leftIntegerOnly = leftSeries.length > 0 && leftSeries.every((item) => (
+      item.valueType === 'integer' && item.data.every((value) => {
+        const number = toFormulaNumber(value);
+        return number == null || Number.isInteger(number);
+      })
+    ));
+    const leftScale = buildScale(leftSeries.flatMap((item) => item.data), leftIntegerOnly);
+    const rightScale = buildScale(safeSeries.filter((item) => item.axis === 'right').flatMap((item) => item.data));
+    const ticks = (scale) => {
+      if (!scale) return [];
+      if (scale.integerOnly) return Array.from({ length: Math.round((scale.max - scale.min) / scale.step) + 1 }, (_, index) => scale.min + scale.step * index);
+      return Array.from({ length: 5 }, (_, index) => scale.min + ((scale.max - scale.min) * index) / 4);
+    };
+    const xFor = (index) => safeDates.length === 1 ? margin.left + plotWidth / 2 : margin.left + (plotWidth * index) / (safeDates.length - 1);
+    const yFor = (value, scale) => margin.top + ((scale.max - Number(value)) / (scale.max - scale.min)) * plotHeight;
+    const pathFor = (item, scale) => {
+      let path = '';
+      let started = false;
+      item.data.forEach((value, index) => {
+        const number = toFormulaNumber(value);
+        if (number == null) { started = false; return; }
+        path += `${started ? 'L' : 'M'} ${xFor(index).toFixed(2)} ${yFor(number, scale).toFixed(2)} `;
+        started = true;
+      });
+      return path.trim();
+    };
+    const labelStep = Math.max(1, Math.ceil(safeDates.length / 18));
+    const activeHoverIndex = Number.isInteger(hoverIndex) && hoverIndex >= 0 && hoverIndex < safeDates.length ? hoverIndex : null;
+    const hoverDate = activeHoverIndex == null ? null : safeDates[activeHoverIndex];
+    const hoverX = activeHoverIndex == null ? null : xFor(activeHoverIndex);
+    const hoverRows = hoverDate ? safeSeries.map((item) => ({ ...item, value: item.data[activeHoverIndex] })) : [];
+    const tooltipLeft = hoverX == null ? '50%' : `${Math.min(92, Math.max(8, (hoverX / width) * 100))}%`;
+    const tooltipTransform = hoverX != null && hoverX > width * 0.62 ? 'translateX(-100%) translateX(-12px)' : 'translateX(12px)';
+
+    return React.createElement('div', {
+      style: { position: 'relative', background: '#111827', border: '1px solid #1f2937', borderRadius: '8px', padding: '18px', color: '#cbd5e1', fontVariantNumeric: 'tabular-nums' },
+      onMouseLeave: () => setHoverIndex(null),
+    },
+      React.createElement('svg', { viewBox: `0 0 ${width} ${height}`, width: '100%', height: 'auto', role: 'img', style: { display: 'block' } },
+        React.createElement('rect', { x: 0, y: 0, width, height, fill: '#111827' }),
+        ticks(leftScale || rightScale).map((tick, index) => React.createElement('line', { key: `grid_${index}`, x1: margin.left, y1: yFor(tick, leftScale || rightScale), x2: margin.left + plotWidth, y2: yFor(tick, leftScale || rightScale), stroke: '#243244', strokeWidth: 1 })),
+        ticks(leftScale).map((tick, index) => React.createElement('text', { key: `left_${index}`, x: margin.left - 14, y: yFor(tick, leftScale) + 5, textAnchor: 'end', fill: '#94a3b8', fontSize: 16, fontWeight: 700 }, formatTrendChartValue(tick, leftIntegerOnly ? 'integer' : 'decimal'))),
+        ticks(rightScale).map((tick, index) => React.createElement('text', { key: `right_${index}`, x: margin.left + plotWidth + 14, y: yFor(tick, rightScale) + 5, textAnchor: 'start', fill: '#F59E0B', fontSize: 16, fontWeight: 700 }, formatTrendChartValue(tick, 'percent'))),
+        React.createElement('line', { x1: margin.left, y1: margin.top, x2: margin.left, y2: margin.top + plotHeight, stroke: '#334155', strokeWidth: 1.5 }),
+        React.createElement('line', { x1: margin.left + plotWidth, y1: margin.top, x2: margin.left + plotWidth, y2: margin.top + plotHeight, stroke: '#334155', strokeWidth: 1.5 }),
+        React.createElement('line', { x1: margin.left, y1: margin.top + plotHeight, x2: margin.left + plotWidth, y2: margin.top + plotHeight, stroke: '#334155', strokeWidth: 1.5 }),
+        React.createElement('text', { x: margin.left, y: margin.top - 22, fill: '#94a3b8', fontSize: 17, fontWeight: 800, textAnchor: 'middle' }, '数值/金额'),
+        React.createElement('text', { x: margin.left + plotWidth, y: margin.top - 22, fill: '#F59E0B', fontSize: 17, fontWeight: 800, textAnchor: 'middle' }, '百分比'),
+        safeDates.map((date, index) => {
+          if (index % labelStep !== 0 && index !== safeDates.length - 1) return null;
+          const x = xFor(index);
+          return React.createElement('text', { key: `date_${date.key}`, x, y: margin.top + plotHeight + 34, fill: '#94a3b8', fontSize: 15, fontWeight: 700, textAnchor: 'end', transform: `rotate(-38 ${x} ${margin.top + plotHeight + 34})` }, date.label);
+        }).filter(Boolean),
+        safeSeries.map((item) => {
+          const scale = item.axis === 'right' ? rightScale : leftScale;
+          return scale ? React.createElement('path', { key: `line_${item.key}`, d: pathFor(item, scale), fill: 'none', stroke: item.color, strokeWidth: 3.2, strokeLinejoin: 'round', strokeLinecap: 'round', opacity: 0.95 }) : null;
+        }),
+        safeSeries.flatMap((item) => {
+          const scale = item.axis === 'right' ? rightScale : leftScale;
+          if (!scale) return [];
+          return item.data.map((value, index) => {
+            const number = toFormulaNumber(value);
+            return number == null ? null : React.createElement('circle', { key: `point_${item.key}_${safeDates[index].key}`, cx: xFor(index), cy: yFor(number, scale), r: 4.5, fill: item.color, stroke: '#111827', strokeWidth: 2 });
+          }).filter(Boolean);
+        }),
+        safeDates.map((date, index) => {
+          const currentX = xFor(index);
+          const prevX = index > 0 ? xFor(index - 1) : margin.left;
+          const nextX = index < safeDates.length - 1 ? xFor(index + 1) : margin.left + plotWidth;
+          const x1 = safeDates.length === 1 ? margin.left : (prevX + currentX) / 2;
+          const x2 = safeDates.length === 1 ? margin.left + plotWidth : (currentX + nextX) / 2;
+          return React.createElement('rect', { key: `hover_${date.key}`, x: x1, y: margin.top, width: Math.max(1, x2 - x1), height: plotHeight, fill: 'transparent', pointerEvents: 'all', style: { cursor: 'crosshair' }, onMouseEnter: () => setHoverIndex(index), onMouseMove: () => setHoverIndex(index) });
+        }),
+        hoverDate && React.createElement('line', { x1: hoverX, y1: margin.top, x2: hoverX, y2: margin.top + plotHeight, stroke: '#e2e8f0', strokeWidth: 1.4, strokeDasharray: '4 5', opacity: 0.72, pointerEvents: 'none' })
+      ),
+      hoverDate && React.createElement('div', {
+        style: { position: 'absolute', top: '54px', left: tooltipLeft, transform: tooltipTransform, width: '360px', maxWidth: 'calc(100% - 32px)', padding: '12px 14px', borderRadius: '8px', border: '1px solid rgba(148,163,184,0.45)', background: 'rgba(15,23,42,0.96)', color: '#e2e8f0', boxShadow: '0 18px 42px rgba(15,23,42,0.36)', zIndex: 2 },
+      },
+        React.createElement('div', { style: { color: '#f8fafc', fontWeight: 800, fontSize: '16px', marginBottom: '10px' } }, hoverDate.label),
+        React.createElement('div', { style: { display: 'grid', gap: '7px', maxHeight: '300px', overflowY: 'auto' } },
+          hoverRows.map((row) => React.createElement('div', { key: `tip_${row.key}`, style: { display: 'grid', gridTemplateColumns: '10px minmax(0,1fr) auto', alignItems: 'center', gap: '10px', fontSize: '14px' } },
+            React.createElement('span', { style: { width: '8px', height: '8px', borderRadius: '50%', background: row.color } }),
+            React.createElement('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#cbd5e1' } }, row.name),
+            React.createElement('span', { style: { color: toFormulaNumber(row.value) == null ? '#64748b' : '#f8fafc', fontWeight: 800 } }, formatTrendChartValue(row.value, row.valueType))
+          ))
+        )
+      ),
+      React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '8px 14px', padding: '6px 4px 0', maxHeight: '96px', overflowY: 'auto' } },
+        safeSeries.map((item) => React.createElement('div', { key: `legend_${item.key}`, style: { display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#cbd5e1', fontSize: '14px', fontWeight: 700 } },
+          React.createElement('span', { style: { width: '18px', height: '3px', borderRadius: '2px', background: item.color } }),
+          React.createElement('span', null, item.name)
+        ))
+      )
+    );
+  };
+
+  const MergedTrendChartModal = ({ visible, onClose, country, asin, dateRange }) => {
+    const [loading, setLoading] = useState(false);
+    const [errorText, setErrorText] = useState('');
+    const [chartRows, setChartRows] = useState([]);
+    const [selectedFieldKeys, setSelectedFieldKeys] = useState(TREND_CHART_DEFAULT_FIELD_KEYS);
+    const [dateRangeState, setDateRangeState] = useState({ scopeKey: '', value: null });
+    const [dateModeState, setDateModeState] = useState({ scopeKey: '', value: 'available' });
+    const dateRangeStart = dateRange?.[0] || '';
+    const dateRangeEnd = dateRange?.[1] || '';
+    const dateRangeScopeKey = `${country || ''}|${asin || ''}|${dateRangeStart}|${dateRangeEnd}`;
+    const selectedDateRange = dateRangeState.scopeKey === dateRangeScopeKey ? dateRangeState.value : null;
+    const dateMode = dateModeState.scopeKey === dateRangeScopeKey ? dateModeState.value : 'available';
+    const displayedDateRange = selectedDateRange || (dateRangeStart && dateRangeEnd ? [dateRangeStart, dateRangeEnd] : null);
+    const todayDate = ctx.libs.dayjs().format('YYYY-MM-DD');
+    const presetDateRange = dateMode === '7d'
+      ? [ctx.libs.dayjs().subtract(6, 'day').format('YYYY-MM-DD'), todayDate]
+      : dateMode === '30d'
+        ? [ctx.libs.dayjs().subtract(29, 'day').format('YYYY-MM-DD'), todayDate]
+        : null;
+    const queryDateStart = dateMode === 'available'
+      ? ''
+      : presetDateRange?.[0] || selectedDateRange?.[0] || dateRangeStart;
+    const queryDateEnd = dateMode === 'available'
+      ? todayDate
+      : presetDateRange?.[1] || selectedDateRange?.[1] || dateRangeEnd;
+    const fieldMap = useMemo(() => Object.fromEntries(TREND_CHART_FIELDS.map((field) => [field.key, field])), []);
+    const fieldOptionsByGroup = useMemo(() => Object.fromEntries(TREND_CHART_FIELD_GROUPS.map((group) => [
+      group.key,
+      TREND_CHART_FIELDS.filter((field) => field.group === group.key).map((field) => ({ value: field.key, label: field.label })),
+    ])), []);
+    const updateSelectedFieldsByGroup = (groupKey, groupFieldKeys) => {
+      const groupKeys = new Set(TREND_CHART_FIELDS.filter((field) => field.group === groupKey).map((field) => field.key));
+      const nextGroupKeys = new Set(Array.isArray(groupFieldKeys) ? groupFieldKeys : []);
+      setSelectedFieldKeys((currentKeys) => TREND_CHART_FIELDS.filter((field) => (
+        groupKeys.has(field.key) ? nextGroupKeys.has(field.key) : currentKeys.includes(field.key)
+      )).map((field) => field.key));
+    };
+
+    useEffect(() => {
+      if (!visible) return undefined;
+      let active = true;
+      const fetchAll = async (url, params = {}) => {
+        const rows = [];
+        for (let page = 1; page <= 1000; page += 1) {
+          const res = await ctx.request({ url, method: 'get', params: { ...params, page, pageSize: 500 } });
+          const batch = Array.isArray(res?.data?.data) ? res.data.data : [];
+          rows.push(...batch);
+          const totalPage = Number(res?.data?.meta?.totalPage);
+          if (batch.length < 500 || (Number.isFinite(totalPage) && page >= totalPage)) break;
+        }
+        return rows;
+      };
+      const fetchByKeys = async (url, field, keys) => {
+        const rows = [];
+        for (let index = 0; index < keys.length; index += 80) {
+          const chunk = keys.slice(index, index + 80);
+          rows.push(...await fetchAll(url, { filter: JSON.stringify({ [field]: { $in: chunk } }) }));
+        }
+        return rows;
+      };
+      const loadChartData = async () => {
+        setErrorText('');
+        setChartRows([]);
+        if (!country || !asin) { setLoading(false); return; }
+        try {
+          setLoading(true);
+          const filterAnd = [{ country: { $eq: country } }, { asin: { $eq: asin } }];
+          if (queryDateStart) filterAnd.push({ date: { $gte: queryDateStart } });
+          if (queryDateEnd) filterAnd.push({ date: { $lte: queryDateEnd } });
+          const dailyRows = await fetchAll('daily_asins:list', { sort: 'date', filter: JSON.stringify({ $and: filterAnd }) });
+          const dailyKeys = [...new Set(dailyRows.map((row) => row?.country_asin_date).filter(Boolean))];
+          const [weeklyRows, profitRows] = await Promise.all([
+            fetchByKeys('weekly_performance:list', 'country_asin_week', dailyKeys),
+            fetchByKeys('daily_profit:list', 'country_asin_date', dailyKeys),
+          ]);
+          if (!active) return;
+          const weeklyMap = Object.fromEntries(weeklyRows.filter((row) => row?.country_asin_week).map((row) => [row.country_asin_week, row]));
+          const profitMap = Object.fromEntries(profitRows.filter((row) => row?.country_asin_date).map((row) => [row.country_asin_date, row]));
+          const loadedDates = dailyRows.map((row) => toDateKey(row?.date)).filter(Boolean).sort();
+          if (dateMode === 'available' && !selectedDateRange && loadedDates.length && (!dateRangeStart || !dateRangeEnd)) {
+            setDateRangeState({
+              scopeKey: dateRangeScopeKey,
+              value: [dateRangeStart || loadedDates[0], dateRangeEnd || loadedDates[loadedDates.length - 1]],
+            });
+          }
+          setChartRows(dailyRows.map((row) => ({
+            key: row.country_asin_date || `${country}_${asin}_${toDateKey(row.date)}`,
+            date: toDateKey(row.date),
+            weekly: weeklyMap[row.country_asin_date] || {},
+            profit: profitMap[row.country_asin_date] || {},
+          })).filter((row) => row.date));
+        } catch (error) {
+          if (active) { setChartRows([]); setErrorText(`加载图表数据失败：${error?.message || '未知错误'}`); }
+        } finally {
+          if (active) setLoading(false);
+        }
+      };
+      loadChartData();
+      return () => { active = false; };
+    }, [visible, country, asin, queryDateStart, queryDateEnd, dateRangeScopeKey, dateMode]);
+
+    const chartPayload = useMemo(() => {
+      const rowsWithSelectedData = chartRows.filter((row) => selectedFieldKeys.some((key) => {
+        const field = fieldMap[key];
+        return field && toFormulaNumber(row[field.src]?.[field.field]) != null;
+      }));
+      const dates = rowsWithSelectedData.map((row) => ({ key: row.key, label: row.date }));
+      const series = selectedFieldKeys.map((key, index) => {
+        const field = fieldMap[key];
+        if (!field) return null;
+        return { key, name: field.label, axis: field.axis, valueType: field.valueType, color: TREND_CHART_LINE_COLORS[index % TREND_CHART_LINE_COLORS.length], data: rowsWithSelectedData.map((row) => toFormulaNumber(row[field.src]?.[field.field])) };
+      }).filter(Boolean);
+      return { dates, series };
+    }, [chartRows, fieldMap, selectedFieldKeys]);
+    const availableDataDates = chartRows.filter((row) => TREND_CHART_FIELDS.some((field) => (
+      toFormulaNumber(row[field.src]?.[field.field]) != null
+    ))).map((row) => row.date).filter(Boolean).sort();
+    const availableDateRange = availableDataDates.length ? [availableDataDates[0], todayDate] : null;
+    const pickerDateRange = dateMode === 'custom'
+      ? displayedDateRange
+      : presetDateRange || availableDateRange;
+
+    return React.createElement(Modal, {
+      title: country && asin ? `合并板块趋势图：${country}_${asin}` : '合并板块趋势图',
+      open: visible,
+      visible,
+      onCancel: onClose,
+      footer: null,
+      width: 'min(1680px, calc(100vw - 32px))',
+      destroyOnClose: false,
+      bodyStyle: { padding: '16px 20px 20px', maxHeight: 'calc(100vh - 96px)', overflowY: 'auto' },
+    },
+      !country || !asin
+        ? React.createElement('div', { style: { padding: 24, color: '#999' } }, '请先筛选到具体国家和 ASIN。')
+        : React.createElement('div', null,
+          React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'flex-end', marginBottom: '12px' } },
+            React.createElement('div', { style: { flex: '1 1 100%', minWidth: 0 } },
+              React.createElement('div', { style: { marginBottom: '4px', fontWeight: 700, color: '#334155' } }, '选择指标字段'),
+              React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px' } },
+                TREND_CHART_FIELD_GROUPS.map((group) => React.createElement('div', { key: `trend_group_${group.key}`, style: { minWidth: 0 } },
+                  React.createElement('div', { style: { marginBottom: '4px', color: '#64748b', fontSize: `${FONT_SIZE_XS}px`, fontWeight: 700 } }, group.label),
+                  React.createElement(Select, {
+                    mode: 'multiple',
+                    allowClear: true,
+                    showSearch: true,
+                    placeholder: `选择${group.label}字段`,
+                    value: selectedFieldKeys.filter((key) => fieldMap[key]?.group === group.key),
+                    options: fieldOptionsByGroup[group.key] || [],
+                    onChange: (values) => updateSelectedFieldsByGroup(group.key, values),
+                    optionFilterProp: 'label',
+                    maxTagCount: 'responsive',
+                    style: { width: '100%' },
+                  })
+                ))
+              )
+            ),
+            React.createElement('div', { style: { flex: '0 1 180px', minWidth: '150px' } },
+              React.createElement('div', { style: { marginBottom: '4px', fontWeight: 700, color: '#334155' } }, '日期选择'),
+              React.createElement(Select, {
+                value: dateMode,
+                options: TREND_CHART_DATE_MODE_OPTIONS,
+                onChange: (value) => {
+                  setDateModeState({ scopeKey: dateRangeScopeKey, value });
+                  if (value !== 'custom') setDateRangeState({ scopeKey: dateRangeScopeKey, value: null });
+                },
+                style: { width: '100%' },
+              })
+            ),
+            React.createElement('div', { style: { flex: '0 1 320px', minWidth: '260px' } },
+              React.createElement('div', { style: { marginBottom: '4px', fontWeight: 700, color: '#334155' } }, '选择日期范围'),
+              React.createElement(DatePicker.RangePicker, {
+                locale: DATE_PICKER_LOCALE,
+                value: pickerDateRange?.[0] && pickerDateRange?.[1]
+                  ? [ctx.libs.dayjs(pickerDateRange[0]), ctx.libs.dayjs(pickerDateRange[1])]
+                  : null,
+                onChange: (dates) => {
+                  const value = dates?.[0] && dates?.[1]
+                    ? [dates[0].format('YYYY-MM-DD'), dates[1].format('YYYY-MM-DD')]
+                    : null;
+                  setDateRangeState({ scopeKey: dateRangeScopeKey, value });
+                  setDateModeState({ scopeKey: dateRangeScopeKey, value: value ? 'custom' : 'available' });
+                },
+                placeholder: ['开始日期', '结束日期'],
+                allowClear: true,
+                style: { width: '100%' },
+              })
+            ),
+            React.createElement('div', { style: { color: '#64748b', fontSize: `${FONT_SIZE_XS}px`, paddingBottom: '6px', whiteSpace: 'nowrap' } }, loading ? '正在加载真实数据...' : `共 ${chartPayload.dates.length} 个有效日期点`)
+          ),
+          errorText && React.createElement('div', { style: { marginBottom: '12px', padding: '8px 10px', background: '#fff1f0', border: '1px solid #ffccc7', borderRadius: '6px', color: '#cf1322' } }, errorText),
+          React.createElement(MergedTrendLineChart, { dates: chartPayload.dates, series: chartPayload.series }),
+          React.createElement('div', { style: { marginTop: '8px', color: '#64748b', fontSize: `${FONT_SIZE_XS}px` } }, '说明：已有数据日期为最早真实指标日期至今天；0 视为有效数据，空值不会占用横轴日期。')
+        )
+    );
+  };
+
   // MergedTable 主组件
   // MergedTable 主组件
   // MergedTable 主组件
@@ -3032,6 +3498,7 @@
     const [formulaProgress, setFormulaProgress] = useState({ active: false, label: '', percent: 0 });
     const [showPanel, setShowPanel]             = useState(false);
     const [showPush, setShowPush]               = useState(false);
+    const [trendChartVisible, setTrendChartVisible] = useState(false);
     const [competitorManagerVisible, setCompetitorManagerVisible] = useState(false);
     const [keywordManagerVisible, setKeywordManagerVisible] = useState(false);
     const [couponManagerVisible, setCouponManagerVisible] = useState(false);
@@ -4174,15 +4641,10 @@
         }
         reportProgress(allDailyRows && allDailyRows.length <= rows.length ? '正在读取当前行关联数据...' : '正在读取试算与关联数据...', 22);
         const pricingScenarioRows = await fetchAllByIn('pricing_scenarios:list', 'asin_country', asinCountries, {
-          extraAnd: [{ scenario_type: { $in: ['normal', 'review'] } }],
           chunkSize: 80,
           pageSize: 500,
         }).catch(() => []);
-        const pricingScenarioMap = {};
-        pricingScenarioRows.forEach((row) => {
-          const lookupKey = toPricingScenarioLookupKey(row?.asin_country || '', row?.price_with_tax, row?.scenario_type);
-          if (lookupKey) pricingScenarioMap[lookupKey] = row;
-        });
+        const pricingScenarioMap = buildPricingScenarioLookupMap(pricingScenarioRows);
         const allDailyKeys = [...new Set(dailyRowsForFormula.map((row) => row?.country_asin_date).filter(Boolean))];
         const existingProfitRows = await fetchAllByIn('daily_profit:list', 'country_asin_date', allDailyKeys.length ? allDailyKeys : keys, {
           chunkSize: 80,
@@ -8860,7 +9322,7 @@
     const primaryColorLegendItems = PRESET_COLORS.slice(0, 4);
     const extraColorLegendItems = PRESET_COLORS.slice(4);
     const renderColorLegendItem = (pc, index) => {
-      const label = index === 0 ? '默认自动取，也可手动复核' : pc.label;
+      const label = index === 0 ? '默认自动抓取，也可手动复核' : pc.label;
       return React.createElement('div', {
         key: pc.value,
         style: { display: 'flex', alignItems: 'center', gap: '2px' },
@@ -8913,6 +9375,7 @@
       targetManagerModal,
       couponManagerModal,
       competitorManagerModal,
+      React.createElement(MergedTrendChartModal, { visible: trendChartVisible, onClose: () => setTrendChartVisible(false), country: filterCountry, asin: filterAsin, dateRange: getDateRange }),
       React.createElement('div', {
         style: { display: 'flex', alignItems: 'center', columnGap: '14px', rowGap: '6px', flexWrap: 'wrap', marginBottom: '4px' },
       },
@@ -8999,6 +9462,7 @@
           React.createElement('button', { type: 'button', onClick: openCompetitorManager, disabled: !currentCountryAsin, style: { ...btnStyle('#EB6793', '#fff', '#d84f7c'), opacity: currentCountryAsin ? 1 : 0.6, cursor: currentCountryAsin ? 'pointer' : 'not-allowed' } }, '管理竞对 ASIN'),
           React.createElement('button', { type: 'button', onClick: openKeywordManager, disabled: !currentCountryAsin, style: { ...btnStyle('#EB6793', '#fff', '#d84f7c'), opacity: currentCountryAsin ? 1 : 0.6, cursor: currentCountryAsin ? 'pointer' : 'not-allowed' } }, '管理 SQP 关键词'),
           React.createElement('button', { type: 'button', onClick: openCouponManager, disabled: !currentAsinCountry, style: { ...btnStyle('#EB6793', '#fff', '#d84f7c'), opacity: currentAsinCountry ? 1 : 0.6, cursor: currentAsinCountry ? 'pointer' : 'not-allowed' } }, '管理 Coupon 预估比例'),
+          React.createElement('button', { type: 'button', onClick: () => { setTrendChartVisible(true); setShowPanel(false); setShowPush(false); setShowCrossHighlightPanel(false); }, disabled: !currentCountryAsin, style: { ...btnStyle('#EB6793', '#fff', '#d84f7c'), opacity: currentCountryAsin ? 1 : 0.6, cursor: currentCountryAsin ? 'pointer' : 'not-allowed' } }, '打开图表'),
         ),
 
         React.createElement('div', {
@@ -9477,4 +9941,3 @@
   ctx.render(React.createElement(TableApp));
 }
 run();
-

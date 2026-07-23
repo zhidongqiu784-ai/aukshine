@@ -935,19 +935,17 @@ function v19Button(textValue, onClick, kind = 'ghost', disabled = false, extra =
   }, textValue);
 }
 
-function V19ScopeBar({ selectedSale, saleOptions, productCount, loading, onSaleChange, onRefresh }) {
+function V19ScopeControls({ selectedSale, saleOptions, productCount, loading, onSaleChange }) {
   const selectStyle = { width: 176, fontSize: 12.5 };
-  return h('div', { style: { background: '#f8fafc', border: '1px solid #dfe4eb', borderRadius: 8, padding: '8px 11px', marginBottom: 10 } },
-    h('div', { style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } },
-      h('b', { style: { fontSize: 12.5, color: '#3a4763' } }, '商品范围'),
-      CAN_SELECT_SALE
-        ? h(React.Fragment, null,
-          h('span', { style: { fontSize: 12.5, color: '#5a6169' } }, '销售'),
-          h(Select, { size: 'small', value: selectedSale, options: saleOptions, onChange: onSaleChange, showSearch: true, optionFilterProp: 'label', loading, style: selectStyle }))
-        : h('span', { style: { fontSize: 12.5, fontWeight: 700, color: '#1a5fb4', background: '#e7f0fd', border: '1px solid #b9d4f5', borderRadius: 6, padding: '2px 9px' } }, `当前销售：${CURRENT_USERNAME || '未识别'}`),
-      h('span', { style: { fontSize: 12, color: '#5a6169' } }, `${productCount} 个 ASIN`),
-      h('span', { style: { marginLeft: 6, fontSize: 12.5, fontWeight: 700, color: '#1a5fb4', background: '#e7f0fd', border: '1px solid #b9d4f5', borderRadius: 6, padding: '2px 9px' } }, '区域合计口径'),
-      h(Button, { size: 'small', loading, icon: h(ReloadOutlined || 'span'), onClick: onRefresh, style: { marginLeft: 'auto', height: 27, fontSize: 12 } }, '刷新')));
+  return h(React.Fragment, null,
+    h('b', { style: { fontSize: 12.5, color: '#3a4763' } }, '商品范围'),
+    CAN_SELECT_SALE
+      ? h(React.Fragment, null,
+        h('span', { style: { fontSize: 12.5, color: '#5a6169' } }, '销售'),
+        h(Select, { size: 'small', value: selectedSale, options: saleOptions, onChange: onSaleChange, showSearch: true, optionFilterProp: 'label', loading, style: selectStyle }))
+      : h('span', { style: { fontSize: 12.5, fontWeight: 700, color: '#1a5fb4', background: '#e7f0fd', border: '1px solid #b9d4f5', borderRadius: 6, padding: '2px 9px' } }, `当前销售：${CURRENT_USERNAME || '未识别'}`),
+    h('span', { style: { fontSize: 12, color: '#5a6169' } }, `${productCount} 个 ASIN`),
+    h('span', { style: { fontSize: 12.5, fontWeight: 700, color: '#1a5fb4', background: '#e7f0fd', border: '1px solid #b9d4f5', borderRadius: 6, padding: '2px 9px' } }, '区域合计口径'));
 }
 
 function V19RoleBar({ role, mine, counts, batchSigned, poGenerated, orderWeek, onRole, onMine, onBatch, onGeneratePO, onAllPass }) {
@@ -984,9 +982,7 @@ function V19RoleBar({ role, mine, counts, batchSigned, poGenerated, orderWeek, o
   role === 'sale' ? h(Button, { onClick: onAllPass, size: 'small', 'aria-disabled': true, style: { marginLeft: 'auto', height: 31, borderRadius: 7, background: '#f2f4f7', borderColor: '#d8dde5', color: '#8a9099', cursor: 'not-allowed', fontSize: 12.5, fontWeight: 700 } },
     '✓ 全表一键通过 · 工作流尚未启用') : null,
   h('span', { style: { border: '1px solid #e8b45a', background: '#fff8ea', color: '#8a5a00', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 700 } },
-    orderWeek ? '📅 本周 = 下单周：W7 新排待确认 · 周二合并 W6 下 PO' : '📅 本周 = 非下单周：仅新排 W6 · 下周合并 W7 下 PO'),
-  h('span', { style: { width: '100%', fontSize: 11.5, color: '#8a9099', marginTop: 2 } },
-    '同一张表、同一个 URL，角色 = 筛选视角 + 按钮组合（规格 S0）。侧边栏「审核中心」已降级为一个「待办 (N)」深链接：点击 = 打开本表 + 自动激活「待我处理」。徽章数 = 状态机流到该角色的对象数。'));
+    orderWeek ? '📅 本周 = 下单周：W7 新排待确认 · 周二合并 W6 下 PO' : '📅 本周 = 非下单周：仅新排 W6 · 下周合并 W7 下 PO'));
 }
 
 function V19Legend() {
@@ -1810,6 +1806,8 @@ function V19ChangeDrawer({ detail, role, changes, auditNote, onAuditNote, onClos
     h('div', { style: { fontSize: 13.5, fontWeight: 700, margin: '6px 0 8px', paddingLeft: 9, borderLeft: '3px solid #3370ff' } }, '发货计划与推算'),
     h('table', { style: { width: '100%', borderCollapse: 'collapse', fontSize: 12.5 } }, h('tbody', null,
       ...[['ASIN', row.product.asin], ['发货周次', `W${weekIndex + 1} · ${shortDate(week.start)}~${shortDate(week.end)}`], ['合计到货', `${fmt(actualQty + suggestQty)} 台（实际 ${fmt(actualQty)} / 建议 ${fmt(suggestQty)}）`], ['覆盖售卖期', `${shortDate(week.coverStart)}~${shortDate(week.coverEnd)}`], ['计划来源', planSourceText], ['真实在途明细', actualSourceText || '-'], ['建议明细/渠道', suggestSourceText || '-']].map((item) => h('tr', { key: item[0] }, h('td', { style: { border: '1px solid #d4dae3', padding: '6px 11px', background: '#dde4ee', fontWeight: 700, color: '#3a4763', width: 96 } }, item[0]), h('td', { style: { border: '1px solid #d4dae3', padding: '6px 11px' } }, item[1]))))),
+    h('div', { style: { fontSize: 13.5, fontWeight: 700, margin: '18px 0 8px', paddingLeft: 9, borderLeft: '3px solid #3370ff' } }, '覆盖售卖期计算'),
+    v19CoverageCalculation(week),
     h('div', { style: { fontSize: 13.5, fontWeight: 700, margin: '18px 0 8px', paddingLeft: 9, borderLeft: '3px solid #e09c1e' } }, '修改申请 ', h('span', { style: { fontWeight: 400, fontSize: 11.5, color: '#8a9099' } }, '推导与验算已并入趋势行（参数卡 + 曲线 + 模拟）—— 回表展开该行即见')),
     h('div', { style: { display: 'inline-block', padding: '5px 10px', borderRadius: 7, fontSize: 12.5, fontWeight: 800, marginBottom: 7, background: style.bg, border: `1px solid ${style.border}`, color: style.color } }, statusBody),
     change ? h('div', { style: { border: '1px solid #e8912a', background: '#fffaf3', borderRadius: 8, padding: '8px 10px', marginBottom: 8, fontSize: 12.5 } },
@@ -1876,6 +1874,34 @@ function V19FinalPanel({ rows, changes, signed, poGenerated, approved, onApprove
     h('div', { style: { padding: '11px 16px', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' } }, approved ? null : v19Button('通过全部待终审申请', onApprove, 'blue', !can), approved ? null : v19Button('个别调整（仅标红项）', null, 'ghost', true), h('span', { style: { fontSize: 11.5, color: '#7a68b8', width: '100%', lineHeight: 1.6 } }, `按钮只处理真实状态为“待终审”的申请；主管、采购、锁状态与乐观锁均由审核工作流服务端再次校验。${approved ? '' : can ? '' : ' 当前没有可终审申请，按钮置灰。'}`)));
 }
 
+function v19DaysBetween(startValue, endValue) {
+  const start = parseDate(startValue);
+  const end = parseDate(endValue);
+  return start && end ? Math.round((end - start) / 86400000) : null;
+}
+
+function v19CoverageCalculation(week) {
+  const plans = (week?.rows || []).filter((plan) => parseDate(plan.date) && parseDate(plan.add_date));
+  if (!plans.length) return h('div', { style: { padding: '9px 11px', background: '#f7f9fc', color: '#8a9099', fontSize: 12, borderRadius: 6 } }, '该周没有可计算覆盖售卖期的建议计划。');
+  return h('div', { style: { background: '#f7f9fc', border: '1px solid #e1e7ef', borderRadius: 6, padding: '8px 11px', fontSize: 12, color: '#3a4763', lineHeight: 1.7 } },
+    ...plans.map((plan, index) => {
+      const warehouseDays = Math.max(0, numberValue(plan.warehouse_days));
+      const totalDays = v19DaysBetween(plan.date, plan.add_date);
+      const logisticsDays = totalDays == null ? null : Math.max(0, totalDays - warehouseDays);
+      const coverStart = addDays(plan.add_date, 7);
+      const coverEnd = addDays(plan.add_date, 13);
+      return h('div', {
+        key: plan.id || index,
+        style: { borderTop: index ? '1px solid #dfe5ed' : 'none', paddingTop: index ? 8 : 0, marginTop: index ? 8 : 0 },
+      },
+      plans.length > 1 ? h('div', { style: { fontWeight: 700, marginBottom: 2 } }, `计划 ${index + 1}`) : null,
+      h('div', null, `发货日：${dateText(plan.date)} · 渠道：${plan.channel || '-'}`),
+      h('div', null, `物流天数：${logisticsDays == null ? '-' : `${logisticsDays} 天`} · 入仓天数：${warehouseDays} 天`),
+      h('div', null, `预计入库：${dateText(plan.date)} + ${logisticsDays == null ? '-' : logisticsDays} 天 + ${warehouseDays} 天 = ${dateText(plan.add_date)}`),
+      h('div', null, `覆盖售卖期：${dateText(plan.add_date)} + 7～13 天 = ${dateText(coverStart)}～${dateText(coverEnd)}`));
+    }));
+}
+
 function V19Table({ rows, allScopeRows, changes, confirmedRows, role, orderWeek, poApproved, logisticsLeads, onEdit, onOpenDetail }) {
   const [expanded, setExpanded] = useState({}); const [w12Open, setW12Open] = useState(false); const [sandboxes, setSandboxes] = useState({});
   const shownIndices = w12Open ? [0, 1, 2, 3, 4, 5, 6] : ['fold', 2, 3, 4, 5, 6];
@@ -1884,6 +1910,10 @@ function V19Table({ rows, allScopeRows, changes, confirmedRows, role, orderWeek,
   const sumFor = (index) => allScopeRows.reduce((sum, row) => sum + v19WeekValue(row, index, changes), 0);
   const actualSumFor = (index) => allScopeRows.reduce((sum, row) => sum + v19ActualWeekValue(row, index), 0);
   const netSum = allScopeRows.reduce((sum, row) => sum + v19NetOf(row, changes).net, 0);
+  const headerCoverage = (index) => {
+    const week = rows.map((row) => row.weeks[index]).find((item) => item?.coverStart && item?.coverEnd);
+    return week ? `${shortDate(week.coverStart)}～${shortDate(week.coverEnd)}` : '—';
+  };
   const weekCellBody = (total, actual, suggest) => h(React.Fragment, null,
     total ? fmt(total) : '—',
     actual ? h('span', { style: { fontSize: 10, marginLeft: 2 } }, '🔒') : null,
@@ -1894,7 +1924,7 @@ function V19Table({ rows, allScopeRows, changes, confirmedRows, role, orderWeek,
         h('tr', null, th('商品信息（看一眼就能初判：要不要备、能不能备）', { colSpan: 9, style: { background: '#dcefe3', color: '#1a6d49', fontWeight: 800, fontSize: 14 } }), th('发货周次（备货当周 7/6 不进表 · W1 = 7/13 → W7 = 8/24；前沿 W6–W7 按净额交采购）', { colSpan: shownIndices.length, style: { background: '#d8b072', color: '#6b4a17', fontWeight: 800, fontSize: 14 } }), th(h('span', null, '需新下厂', h('span', { style: { display: 'block', fontWeight: 400, fontSize: 11, color: '#b08430' } }, '净额 · PO 唯一依据')), { rowSpan: 4, style: { background: '#fff4e2', color: '#8a5a00', borderBottom: '2px solid #e8b45a', minWidth: 145 } })),
         h('tr', null, th('趋势', { rowSpan: 3, style: { background: '#eaf5ee', color: '#2c6a4c' } }), ...['站点', '销售', '型号', 'ASIN', '加权日均', '等级', '库销比', '产品标签'].map((value) => th(value, { rowSpan: 3, style: { background: '#eaf5ee', color: '#2c6a4c', fontWeight: 700 } })), ...shownIndices.map((index) => index === 'fold' ? th('W1–W2 🔒', { onClick: () => setW12Open(true), style: { background: '#ededf0', color: '#6a727d', cursor: 'pointer' } }) : th(`W${index + 1}`, { style: { background: index >= 5 ? '#efeaff' : '#f3e6cf', color: index >= 5 ? '#5b3fc4' : '#7a5a24', fontWeight: 700 } }))),
         h('tr', null, ...shownIndices.map((index) => index === 'fold' ? th(`${shortDate(headerWeeks[0].start)}~${shortDate(headerWeeks[1].end)}`, { style: { background: '#ededf0', color: '#8a9099', fontSize: 11 } }) : th(`${shortDate(headerWeeks[index].start)}~${shortDate(headerWeeks[index].end)}`, { style: { background: index >= 5 ? '#efeaff' : '#f7edda', color: index >= 5 ? '#6b4fd0' : '#8a6a2e', fontSize: 11 } }))),
-        h('tr', null, ...shownIndices.map((index) => index === 'fold' ? th('点开看两周', { style: { background: '#ededf0', color: '#8a9099', fontSize: 10 } }) : th(h('span', null, '覆盖售卖期 ', h('span', { style: { color: index >= 5 ? '#6b4fd0' : '#b06a1e' } }, `${shortDate(addDays(headerWeeks[index].start, 40))}~${shortDate(addDays(headerWeeks[index].end, 40))}`)), { style: { background: index >= 5 ? '#efeaff' : '#fbf5e8', color: '#a07a3a', fontSize: 10 } })))),
+        h('tr', null, ...shownIndices.map((index) => index === 'fold' ? th('点开看两周', { style: { background: '#ededf0', color: '#8a9099', fontSize: 10 } }) : th(h('span', null, '覆盖售卖期 ', h('span', { style: { color: index >= 5 ? '#6b4fd0' : '#b06a1e' } }, headerCoverage(index))), { style: { background: index >= 5 ? '#efeaff' : '#fbf5e8', color: '#a07a3a', fontSize: 10 } })))),
       h('tbody', null,
         ...rows.flatMap((row, rowIndex) => {
           const open = Boolean(expanded[row.key]); const confirmed = Boolean(confirmedRows?.[row.key]); const lifeName = v19LifeName(row); const lifeStyle = V19_LIFE[lifeName] || { bg: '#eef1f5', color: '#5a6169' }; const ratioColor = row.ratio.name === '短缺' ? '#c0392b' : row.ratio.name === '滞销' ? '#b06a1e' : '#1a6d49'; const net = v19NetOf(row, changes);
@@ -1906,7 +1936,8 @@ function V19Table({ rows, allScopeRows, changes, confirmedRows, role, orderWeek,
               return h('td', { key: 'fold', onClick: () => setW12Open(true), style: { background: '#ededf0', color: '#6a727d', fontSize: 11, cursor: 'pointer', minWidth: 84, borderBottom: border, borderRight: border, textAlign: 'center', fontWeight: 700 } }, weekCellBody(suggest, actual, suggest));
             }
             const week = row.weeks[index]; const key = v19ChangeKey(row.key, index); const change = changes[key]; const value = v19WeekValue(row, index, changes); const actual = v19ActualWeekValue(row, index); const sandbox = sandboxes[row.key]?.[index]; const displaySuggest = sandbox?.qty == null ? value : numberValue(sandbox.qty); const displayValue = displaySuggest; const status = change?.status || 'ok'; const statusStyle = V19_STATUS_STYLE[status]; const newAlgorithm = week.newQty > 0; const actualLocked = actual > 0;
-            return h(Tooltip, { key: index, title: sandbox ? `模拟沙盘：建议 ${fmt(value)} → ${fmt(displaySuggest)} 台；实际在途 ${fmt(actual)} 台不变` : change ? `${V19_CHANGE_MARK[change.type]} ${V19_CHANGE_LABEL[change.type]}：建议 ${fmt(change.from)} → ${fmt(change.to)} 台 · ${V19_STATUS_TEXT[status]} · ${change.reason}` : week.rows.length || week.actualRows.length ? `点击查看：新算法建议 ${week.rows.length} 条，真实在途 ${week.actualRows.length} 条` : '该周无排；点击可提出修改申请' }, h('td', { onClick: () => onOpenDetail(row, index), style: { position: 'relative', minWidth: 98, padding: '8px 7px', textAlign: 'center', borderBottom: border, borderRight: border, cursor: 'pointer', fontWeight: change || displayValue ? 800 : 500, color: sandbox ? '#5b3fc4' : change ? statusStyle.color : displayValue ? '#1f2329' : '#c2c8d0', background: sandbox ? '#f2edff' : actualLocked ? '#fffaf1' : index >= 5 ? '#f6f3ff' : index < 2 ? '#ededf0' : statusStyle.bg, boxShadow: sandbox ? 'inset 0 0 0 2px #8b6cf0' : change && status !== 'ok' ? `inset 0 0 0 2px ${statusStyle.border}` : index >= 5 ? 'inset 0 2px 0 #8b6cf0, inset 0 -2px 0 #8b6cf0' : 'none' } }, sandbox ? h('span', { style: { position: 'absolute', top: 1, right: 3, fontSize: 9.5, color: '#6b4fd0', fontWeight: 900 } }, '沙盘') : change ? h('span', { style: { position: 'absolute', top: 2, right: 3, fontSize: 10.5, fontWeight: 900, color: statusStyle.color } }, V19_CHANGE_MARK[change.type]) : newAlgorithm ? h('span', { style: { position: 'absolute', top: 2, right: 3, color: '#7c3aed', fontSize: 10.5 } }, '⟳') : actualLocked ? h('span', { style: { position: 'absolute', top: 2, right: 3, color: '#b06a00', fontSize: 10.5 } }, '◆') : null, change && status !== 'ok' ? h('span', { style: { position: 'absolute', top: 1, left: 3, fontSize: 10 } }, status === 'rej' ? '⛔' : '⏳') : null, weekCellBody(displayValue, actual, displaySuggest)));
+            const interactionHint = sandbox ? `模拟沙盘：建议 ${fmt(value)} → ${fmt(displaySuggest)} 台；实际在途 ${fmt(actual)} 台不变` : change ? `${V19_CHANGE_MARK[change.type]} ${V19_CHANGE_LABEL[change.type]}：建议 ${fmt(change.from)} → ${fmt(change.to)} 台 · ${V19_STATUS_TEXT[status]} · ${change.reason}` : week.rows.length || week.actualRows.length ? `点击查看：新算法建议 ${week.rows.length} 条，真实在途 ${week.actualRows.length} 条` : '该周无排；点击可提出修改申请';
+            return h(Tooltip, { key: index, title: interactionHint }, h('td', { onClick: () => onOpenDetail(row, index), style: { position: 'relative', minWidth: 98, padding: '8px 7px', textAlign: 'center', borderBottom: border, borderRight: border, cursor: 'pointer', fontWeight: change || displayValue ? 800 : 500, color: sandbox ? '#5b3fc4' : change ? statusStyle.color : displayValue ? '#1f2329' : '#c2c8d0', background: sandbox ? '#f2edff' : actualLocked ? '#fffaf1' : index >= 5 ? '#f6f3ff' : index < 2 ? '#ededf0' : statusStyle.bg, boxShadow: sandbox ? 'inset 0 0 0 2px #8b6cf0' : change && status !== 'ok' ? `inset 0 0 0 2px ${statusStyle.border}` : index >= 5 ? 'inset 0 2px 0 #8b6cf0, inset 0 -2px 0 #8b6cf0' : 'none' } }, sandbox ? h('span', { style: { position: 'absolute', top: 1, right: 3, fontSize: 9.5, color: '#6b4fd0', fontWeight: 900 } }, '沙盘') : change ? h('span', { style: { position: 'absolute', top: 2, right: 3, fontSize: 10.5, fontWeight: 900, color: statusStyle.color } }, V19_CHANGE_MARK[change.type]) : newAlgorithm ? h('span', { style: { position: 'absolute', top: 2, right: 3, color: '#7c3aed', fontSize: 10.5 } }, '⟳') : actualLocked ? h('span', { style: { position: 'absolute', top: 2, right: 3, color: '#b06a00', fontSize: 10.5 } }, '◆') : null, change && status !== 'ok' ? h('span', { style: { position: 'absolute', top: 1, left: 3, fontSize: 10 } }, status === 'rej' ? '⛔' : '⏳') : null, weekCellBody(displayValue, actual, displaySuggest)));
           });
           return [h('tr', { key: row.key, style: { background: open ? '#f7faff' : rowIndex % 2 ? '#fafbfc' : '#fff', boxShadow: open ? 'inset 0 2px 0 #8fb1ff' : 'none' } },
             h('td', { onClick: () => setExpanded((current) => ({ ...current, [row.key]: !current[row.key] })), style: { width: 32, cursor: 'pointer', color: open ? '#3370ff' : '#8a929c', borderBottom: border, borderRight: border, textAlign: 'center', padding: '8px 6px' } }, open ? '▼' : '▶'),
@@ -1932,6 +1963,7 @@ function ShipmentEvolutionBlockV19() {
   const [params, setParams] = useState(readParamsSync); const [products, setProducts] = useState([]); const [catalogReady, setCatalogReady] = useState(false); const [catalogLoading, setCatalogLoading] = useState(true); const [catalogError, setCatalogError] = useState('');
   const [selectedSale, setSelectedSale] = useState(CAN_SELECT_SALE ? ALL_SALES : CURRENT_USERNAME); const [shops, setShops] = useState([]); const [dailyRows, setDailyRows] = useState([]); const [totalRows, setTotalRows] = useState([]); const [shipments, setShipments] = useState([]); const [realSupplies, setRealSupplies] = useState([]); const [waterRows, setWaterRows] = useState([]); const [modelLevels, setModelLevels] = useState([]); const [logisticsLeads, setLogisticsLeads] = useState([]); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [refreshSeed, setRefreshSeed] = useState(0); const requestSequence = useRef(0);
   const [role, setRole] = useState(DEFAULT_ROLE); const [mine, setMine] = useState(false); const orderWeek = isCurrentOrderWeek(); const [labelFilter, setLabelFilter] = useState([]); const [onlyWarning, setOnlyWarning] = useState(false); const [onlyChanged, setOnlyChanged] = useState(false); const [changes, setChanges] = useState({}); const [confirmedRows, setConfirmedRows] = useState({}); const [detail, setDetail] = useState(null); const [editTarget, setEditTarget] = useState(null); const [auditNote, setAuditNote] = useState(''); const [actionLoading, setActionLoading] = useState(false); const [batchOpen, setBatchOpen] = useState(false); const [batchSigned, setBatchSigned] = useState(null); const [poGenerated, setPoGenerated] = useState(false); const [poApproved, setPoApproved] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
   useEffect(() => { let active = true; Promise.all([resolveParams(), requestEligibleProducts()]).then(([initial, rows]) => { if (!active) return; setProducts(rows); const names = new Set(rows.map((item) => item.sale_owner).filter(Boolean)); const requested = rows.find((item) => item.asin === initial.asin && item.country === initial.country); const sale = CAN_SELECT_SALE ? (initial.sale === ALL_SALES || names.has(initial.sale) ? initial.sale : requested?.sale_owner || ALL_SALES) : CURRENT_USERNAME; setSelectedSale(sale); setParams({ ...initial, sale, shop: TOTAL_SHOP }); if (!initial.asin && !initial.country && (initial.sale !== sale || initial.shop !== TOTAL_SHOP)) replaceSaleParams(sale, TOTAL_SHOP); if (!rows.length) setCatalogError(!AVAILABLE_ROLE_KEYS.length ? '当前用户不属于管理员、销售主管、物流仓储部或销售部门，本页面按只读无数据处理。' : '当前查看范围内没有状态为普通、新品或重点的非变体 ASIN。'); }).catch((requestError) => setCatalogError(requestError?.message || String(requestError))).finally(() => { if (active) { setCatalogLoading(false); setCatalogReady(true); } }); return () => { active = false; }; }, []);
   useEffect(() => {
     if (!catalogReady) return undefined;
@@ -2088,22 +2120,44 @@ function ShipmentEvolutionBlockV19() {
     reviewRecords(records, 'APPROVE');
   }
   return h('div', { style: { width: '100%', minWidth: 0, margin: 0, padding: 22, background: '#eef1f5', color: '#1f2329', fontFamily: '-apple-system,"PingFang SC","Microsoft YaHei",sans-serif', fontSize: 13.5, lineHeight: 1.6, boxSizing: 'border-box', WebkitFontSmoothing: 'antialiased', fontVariantNumeric: 'tabular-nums' } },
-    h('div', { style: { display: 'flex', alignItems: 'center', gap: 12, fontSize: 21, fontWeight: 800, marginBottom: 14 } }, h('span', { style: { fontSize: 22 } }, '📦'), '发货计划演变', h('span', { style: { fontSize: 12, fontWeight: 700, color: '#1a5fb4', background: '#e7f0fd', border: '1px solid #b9d4f5', borderRadius: 11, padding: '2px 10px' } }, 'v19 · 安全天数统一 7/14 · 库销比全局固定 3.5/4.5（短缺/正常/滞销）｜决策 27：修改后由服务端重算 v2 水位，结果在 7–14 天或不劣于系统建议则免审生效；出界才审核（W3–W5→主管+采购；下单批→采购+终审）· W1–W2 守工厂节奏维持（审可执行性）')),
-    h('div', { style: { display: 'flex', gap: 10, marginBottom: 14 } }, h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 700, borderRadius: 11, padding: '10px 20px', background: '#3370ff', color: '#fff', border: '1px solid #3370ff', boxShadow: '0 3px 10px rgba(51,112,255,0.28)' } }, '🌐 全部站点 · 统一系统', h('span', { style: { fontSize: 11.5, fontWeight: 600, opacity: 0.9 } }, `${scopedProducts.length} ASIN`))),
+    h('div', { style: { display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 21, fontWeight: 800, marginBottom: 14 } },
+      h('span', { style: { fontSize: 22 } }, '📦'),
+      '发货计划演变',
+      h('span', { style: { fontSize: 12, fontWeight: 700, color: '#1a5fb4', background: '#e7f0fd', border: '1px solid #b9d4f5', borderRadius: 11, padding: '2px 10px' } }, 'v19 · 安全天数统一 7/14 · 库销比全局固定 3.5/4.5（短缺/正常/滞销）｜决策 27：修改后由服务端重算 v2 水位，结果在 7–14 天或不劣于系统建议则免审生效；出界才审核（W3–W5→主管+采购；下单批→采购+终审）· W1–W2 守工厂节奏维持（审可执行性）'),
+      h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 'auto' } },
+        h(Button, {
+          loading: catalogLoading || loading,
+          icon: h(ReloadOutlined || 'span'),
+          onClick: () => setRefreshSeed((value) => value + 1),
+          style: { height: 40, borderRadius: 7, padding: '0 14px', color: '#3a4763', borderColor: '#c9d2df', background: '#fff', fontWeight: 700 },
+        }, '刷新'),
+        h(Button, {
+          icon: h(guideOpen ? (DownOutlined || 'span') : (RightOutlined || 'span')),
+          'aria-expanded': guideOpen,
+          onClick: () => setGuideOpen((value) => !value),
+          style: { height: 40, borderRadius: 7, padding: '0 14px', color: '#1a5fb4', borderColor: '#b9d4f5', background: '#f6f9ff', fontWeight: 700 },
+        }, guideOpen ? '收起计划说明' : '查看计划说明'))),
     h('div', { style: { background: '#fff', border: '1px solid #e6e9ee', borderRadius: 9, boxShadow: '0 1px 8px rgba(0,0,0,0.05)', padding: '16px 18px' } },
-      h(V19ScopeBar, { selectedSale, saleOptions, productCount: scopedProducts.length, loading: catalogLoading || loading, onSaleChange: changeSale, onRefresh: () => setRefreshSeed((value) => value + 1) }),
-      h('div', { style: { fontSize: 12.5, color: '#5a6169', lineHeight: 1.7, marginBottom: 10 } }, '系统每周滚动算好发货计划，', h('b', { style: { color: '#1f2329' } }, '你只确认「够不够、覆盖到哪周」，不用自己算'), '。表头三行：', h('b', { style: { color: '#1f2329' } }, '周次 / 发货日期 / 覆盖售卖期'), '。', h('b', { style: { color: '#1f2329' } }, '基准 7/6 备货周'), '（周一确认 · 7/7 周二下厂）：', h('b', { style: { color: '#1f2329' } }, '备货当周不进表，W1 从下一周 7/13 起算'), '；+45 天交期 → 8/21 出厂落 ', h('b', { style: { color: '#1f2329' } }, '8/18 那一周（W6）'), ' → ', h('b', { style: { color: '#1f2329' } }, '本期下单批 = W6 + W7 = 前沿'), '，发货计划排到 W7 为止。格子 = 该周应发量；', h('b', { style: { color: '#1f2329' } }, '需下单（净额）= W6+W7 应发相加 − 未交货订单余量'), '，采购按净额下 PO。节奏：', h('b', { style: { color: '#1f2329' } }, '每周新排一周（逐周滚动）'), '——非下单周排 W6，确认即承诺——', h('b', { style: { color: '#1f2329' } }, '承诺 = 系统不重算'), '（铁律①修订）；下单周排 W7，漂移全由 W7 吸收（铁律②）；', h('b', { style: { color: '#1f2329' } }, '周二 PO 落地前 W6 仍可提下单异议'), '（改即申请 → 采购 → 终审），PO 通过后 W6+W7 真锁死（决策 19 不可取消）。', h('span', { style: { color: '#8a9099' } }, '发货 = 出货 / 出厂轴，W1 = 下周；各站点周次一致，时效差异只改覆盖售卖期与在途量。')),
-      h('div', { style: { display: 'flex', gap: 10, marginBottom: 11, flexWrap: 'wrap' } }, h('div', { style: { flex: 1, minWidth: 260, background: '#f6f9ff', border: '1px solid #d6e4fb', borderRadius: 7, padding: '9px 13px', fontSize: 12.5, color: '#26405f', lineHeight: 1.6 } }, h('b', { style: { color: '#1a5fb4' } }, '① 确认发货计划　'), '常规行顶栏「一键通过（例外除外）」；', h('b', null, '要改 → 展开趋势图直接拖节点'), '（上下 = 数量、左右 = 时间按周、点渠道名切换），曲线即时变，满意再「转修改申请」（模拟证据自动带入 + 补充说明必填）。闸：', h('b', null, 'W1–W2 不允许减量，销售不可推迟，采购仅 W1–W2 可直改'), ' · ', h('b', null, 'W3–W5 按修改后 7–14 天或不劣于系统建议判闸'), ' · ', h('b', null, 'W6–W7 = 下单异议'), '（W6 已承诺可议至 PO）。'), h('div', { style: { flex: 1, minWidth: 260, background: '#f6f9ff', border: '1px solid #d6e4fb', borderRadius: 7, padding: '9px 13px', fontSize: 12.5, color: '#26405f', lineHeight: 1.6 } }, h('b', { style: { color: '#1a5fb4' } }, '② 看覆盖前沿　'), '第三行「覆盖售卖期」= 这批发出去补的是哪段可售；点开行看测算（时效 / 安全库存 / 淡旺季）验系统算得对不对。')),
-      h('div', { style: { fontSize: 12, color: '#36507e', background: '#eef4ff', borderLeft: '3px solid #3370ff', borderRadius: 5, padding: '9px 12px', lineHeight: 1.7, marginBottom: 12 } }, '数据口径：库存 / 安全天数 / 在途读取 daily_sales.v2_*；真实在途读取 expected_inventory（qty_shipped>0 且 remaining>0，锁定不可改）；建议计划读取 simulate_shipment.plan_source=shipment_plan_v2。', h('b', { style: { color: '#1f2329' } }, '格子主数和图表节点 = 新算法建议量；真实在途单独展示，并继续参与库存曲线推演。拖动和审批只改“建议量”，不改真实发货。净额列 = 只读结果 = W6+W7 建议量 − 未交货余量（2.5.2）。'), '净额 = 0 时本批不下新单。周二采购在净额区「生成下单计划」→ 下单执行看板（工厂×规格 · 调拨在看板算）→ 终审。'),
+      guideOpen ? h(React.Fragment, null,
+        h('div', { style: { fontSize: 12.5, color: '#5a6169', lineHeight: 1.7, marginBottom: 10 } }, '系统每周滚动算好发货计划，', h('b', { style: { color: '#1f2329' } }, '你只确认「够不够、覆盖到哪周」，不用自己算'), '。表头三行：', h('b', { style: { color: '#1f2329' } }, '周次 / 发货日期 / 覆盖售卖期'), '。', h('b', { style: { color: '#1f2329' } }, '基准 7/6 备货周'), '（周一确认 · 7/7 周二下厂）：', h('b', { style: { color: '#1f2329' } }, '备货当周不进表，W1 从下一周 7/13 起算'), '；+45 天交期 → 8/21 出厂落 ', h('b', { style: { color: '#1f2329' } }, '8/18 那一周（W6）'), ' → ', h('b', { style: { color: '#1f2329' } }, '本期下单批 = W6 + W7 = 前沿'), '，发货计划排到 W7 为止。格子 = 该周应发量；', h('b', { style: { color: '#1f2329' } }, '需下单（净额）= W6+W7 应发相加 − 未交货订单余量'), '，采购按净额下 PO。节奏：', h('b', { style: { color: '#1f2329' } }, '每周新排一周（逐周滚动）'), '——非下单周排 W6，确认即承诺——', h('b', { style: { color: '#1f2329' } }, '承诺 = 系统不重算'), '（铁律①修订）；下单周排 W7，漂移全由 W7 吸收（铁律②）；', h('b', { style: { color: '#1f2329' } }, '周二 PO 落地前 W6 仍可提下单异议'), '（改即申请 → 采购 → 终审），PO 通过后 W6+W7 真锁死（决策 19 不可取消）。', h('span', { style: { color: '#8a9099' } }, '发货 = 出货 / 出厂轴，W1 = 下周；各站点周次一致，时效差异只改覆盖售卖期与在途量。')),
+        h('div', { style: { display: 'flex', gap: 10, marginBottom: 11, flexWrap: 'wrap' } }, h('div', { style: { flex: 1, minWidth: 260, background: '#f6f9ff', border: '1px solid #d6e4fb', borderRadius: 7, padding: '9px 13px', fontSize: 12.5, color: '#26405f', lineHeight: 1.6 } }, h('b', { style: { color: '#1a5fb4' } }, '① 确认发货计划　'), '常规行顶栏「一键通过（例外除外）」；', h('b', null, '要改 → 展开趋势图直接拖节点'), '（上下 = 数量、左右 = 时间按周、点渠道名切换），曲线即时变，满意再「转修改申请」（模拟证据自动带入 + 补充说明必填）。闸：', h('b', null, 'W1–W2 不允许减量，销售不可推迟，采购仅 W1–W2 可直改'), ' · ', h('b', null, 'W3–W5 按修改后 7–14 天或不劣于系统建议判闸'), ' · ', h('b', null, 'W6–W7 = 下单异议'), '（W6 已承诺可议至 PO）。'), h('div', { style: { flex: 1, minWidth: 260, background: '#f6f9ff', border: '1px solid #d6e4fb', borderRadius: 7, padding: '9px 13px', fontSize: 12.5, color: '#26405f', lineHeight: 1.6 } }, h('b', { style: { color: '#1a5fb4' } }, '② 看覆盖前沿　'), '第三行「覆盖售卖期」= 这批发出去补的是哪段可售；点开行看测算（时效 / 安全库存 / 淡旺季）验系统算得对不对。')),
+        h('div', { style: { fontSize: 12, color: '#36507e', background: '#eef4ff', borderLeft: '3px solid #3370ff', borderRadius: 5, padding: '9px 12px', lineHeight: 1.7, marginBottom: 12 } }, '数据口径：库存 / 安全天数 / 在途读取 daily_sales.v2_*；真实在途读取 expected_inventory（qty_shipped>0 且 remaining>0，锁定不可改）；建议计划读取 simulate_shipment.plan_source=shipment_plan_v2。', h('b', { style: { color: '#1f2329' } }, '格子主数和图表节点 = 新算法建议量；真实在途单独展示，并继续参与库存曲线推演。拖动和审批只改“建议量”，不改真实发货。净额列 = 只读结果 = W6+W7 建议量 − 未交货余量（2.5.2）。'), '净额 = 0 时本批不下新单。周二采购在净额区「生成下单计划」→ 下单执行看板（工厂×规格 · 调拨在看板算）→ 终审。')) : null,
       h(V19RoleBar, { role, mine, counts, batchSigned, poGenerated, orderWeek, onRole: setRole, onMine: setMine, onBatch: () => setBatchOpen(true), onGeneratePO: generatePO, onAllPass: allPass }),
       role === 'final' && (orderWeek || Object.values(changes).some((change) => change.status === 'fin')) ? h(V19FinalPanel, { rows: productViews, changes, signed: batchSigned, poGenerated, approved: poApproved, onApprove: approvePO, onOpenDetail: (row, weekIndex) => setDetail({ row, weekIndex }) }) : null,
       inflight ? h('div', { style: { margin: '8px 0', padding: '8px 12px', border: '1px solid #f0c36d', background: '#fff8e6', borderRadius: 8, fontSize: 12.5, color: '#7a4d00' } }, '⚠ ', h('b', null, '销售提交的修改需求进入审核流'), '；当前 ', h('b', null, inflight), ' 条在途。', h('span', { style: { color: '#8a9099' } }, '（原型：提交即计入状态机）')) : null,
-      h('div', { style: { display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 10 } }, h('span', { style: { fontSize: 12.5, fontWeight: 700, color: '#3a4763' } }, '筛选'), h(Select, { mode: 'multiple', allowClear: true, maxTagCount: 'responsive', size: 'small', value: labelFilter, placeholder: '全部产品标签', onChange: setLabelFilter, options: ['新品期', '成长期', '成熟期', '淘汰期'].map((value) => ({ value, label: value })), style: { width: 260 } }), h(Checkbox, { checked: onlyWarning, onChange: (event) => setOnlyWarning(event.target.checked) }, '仅看预警'), h(Checkbox, { checked: onlyChanged, onChange: (event) => setOnlyChanged(event.target.checked) }, '仅看本周动过的'), h(Tag, { color: 'blue', bordered: false }, '计划来源：新算法'), h('span', { style: { marginLeft: 'auto', fontSize: 12.5, color: '#5a6169' } }, `全部站点 · 统一系统 · 视角 ${V19_ROLE_NAME[role]}${mine ? ' · 待我处理' : ' · 全部'} · 显示 ${visibleRows.length}/${productViews.length} ASIN · 本周动过 ${productViews.filter((row) => v19Changed(row, changes)).length} 行（${inflight} 在流转）`)),
+      h('div', { style: { display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 10 } },
+        h('div', { style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } },
+          h(V19ScopeControls, { selectedSale, saleOptions, productCount: scopedProducts.length, loading: catalogLoading || loading, onSaleChange: changeSale })),
+        h('div', { style: { display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', paddingLeft: 12, borderLeft: '1px solid #dfe4eb' } },
+          h('span', { style: { fontSize: 12.5, fontWeight: 700, color: '#3a4763' } }, '筛选'),
+          h(Select, { mode: 'multiple', allowClear: true, maxTagCount: 'responsive', size: 'small', value: labelFilter, placeholder: '全部产品标签', onChange: setLabelFilter, options: ['新品期', '成长期', '成熟期', '淘汰期'].map((value) => ({ value, label: value })), style: { width: 260 } }),
+          h(Checkbox, { checked: onlyWarning, onChange: (event) => setOnlyWarning(event.target.checked) }, '仅看预警'),
+          h(Checkbox, { checked: onlyChanged, onChange: (event) => setOnlyChanged(event.target.checked) }, '仅看本周动过的'),
+          h(Tag, { color: 'blue', bordered: false }, '计划来源：新算法'))),
       h(V19Legend),
       catalogError ? h('div', { style: { padding: 10, border: '1px solid #f2b8b5', background: '#fff1f0', color: '#a61d24', borderRadius: 8, marginBottom: 10 } }, catalogError) : null,
       error ? h('div', { style: { padding: 10, border: '1px solid #f2b8b5', background: '#fff1f0', color: '#a61d24', borderRadius: 8, marginBottom: 10 } }, error) : null,
-      catalogLoading || loading ? h('div', { style: { minHeight: 360, display: 'flex', alignItems: 'center', justifyContent: 'center' } }, h(Spin, { size: 'large', tip: '正在读取 daily_sales.v2、水位标签、真实在途和新算法建议...' })) : visibleRows.length ? h(V19Table, { rows: visibleRows, allScopeRows: productViews, changes, confirmedRows, role, orderWeek, poApproved, logisticsLeads, onEdit: openEdit, onOpenDetail: (row, weekIndex) => { setAuditNote(''); setDetail({ row, weekIndex }); } }) : h(Empty, { description: mine ? '当前角色没有待处理商品' : '当前筛选范围没有商品' }),
-      h('div', { style: { marginTop: 8, fontSize: 12, color: '#36507e', background: '#eef4ff', borderLeft: '3px solid #3370ff', borderRadius: 5, padding: '9px 12px', lineHeight: 1.7 } }, 'W8+ 为系统预览区：仅系统顺延 / 重算可写入，销售只读（默认收起）。样板仅留 5 条 ASIN 供 ERP 照做。全站点统一一张表，时效差异只体现在覆盖售卖期与到货曲线。到货曲线口径：已到 = 领星真实签收（T+1 同步），未到 = 预估单点，', h('b', null, '不做到货分布'), '（07-03 会议定）；在途 = 发货量 − 已签收。', h('b', { style: { color: '#b06a1e' } }, '铁律①修订（承诺=系统不重算、人可议至 PO、真锁点=PO 落地）→ 列入待 Ailah 拍板清单（S6）。'))),
+      catalogLoading || loading ? h('div', { style: { minHeight: 360, display: 'flex', alignItems: 'center', justifyContent: 'center' } }, h(Spin, { size: 'large', tip: '正在读取 daily_sales.v2、水位标签、真实在途和新算法建议...' })) : visibleRows.length ? h(V19Table, { rows: visibleRows, allScopeRows: productViews, changes, confirmedRows, role, orderWeek, poApproved, logisticsLeads, onEdit: openEdit, onOpenDetail: (row, weekIndex) => { setAuditNote(''); setDetail({ row, weekIndex }); } }) : h(Empty, { description: mine ? '当前角色没有待处理商品' : '当前筛选范围没有商品' })),
     h(V19EditModal, { target: editTarget, loading: actionLoading, onClose: () => setEditTarget(null), onSubmit: submitEdit }),
     h(V19ChangeDrawer, { detail, role, changes, auditNote, onAuditNote: setAuditNote, onClose: () => setDetail(null), onEdit: openEdit, onAction: actionChange }),
     h(V19BatchModal, { open: batchOpen, rows: productViews, changes, signed: batchSigned, onClose: () => setBatchOpen(false), onSign: signBatch, onAction: actionChange, onOpenDetail: (row, weekIndex) => { setBatchOpen(false); setDetail({ row, weekIndex }); } }));

@@ -398,7 +398,7 @@ SELECT IF(
     0
 );
 
--- 与普通库存口径一致：缺货期间未成交需求不结转；正补货到达时从本次补货量重新起算。
+-- 缺货需求连续结转：补货到达时仍保留此前负库存，不再从补货量重新起算。
 CREATE TEMPORARY TABLE temp_v2_inventory_prediction AS
 WITH RECURSIVE inventory_calc AS (
     SELECT
@@ -418,14 +418,9 @@ WITH RECURSIVE inventory_calc AS (
         input.country,
         input.shop,
         input.`date`,
-        CASE
-            WHEN COALESCE(input.v2_add, 0) > 0
-             AND (previous.calc_inventory - previous.demand) < 0
-            THEN CAST(input.v2_add AS SIGNED)
-            ELSE previous.calc_inventory
-                - previous.demand
-                + CAST(COALESCE(input.v2_add, 0) AS SIGNED)
-        END AS calc_inventory,
+        previous.calc_inventory
+            - previous.demand
+            + CAST(COALESCE(input.v2_add, 0) AS SIGNED) AS calc_inventory,
         CAST(input.demand AS SIGNED) AS demand
     FROM temp_v2_projection_input AS input
     INNER JOIN inventory_calc AS previous

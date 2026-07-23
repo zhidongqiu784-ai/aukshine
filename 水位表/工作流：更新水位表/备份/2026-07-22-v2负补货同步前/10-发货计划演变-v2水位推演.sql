@@ -4,7 +4,7 @@
 --
 -- 业务口径：
 -- 1. 真实未入库量内联复用“期望入库SQL - 修改版.sql”的真实发货口径：
---    delivery_note.quantity_shipped - fba_ship.received；保留超签收形成的负补货，旧模拟计划不进入 v2。
+--    delivery_note.quantity_shipped - fba_ship.received；旧模拟计划不进入 v2。
 -- 2. 模拟计划只读取 simulate_shipment.plan_source = 'shipment_plan_v2'。
 -- 3. 模拟计划已生成真实 delivery_note 时，按 shippment_id + asin 排除，避免重复计算。
 -- 4. 不写 daily_sales 的旧字段。
@@ -12,7 +12,6 @@
 --    因此 v2 今日锚点先用 inventory - old add 还原真实库存，再加 v2_add。
 -- 6. 先完整计算并校验临时表，最后一次性写回 v2_*；无补货日写 NULL，旧日期不会残留旧值。
 -- 7. v3.5 / 决策 23：只递推“合计”行；店铺层不做 v2 断货精算或计划分摊。
--- 8. v2 在途按“初始正补货总量 - 截至当天累计补货”递推；负补货会减少库存并等量恢复在途。
 
 SET SESSION cte_max_recursion_depth = 1000;
 SET @v2_calculated_at = NOW(3);
@@ -207,7 +206,7 @@ WITH real_shipment AS (
        AND scope_key.country = real_supply.country
        AND scope_key.shop = '合计'
     WHERE real_supply.expected_storage_time >= CURDATE()
-      AND (real_supply.qty_shipped - real_supply.received) <> 0
+      AND (real_supply.qty_shipped - real_supply.received) > 0
     GROUP BY
         real_supply.country,
         real_supply.asin,
@@ -398,7 +397,7 @@ SELECT IF(
     0
 );
 
--- 与普通库存口径一致：缺货期间未成交需求不结转；正补货到达时从本次补货量重新起算。
+-- 合计递推严格复用节点 08 的缺货重启规则。
 CREATE TEMPORARY TABLE temp_v2_inventory_prediction AS
 WITH RECURSIVE inventory_calc AS (
     SELECT
@@ -423,8 +422,8 @@ WITH RECURSIVE inventory_calc AS (
              AND (previous.calc_inventory - previous.demand) < 0
             THEN CAST(input.v2_add AS SIGNED)
             ELSE previous.calc_inventory
-                - previous.demand
-                + CAST(COALESCE(input.v2_add, 0) AS SIGNED)
+                 - previous.demand
+                 + CAST(COALESCE(input.v2_add, 0) AS SIGNED)
         END AS calc_inventory,
         CAST(input.demand AS SIGNED) AS demand
     FROM temp_v2_projection_input AS input
@@ -449,7 +448,6 @@ SELECT IF(
     0
 );
 
--- 在途遵循库存转移守恒：正补货到库后扣减在途，负补货减少库存并恢复等量在途。
 CREATE TEMPORARY TABLE temp_v2_branch_stage AS
 SELECT
     prediction.asin,
@@ -468,13 +466,10 @@ SELECT
     ) AS v2_days_for_sale,
     CAST(
         COALESCE(
-            SUM(GREATEST(COALESCE(input.v2_add, 0), 0)) OVER (
-                PARTITION BY prediction.asin, prediction.country, prediction.shop
-            )
-            - SUM(COALESCE(input.v2_add, 0)) OVER (
+            SUM(COALESCE(input.v2_add, 0)) OVER (
                 PARTITION BY prediction.asin, prediction.country, prediction.shop
                 ORDER BY prediction.`date`
-                ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                ROWS BETWEEN 1 FOLLOWING AND UNBOUNDED FOLLOWING
             ),
             0
         ) AS SIGNED

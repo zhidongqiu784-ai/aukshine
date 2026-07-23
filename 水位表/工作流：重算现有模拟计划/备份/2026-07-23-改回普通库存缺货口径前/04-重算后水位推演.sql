@@ -1,6 +1,6 @@
--- 工作流：更新水位表
--- 节点序号：10
--- 节点名称：发货计划演变 v2 水位推演（全量）
+-- 工作流：发货计划演变-v2-重算现有建议
+-- 节点 02：建议量写回后全量重算 V2 水位。
+-- 本文件与“工作流：更新水位表”的节点 10 保持同一计算口径。
 --
 -- 业务口径：
 -- 1. 真实未入库量内联复用“期望入库SQL - 修改版.sql”的真实发货口径：
@@ -398,7 +398,7 @@ SELECT IF(
     0
 );
 
--- 与普通库存口径一致：缺货期间未成交需求不结转；正补货到达时从本次补货量重新起算。
+-- 缺货需求连续结转：补货到达时仍保留此前负库存，不再从补货量重新起算。
 CREATE TEMPORARY TABLE temp_v2_inventory_prediction AS
 WITH RECURSIVE inventory_calc AS (
     SELECT
@@ -418,14 +418,9 @@ WITH RECURSIVE inventory_calc AS (
         input.country,
         input.shop,
         input.`date`,
-        CASE
-            WHEN COALESCE(input.v2_add, 0) > 0
-             AND (previous.calc_inventory - previous.demand) < 0
-            THEN CAST(input.v2_add AS SIGNED)
-            ELSE previous.calc_inventory
-                - previous.demand
-                + CAST(COALESCE(input.v2_add, 0) AS SIGNED)
-        END AS calc_inventory,
+        previous.calc_inventory
+            - previous.demand
+            + CAST(COALESCE(input.v2_add, 0) AS SIGNED) AS calc_inventory,
         CAST(input.demand AS SIGNED) AS demand
     FROM temp_v2_projection_input AS input
     INNER JOIN inventory_calc AS previous

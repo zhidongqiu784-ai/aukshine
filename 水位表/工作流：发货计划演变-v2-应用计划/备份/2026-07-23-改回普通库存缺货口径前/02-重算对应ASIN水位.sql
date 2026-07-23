@@ -386,14 +386,9 @@ WITH RECURSIVE inventory_calc AS (
         input.country,
         input.shop,
         input.`date`,
-        CASE
-            WHEN COALESCE(input.v2_add, 0) > 0
-             AND (previous.calc_inventory - previous.demand) < 0
-            THEN CAST(input.v2_add AS SIGNED)
-            ELSE previous.calc_inventory
-                - previous.demand
-                + CAST(COALESCE(input.v2_add, 0) AS SIGNED)
-        END AS calc_inventory,
+        previous.calc_inventory
+            - previous.demand
+            + CAST(COALESCE(input.v2_add, 0) AS SIGNED) AS calc_inventory,
         CAST(input.demand AS SIGNED) AS demand
     FROM temp_v2_target_projection_input AS input
     INNER JOIN inventory_calc AS previous

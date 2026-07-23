@@ -549,17 +549,12 @@ WITH RECURSIVE projection AS (
         input.country,
         input.shop,
         input.`date`,
-        CAST(
-            CASE
-                WHEN COALESCE(input.proposed_add, 0) > 0
-                 AND (previous.calc_inventory - previous.demand) < 0
-                THEN input.proposed_add
-                ELSE previous.calc_inventory
-                    - previous.demand
-                    + COALESCE(input.proposed_add, 0)
-            END
-            AS SIGNED
-        ) AS calc_inventory,
+        CAST(CASE
+            WHEN COALESCE(input.proposed_add, 0) > 0
+             AND previous.calc_inventory - previous.demand < 0
+            THEN input.proposed_add
+            ELSE previous.calc_inventory - previous.demand + COALESCE(input.proposed_add, 0)
+        END AS SIGNED) AS calc_inventory,
         input.demand
     FROM temp_v2_submit_recursive_source AS input
     INNER JOIN projection AS previous
