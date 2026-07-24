@@ -1,7 +1,7 @@
 ﻿async function run() {
   const React = ctx.libs.React;
   const { useState, useRef, useMemo, useCallback, useEffect, useSyncExternalStore } = React;
-  const { Pagination, Input, InputNumber, Select, DatePicker, Drawer, Table, Button, Popconfirm, ConfigProvider, Tooltip, Modal } = ctx.libs.antd;
+  const { Pagination, Input, InputNumber, Select, DatePicker, Drawer, Table, Button, Popconfirm, Popover, ConfigProvider, Tooltip, Modal } = ctx.libs.antd;
 
   const currentUserId    = await ctx.getVar('ctx.user.id') || null;
   const currentUserName  = await ctx.getVar('ctx.user.username') || 'guest';
@@ -447,11 +447,16 @@
   const TREND_CHART_FIELDS = [
     { key:'weekly_sales',                   src:'weekly', field:'sales',                   label:'实际总单量',                group:'fixed',              axis:'left',  valueType:'integer' },
     { key:'weekly_zongliuliang',            src:'weekly', field:'zongliuliang',            label:'汇总流量-会话量',          group:'traffic_conversion', axis:'left',  valueType:'integer' },
+    { key:'weekly_organic_traffic',         src:'weekly', field:'organic_traffic',         label:'自然流量（会话量-广告点击）', group:'traffic_conversion', axis:'left',  valueType:'integer' },
     { key:'weekly_session_conversion_rate', src:'weekly', field:'session_conversion_rate', label:'会话转化率',                group:'traffic_conversion', axis:'right', valueType:'percent' },
+    { key:'order_link_total_onsite_orders', src:'order_link', field:'total_onsite_orders',  label:'②站内总单量',              group:'order_structure',    axis:'left',  valueType:'integer' },
+    { key:'order_link_onsite_organic_orders', src:'order_link', field:'onsite_organic_orders', label:'③站内纯自然单',          group:'order_structure',    axis:'left',  valueType:'integer' },
+    { key:'order_link_onsite_ad_orders',    src:'order_link', field:'onsite_ad_orders',     label:'④站内总广告单',            group:'order_structure',    axis:'left',  valueType:'integer' },
     { key:'weekly_adv_rate',                src:'weekly', field:'adv_rate',                label:'广告订单量占比',            group:'ad_data',            axis:'right', valueType:'percent' },
     { key:'weekly_impressions',             src:'weekly', field:'impressions',             label:'曝光量',                    group:'ad_data',            axis:'left',  valueType:'integer' },
     { key:'weekly_guanggaodianji',          src:'weekly', field:'guanggaodianji',          label:'广告点击量',                group:'ad_data',            axis:'left',  valueType:'integer' },
     { key:'weekly_guanggaohuafei',          src:'weekly', field:'guanggaohuafei',          label:'广告花费',                  group:'ad_data',            axis:'left',  valueType:'decimal' },
+    { key:'weekly_ad_sales_amount',         src:'weekly', field:'ad_sales_amount',         label:'广告销售额',                group:'ad_data',            axis:'left',  valueType:'decimal' },
     { key:'weekly_guanggaodan',             src:'weekly', field:'guanggaodan',             label:'广告总单量',                group:'ad_data',            axis:'left',  valueType:'integer' },
     { key:'weekly_ctr',                     src:'weekly', field:'ctr',                     label:'CTR',                       group:'ad_data',            axis:'right', valueType:'percent' },
     { key:'weekly_cpc',                     src:'weekly', field:'cpc',                     label:'CPC',                       group:'ad_data',            axis:'left',  valueType:'decimal' },
@@ -467,10 +472,27 @@
   const TREND_CHART_FIELD_GROUPS = [
     { key:'fixed',              label:'固定列' },
     { key:'traffic_conversion', label:'流量结构&转化' },
+    { key:'order_structure',    label:'订单结构' },
     { key:'ad_data',            label:'广告数据' },
     { key:'profit',             label:'利润数据' },
   ];
-  const TREND_CHART_DEFAULT_FIELD_KEYS = ['weekly_sales', 'weekly_zongliuliang', 'weekly_session_conversion_rate'];
+  const TREND_CHART_PRESETS = {
+    traffic: ['weekly_zongliuliang', 'weekly_organic_traffic', 'weekly_guanggaodianji'],
+    orderStructure: ['order_link_total_onsite_orders', 'order_link_onsite_organic_orders', 'order_link_onsite_ad_orders'],
+    adConversion: ['weekly_ctr', 'weekly_guanggaocvr'],
+    adEfficiency: ['weekly_cpa', 'weekly_cpu'],
+    adInvestment: ['weekly_guanggaohuafei', 'weekly_ad_sales_amount'],
+  };
+  const TREND_CHART_PRESET_OPTIONS = [
+    { value:'traffic',        label:'流量结构' },
+    { value:'orderStructure', label:'订单结构' },
+    { value:'adConversion',   label:'广告转化' },
+    { value:'adEfficiency',   label:'广告效率' },
+    { value:'adInvestment',   label:'广告投入效果' },
+    { value:'custom',         label:'自定义' },
+  ];
+  const TREND_CHART_DEFAULT_PRESET_KEY = 'traffic';
+  const TREND_CHART_DEFAULT_FIELD_KEYS = TREND_CHART_PRESETS[TREND_CHART_DEFAULT_PRESET_KEY];
   const TREND_CHART_LINE_COLORS = ['#38BDF8','#F59E0B','#34D399','#FB7185','#A78BFA','#F97316','#22D3EE','#E879F9','#84CC16','#FACC15','#60A5FA','#F472B6'];
   const TREND_CHART_DATE_MODE_OPTIONS = [
     { value:'available', label:'已有数据日期' },
@@ -1522,7 +1544,7 @@
     { src:'link_notes', label:'链接操作备注', color:GROUP_COLOR_LINK_NOTES },
     { src:'ad_data', label:'广告数据', color:GROUP_COLOR_AD_DATA },
     { src:'profit', label:'利润数据', color:GROUP_COLOR_PROFIT },
-    { src:'coupon_flash', label:'优惠卷与秒杀费用测算', color:GROUP_COLOR_COUPON_FLASH },
+    { src:'coupon_flash', label:'优惠券与秒杀费用测算', color:GROUP_COLOR_COUPON_FLASH },
     { src:'ops_target', label:'运营目标与达成追踪', color:GROUP_COLOR_OPS_TARGET },
     { src:'keyword_position', label:'关键词追踪', color:GROUP_COLOR_KEYWORD },
     { src:'competitor', label:'竞对 ASIN', color:GROUP_COLOR_COMPETITOR },
@@ -3147,13 +3169,13 @@
   };
 
   const MergedTrendLineChart = ({ dates, series }) => {
-    const width = 1560;
-    const height = 700;
-    const margin = { top: 58, right: 118, bottom: 116, left: 118 };
-    const plotWidth = width - margin.left - margin.right;
-    const plotHeight = height - margin.top - margin.bottom;
     const safeDates = Array.isArray(dates) ? dates : [];
     const safeSeries = (Array.isArray(series) ? series : []).filter((item) => item.data.some((value) => toFormulaNumber(value) != null));
+    const width = 1640;
+    const height = 760;
+    const margin = { top: 64, right: 122, bottom: 156, left: 118 };
+    const plotWidth = width - margin.left - margin.right;
+    const plotHeight = height - margin.top - margin.bottom;
     const [hoverIndex, setHoverIndex] = useState(null);
 
     if (!safeDates.length || !safeSeries.length) {
@@ -3207,6 +3229,47 @@
     };
     const xFor = (index) => safeDates.length === 1 ? margin.left + plotWidth / 2 : margin.left + (plotWidth * index) / (safeDates.length - 1);
     const yFor = (value, scale) => margin.top + ((scale.max - Number(value)) / (scale.max - scale.min)) * plotHeight;
+    const labelFontSize = safeDates.length > 40 ? 12 : safeDates.length > 16 ? 14 : 17;
+    const labelMinGap = labelFontSize + 8;
+    const labelTopLimit = margin.top + labelFontSize;
+    const labelBottomLimit = margin.top + plotHeight - 12;
+    const labelOffsets = [-18, 26, -34, 42];
+    const pointLabels = safeDates.flatMap((date, dateIndex) => {
+      const labels = safeSeries.map((item, seriesIndex) => {
+        const scale = item.axis === 'right' ? rightScale : leftScale;
+        const value = toFormulaNumber(item.data[dateIndex]);
+        if (!scale || value == null) return null;
+        const pointY = yFor(value, scale);
+        return {
+          item,
+          value,
+          pointX: xFor(dateIndex),
+          pointY,
+          labelY: Math.min(labelBottomLimit, Math.max(labelTopLimit, pointY + labelOffsets[seriesIndex % labelOffsets.length])),
+        };
+      }).filter(Boolean).sort((a, b) => a.labelY - b.labelY);
+      if (!labels.length) return [];
+      for (let index = 1; index < labels.length; index += 1) {
+        if (labels[index].labelY - labels[index - 1].labelY < labelMinGap) {
+          labels[index].labelY = labels[index - 1].labelY + labelMinGap;
+        }
+      }
+      const bottomOverflow = labels[labels.length - 1].labelY - labelBottomLimit;
+      if (bottomOverflow > 0) labels.forEach((label) => { label.labelY -= bottomOverflow; });
+      for (let index = labels.length - 2; index >= 0; index -= 1) {
+        if (labels[index + 1].labelY - labels[index].labelY < labelMinGap) {
+          labels[index].labelY = labels[index + 1].labelY - labelMinGap;
+        }
+      }
+      const topOverflow = labelTopLimit - labels[0].labelY;
+      if (topOverflow > 0) labels.forEach((label) => { label.labelY += topOverflow; });
+      const center = (labels.length - 1) / 2;
+      return labels.map((label, labelIndex) => ({
+        ...label,
+        date,
+        labelX: label.pointX + (labelIndex - center) * 18,
+      }));
+    });
     const pathFor = (item, scale) => {
       let path = '';
       let started = false;
@@ -3227,9 +3290,15 @@
     const tooltipTransform = hoverX != null && hoverX > width * 0.62 ? 'translateX(-100%) translateX(-12px)' : 'translateX(12px)';
 
     return React.createElement('div', {
-      style: { position: 'relative', background: '#111827', border: '1px solid #1f2937', borderRadius: '8px', padding: '18px', color: '#cbd5e1', fontVariantNumeric: 'tabular-nums' },
+      style: { position: 'relative', width: '100%', boxSizing: 'border-box', background: '#111827', border: '1px solid #1f2937', borderRadius: '8px', padding: '18px', color: '#cbd5e1', fontVariantNumeric: 'tabular-nums' },
       onMouseLeave: () => setHoverIndex(null),
     },
+      React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '8px 14px', padding: '0 4px 12px', maxHeight: '96px', overflowY: 'auto' } },
+        safeSeries.map((item) => React.createElement('div', { key: `legend_${item.key}`, style: { display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#cbd5e1', fontSize: '14px', fontWeight: 700 } },
+          React.createElement('span', { style: { width: '18px', height: '3px', borderRadius: '2px', background: item.color } }),
+          React.createElement('span', null, item.name)
+        ))
+      ),
       React.createElement('svg', { viewBox: `0 0 ${width} ${height}`, width: '100%', height: 'auto', role: 'img', style: { display: 'block' } },
         React.createElement('rect', { x: 0, y: 0, width, height, fill: '#111827' }),
         ticks(leftScale || rightScale).map((tick, index) => React.createElement('line', { key: `grid_${index}`, x1: margin.left, y1: yFor(tick, leftScale || rightScale), x2: margin.left + plotWidth, y2: yFor(tick, leftScale || rightScale), stroke: '#243244', strokeWidth: 1 })),
@@ -3238,7 +3307,7 @@
         React.createElement('line', { x1: margin.left, y1: margin.top, x2: margin.left, y2: margin.top + plotHeight, stroke: '#334155', strokeWidth: 1.5 }),
         React.createElement('line', { x1: margin.left + plotWidth, y1: margin.top, x2: margin.left + plotWidth, y2: margin.top + plotHeight, stroke: '#334155', strokeWidth: 1.5 }),
         React.createElement('line', { x1: margin.left, y1: margin.top + plotHeight, x2: margin.left + plotWidth, y2: margin.top + plotHeight, stroke: '#334155', strokeWidth: 1.5 }),
-        React.createElement('text', { x: margin.left, y: margin.top - 22, fill: '#94a3b8', fontSize: 17, fontWeight: 800, textAnchor: 'middle' }, '数值/金额'),
+        React.createElement('text', { x: margin.left, y: margin.top - 22, fill: '#94a3b8', fontSize: 17, fontWeight: 800, textAnchor: 'middle' }, '实际数值'),
         React.createElement('text', { x: margin.left + plotWidth, y: margin.top - 22, fill: '#F59E0B', fontSize: 17, fontWeight: 800, textAnchor: 'middle' }, '百分比'),
         safeDates.map((date, index) => {
           if (index % labelStep !== 0 && index !== safeDates.length - 1) return null;
@@ -3247,16 +3316,21 @@
         }).filter(Boolean),
         safeSeries.map((item) => {
           const scale = item.axis === 'right' ? rightScale : leftScale;
-          return scale ? React.createElement('path', { key: `line_${item.key}`, d: pathFor(item, scale), fill: 'none', stroke: item.color, strokeWidth: 3.2, strokeLinejoin: 'round', strokeLinecap: 'round', opacity: 0.95 }) : null;
+          return scale ? React.createElement('path', { key: `line_${item.key}`, d: pathFor(item, scale), fill: 'none', stroke: item.color, strokeWidth: 2.2, strokeLinejoin: 'round', strokeLinecap: 'round', opacity: 0.95 }) : null;
         }),
-        safeSeries.flatMap((item) => {
-          const scale = item.axis === 'right' ? rightScale : leftScale;
-          if (!scale) return [];
-          return item.data.map((value, index) => {
-            const number = toFormulaNumber(value);
-            return number == null ? null : React.createElement('circle', { key: `point_${item.key}_${safeDates[index].key}`, cx: xFor(index), cy: yFor(number, scale), r: 4.5, fill: item.color, stroke: '#111827', strokeWidth: 2 });
-          }).filter(Boolean);
-        }),
+        pointLabels.flatMap(({ item, value, pointX, pointY, labelX, labelY, date }) => ([
+            React.createElement('circle', { key: `point_${item.key}_${date.key}`, cx: pointX, cy: pointY, r: 5, fill: item.color, stroke: '#111827', strokeWidth: 2 }),
+            React.createElement('text', {
+              key: `point_value_${item.key}_${date.key}`,
+              x: labelX,
+              y: labelY,
+              fill: item.color,
+              fontSize: labelFontSize,
+              fontWeight: 800,
+              textAnchor: 'middle',
+              style: { paintOrder: 'stroke', stroke: '#111827', strokeWidth: 5, strokeLinejoin: 'round', pointerEvents: 'none' },
+            }, formatTrendChartValue(value, item.valueType)),
+          ])),
         safeDates.map((date, index) => {
           const currentX = xFor(index);
           const prevX = index > 0 ? xFor(index - 1) : margin.left;
@@ -3268,7 +3342,7 @@
         hoverDate && React.createElement('line', { x1: hoverX, y1: margin.top, x2: hoverX, y2: margin.top + plotHeight, stroke: '#e2e8f0', strokeWidth: 1.4, strokeDasharray: '4 5', opacity: 0.72, pointerEvents: 'none' })
       ),
       hoverDate && React.createElement('div', {
-        style: { position: 'absolute', top: '54px', left: tooltipLeft, transform: tooltipTransform, width: '360px', maxWidth: 'calc(100% - 32px)', padding: '12px 14px', borderRadius: '8px', border: '1px solid rgba(148,163,184,0.45)', background: 'rgba(15,23,42,0.96)', color: '#e2e8f0', boxShadow: '0 18px 42px rgba(15,23,42,0.36)', zIndex: 2 },
+        style: { position: 'absolute', top: '132px', left: tooltipLeft, transform: tooltipTransform, width: '360px', maxWidth: 'calc(100% - 32px)', padding: '12px 14px', borderRadius: '8px', border: '1px solid rgba(148,163,184,0.45)', background: 'rgba(15,23,42,0.96)', color: '#e2e8f0', boxShadow: '0 18px 42px rgba(15,23,42,0.36)', zIndex: 2 },
       },
         React.createElement('div', { style: { color: '#f8fafc', fontWeight: 800, fontSize: '16px', marginBottom: '10px' } }, hoverDate.label),
         React.createElement('div', { style: { display: 'grid', gap: '7px', maxHeight: '300px', overflowY: 'auto' } },
@@ -3278,12 +3352,6 @@
             React.createElement('span', { style: { color: toFormulaNumber(row.value) == null ? '#64748b' : '#f8fafc', fontWeight: 800 } }, formatTrendChartValue(row.value, row.valueType))
           ))
         )
-      ),
-      React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '8px 14px', padding: '6px 4px 0', maxHeight: '96px', overflowY: 'auto' } },
-        safeSeries.map((item) => React.createElement('div', { key: `legend_${item.key}`, style: { display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#cbd5e1', fontSize: '14px', fontWeight: 700 } },
-          React.createElement('span', { style: { width: '18px', height: '3px', borderRadius: '2px', background: item.color } }),
-          React.createElement('span', null, item.name)
-        ))
       )
     );
   };
@@ -3293,6 +3361,8 @@
     const [errorText, setErrorText] = useState('');
     const [chartRows, setChartRows] = useState([]);
     const [selectedFieldKeys, setSelectedFieldKeys] = useState(TREND_CHART_DEFAULT_FIELD_KEYS);
+    const [selectedPresetKey, setSelectedPresetKey] = useState(TREND_CHART_DEFAULT_PRESET_KEY);
+    const [indicatorPanelOpen, setIndicatorPanelOpen] = useState(false);
     const [dateRangeState, setDateRangeState] = useState({ scopeKey: '', value: null });
     const [dateModeState, setDateModeState] = useState({ scopeKey: '', value: 'available' });
     const dateRangeStart = dateRange?.[0] || '';
@@ -3318,9 +3388,23 @@
       group.key,
       TREND_CHART_FIELDS.filter((field) => field.group === group.key).map((field) => ({ value: field.key, label: field.label })),
     ])), []);
+    const presetOptionsWithDetails = useMemo(() => TREND_CHART_PRESET_OPTIONS.map((option) => {
+      const fieldKeys = option.value === 'custom' ? selectedFieldKeys : (TREND_CHART_PRESETS[option.value] || []);
+      const fieldLabels = fieldKeys.map((key) => fieldMap[key]?.label).filter(Boolean);
+      const detailText = fieldLabels.length ? fieldLabels.join('、') : '未选择字段';
+      return {
+        ...option,
+        title: option.label,
+        label: React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '18px', width: '100%', minWidth: 0 } },
+          React.createElement('span', { style: { flexShrink: 0, color: '#334155', fontWeight: 700 } }, option.label),
+          React.createElement('span', { title: detailText, style: { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'right', color: '#64748b', fontSize: `${FONT_SIZE_XS}px` } }, detailText)
+        ),
+      };
+    }), [fieldMap, selectedFieldKeys]);
     const updateSelectedFieldsByGroup = (groupKey, groupFieldKeys) => {
       const groupKeys = new Set(TREND_CHART_FIELDS.filter((field) => field.group === groupKey).map((field) => field.key));
       const nextGroupKeys = new Set(Array.isArray(groupFieldKeys) ? groupFieldKeys : []);
+      setSelectedPresetKey('custom');
       setSelectedFieldKeys((currentKeys) => TREND_CHART_FIELDS.filter((field) => (
         groupKeys.has(field.key) ? nextGroupKeys.has(field.key) : currentKeys.includes(field.key)
       )).map((field) => field.key));
@@ -3359,13 +3443,15 @@
           if (queryDateEnd) filterAnd.push({ date: { $lte: queryDateEnd } });
           const dailyRows = await fetchAll('daily_asins:list', { sort: 'date', filter: JSON.stringify({ $and: filterAnd }) });
           const dailyKeys = [...new Set(dailyRows.map((row) => row?.country_asin_date).filter(Boolean))];
-          const [weeklyRows, profitRows] = await Promise.all([
+          const [weeklyRows, profitRows, orderLinkRows] = await Promise.all([
             fetchByKeys('weekly_performance:list', 'country_asin_week', dailyKeys),
             fetchByKeys('daily_profit:list', 'country_asin_date', dailyKeys),
+            fetchByKeys('daily_order_link_tracking:list', 'country_asin_date', dailyKeys),
           ]);
           if (!active) return;
           const weeklyMap = Object.fromEntries(weeklyRows.filter((row) => row?.country_asin_week).map((row) => [row.country_asin_week, row]));
           const profitMap = Object.fromEntries(profitRows.filter((row) => row?.country_asin_date).map((row) => [row.country_asin_date, row]));
+          const orderLinkMap = Object.fromEntries(orderLinkRows.filter((row) => row?.country_asin_date).map((row) => [row.country_asin_date, row]));
           const loadedDates = dailyRows.map((row) => toDateKey(row?.date)).filter(Boolean).sort();
           if (dateMode === 'available' && !selectedDateRange && loadedDates.length && (!dateRangeStart || !dateRangeEnd)) {
             setDateRangeState({
@@ -3378,6 +3464,7 @@
             date: toDateKey(row.date),
             weekly: weeklyMap[row.country_asin_date] || {},
             profit: profitMap[row.country_asin_date] || {},
+            order_link: orderLinkMap[row.country_asin_date] || {},
           })).filter((row) => row.date));
         } catch (error) {
           if (active) { setChartRows([]); setErrorText(`加载图表数据失败：${error?.message || '未知错误'}`); }
@@ -3390,18 +3477,29 @@
     }, [visible, country, asin, queryDateStart, queryDateEnd, dateRangeScopeKey, dateMode]);
 
     const chartPayload = useMemo(() => {
-      const rowsWithSelectedData = chartRows.filter((row) => selectedFieldKeys.some((key) => {
-        const field = fieldMap[key];
-        return field && toFormulaNumber(row[field.src]?.[field.field]) != null;
-      }));
-      const dates = rowsWithSelectedData.map((row) => ({ key: row.key, label: row.date }));
+      const sortedDates = chartRows.map((row) => row.date).filter(Boolean).sort();
+      const rangeStart = queryDateStart || sortedDates[0] || '';
+      const rangeEnd = queryDateEnd || sortedDates[sortedDates.length - 1] || rangeStart;
+      const startDay = rangeStart ? ctx.libs.dayjs(rangeStart) : null;
+      const endDay = rangeEnd ? ctx.libs.dayjs(rangeEnd) : null;
+      const totalDays = startDay?.isValid() && endDay?.isValid() && !endDay.isBefore(startDay, 'day')
+        ? endDay.diff(startDay, 'day') + 1
+        : 0;
+      const chartRowMap = new Map(chartRows.map((row) => [row.date, row]));
+      const continuousRows = totalDays > 0
+        ? Array.from({ length: totalDays }, (_, index) => {
+            const date = startDay.add(index, 'day').format('YYYY-MM-DD');
+            return chartRowMap.get(date) || { key: `${country}_${asin}_${date}`, date, weekly: {}, profit: {}, order_link: {} };
+          })
+        : chartRows;
+      const dates = continuousRows.map((row) => ({ key: row.key, label: row.date }));
       const series = selectedFieldKeys.map((key, index) => {
         const field = fieldMap[key];
         if (!field) return null;
-        return { key, name: field.label, axis: field.axis, valueType: field.valueType, color: TREND_CHART_LINE_COLORS[index % TREND_CHART_LINE_COLORS.length], data: rowsWithSelectedData.map((row) => toFormulaNumber(row[field.src]?.[field.field])) };
+        return { key, name: field.label, axis: field.axis, valueType: field.valueType, color: TREND_CHART_LINE_COLORS[index % TREND_CHART_LINE_COLORS.length], data: continuousRows.map((row) => toFormulaNumber(row[field.src]?.[field.field])) };
       }).filter(Boolean);
       return { dates, series };
-    }, [chartRows, fieldMap, selectedFieldKeys]);
+    }, [chartRows, fieldMap, selectedFieldKeys, queryDateStart, queryDateEnd, country, asin]);
     const availableDataDates = chartRows.filter((row) => TREND_CHART_FIELDS.some((field) => (
       toFormulaNumber(row[field.src]?.[field.field]) != null
     ))).map((row) => row.date).filter(Boolean).sort();
@@ -3409,6 +3507,41 @@
     const pickerDateRange = dateMode === 'custom'
       ? displayedDateRange
       : presetDateRange || availableDateRange;
+    const indicatorPanel = React.createElement('div', {
+      style: { width: 'min(860px, calc(100vw - 64px))', maxHeight: 'min(620px, calc(100vh - 160px))', overflowY: 'auto', padding: '4px' },
+    },
+      React.createElement('div', { style: { marginBottom: '12px' } },
+        React.createElement('div', { style: { marginBottom: '4px', color: '#334155', fontSize: `${FONT_SIZE_XS}px`, fontWeight: 700 } }, '对比主题'),
+        React.createElement(Select, {
+          value: selectedPresetKey,
+          options: presetOptionsWithDetails,
+          optionLabelProp: 'title',
+          onChange: (value) => {
+            setSelectedPresetKey(value);
+            if (value !== 'custom' && TREND_CHART_PRESETS[value]) setSelectedFieldKeys([...TREND_CHART_PRESETS[value]]);
+          },
+          style: { width: '100%' },
+        })
+      ),
+      React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px' } },
+        TREND_CHART_FIELD_GROUPS.map((group) => React.createElement('div', { key: `trend_group_${group.key}`, style: { minWidth: 0 } },
+          React.createElement('div', { style: { marginBottom: '4px', color: '#64748b', fontSize: `${FONT_SIZE_XS}px`, fontWeight: 700 } }, group.label),
+          React.createElement(Select, {
+            mode: 'multiple',
+            allowClear: true,
+            showSearch: true,
+            placeholder: `选择${group.label}字段`,
+            value: selectedFieldKeys.filter((key) => fieldMap[key]?.group === group.key),
+            options: fieldOptionsByGroup[group.key] || [],
+            onChange: (values) => updateSelectedFieldsByGroup(group.key, values),
+            optionFilterProp: 'label',
+            maxTagCount: 'responsive',
+            style: { width: '100%' },
+          })
+        ))
+      ),
+      React.createElement('div', { style: { marginTop: '10px', color: '#64748b', fontSize: `${FONT_SIZE_XS}px`, textAlign: 'right' } }, `已选择 ${selectedFieldKeys.length} 个指标`)
+    );
 
     return React.createElement(Modal, {
       title: country && asin ? `合并板块趋势图：${country}_${asin}` : '合并板块趋势图',
@@ -3416,33 +3549,24 @@
       visible,
       onCancel: onClose,
       footer: null,
-      width: 'min(1680px, calc(100vw - 32px))',
+      width: 'min(1740px, calc(100vw - 32px))',
       destroyOnClose: false,
-      bodyStyle: { padding: '16px 20px 20px', maxHeight: 'calc(100vh - 96px)', overflowY: 'auto' },
+      bodyStyle: { padding: '16px 20px 20px', maxHeight: 'calc(100vh - 96px)', overflowX: 'hidden', overflowY: 'auto' },
     },
       !country || !asin
         ? React.createElement('div', { style: { padding: 24, color: '#999' } }, '请先筛选到具体国家和 ASIN。')
         : React.createElement('div', null,
           React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'flex-end', marginBottom: '12px' } },
-            React.createElement('div', { style: { flex: '1 1 100%', minWidth: 0 } },
-              React.createElement('div', { style: { marginBottom: '4px', fontWeight: 700, color: '#334155' } }, '选择指标字段'),
-              React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px' } },
-                TREND_CHART_FIELD_GROUPS.map((group) => React.createElement('div', { key: `trend_group_${group.key}`, style: { minWidth: 0 } },
-                  React.createElement('div', { style: { marginBottom: '4px', color: '#64748b', fontSize: `${FONT_SIZE_XS}px`, fontWeight: 700 } }, group.label),
-                  React.createElement(Select, {
-                    mode: 'multiple',
-                    allowClear: true,
-                    showSearch: true,
-                    placeholder: `选择${group.label}字段`,
-                    value: selectedFieldKeys.filter((key) => fieldMap[key]?.group === group.key),
-                    options: fieldOptionsByGroup[group.key] || [],
-                    onChange: (values) => updateSelectedFieldsByGroup(group.key, values),
-                    optionFilterProp: 'label',
-                    maxTagCount: 'responsive',
-                    style: { width: '100%' },
-                  })
-                ))
-              )
+            React.createElement(Popover, {
+              content: indicatorPanel,
+              trigger: 'click',
+              placement: 'bottomLeft',
+              open: indicatorPanelOpen,
+              visible: indicatorPanelOpen,
+              onOpenChange: setIndicatorPanelOpen,
+              onVisibleChange: setIndicatorPanelOpen,
+            },
+              React.createElement(Button, { type: 'primary', style: { minWidth: '180px' } }, `选择对比指标（${selectedFieldKeys.length}）`)
             ),
             React.createElement('div', { style: { flex: '0 1 180px', minWidth: '150px' } },
               React.createElement('div', { style: { marginBottom: '4px', fontWeight: 700, color: '#334155' } }, '日期选择'),
@@ -3475,11 +3599,13 @@
                 style: { width: '100%' },
               })
             ),
-            React.createElement('div', { style: { color: '#64748b', fontSize: `${FONT_SIZE_XS}px`, paddingBottom: '6px', whiteSpace: 'nowrap' } }, loading ? '正在加载真实数据...' : `共 ${chartPayload.dates.length} 个有效日期点`)
+            React.createElement('div', { style: { color: '#64748b', fontSize: `${FONT_SIZE_XS}px`, paddingBottom: '6px', whiteSpace: 'nowrap' } }, loading ? '正在加载真实数据...' : `共 ${chartPayload.dates.length} 个连续日期点`)
           ),
           errorText && React.createElement('div', { style: { marginBottom: '12px', padding: '8px 10px', background: '#fff1f0', border: '1px solid #ffccc7', borderRadius: '6px', color: '#cf1322' } }, errorText),
-          React.createElement(MergedTrendLineChart, { dates: chartPayload.dates, series: chartPayload.series }),
-          React.createElement('div', { style: { marginTop: '8px', color: '#64748b', fontSize: `${FONT_SIZE_XS}px` } }, '说明：已有数据日期为最早真实指标日期至今天；0 视为有效数据，空值不会占用横轴日期。')
+          React.createElement('div', { style: { width: '100%', paddingBottom: '6px' } },
+            React.createElement(MergedTrendLineChart, { dates: chartPayload.dates, series: chartPayload.series })
+          ),
+          React.createElement('div', { style: { marginTop: '8px', color: '#64748b', fontSize: `${FONT_SIZE_XS}px` } }, '说明：图表展示实际数值，不做归一化或趋势换算；已有数据日期为最早真实指标日期至今天，0 视为有效数据，空值日期会保留并以断线表示。')
         )
     );
   };
