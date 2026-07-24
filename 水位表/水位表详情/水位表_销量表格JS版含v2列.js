@@ -50,6 +50,7 @@ async function run() {
   };
   const DEFAULT_HEADER_COLOR = '#fafafa';
   const IMPORTANT_COLUMN_BG = '#fffbe6';
+  const DATA_BAR_FIELDS = ['inventory', 'sale_inventory'];
   const PUSH_PROP_OPTIONS = [
     { label: '显示/隐藏', value: 'hidden' },
     { label: '列宽', value: 'width' },
@@ -76,6 +77,7 @@ async function run() {
     inventory: '库存',
     add: '补货',
     sale_maybe_sales: '销售预估销量',
+    sale_estimate_type: '销售预估日类型',
     on_the_way: '在途',
     sales_store: '销售店铺',
     quantity_receive: '待交付',
@@ -154,6 +156,21 @@ async function run() {
     return TYPE_STYLES[type] || { bg: '#eef2ff', border: '#c7d2fe', text: '#4338ca' };
   }
 
+  const DAY_TYPE_CATEGORY_STYLES = {
+    基础类型: { bg: '#eff6ff', border: '#eff6ff', text: '#2563eb' },
+    叠加基础类型: { bg: '#ecfdf5', border: '#ecfdf5', text: '#059669' },
+    专享类型: { bg: '#fffbeb', border: '#fffbeb', text: '#d97706' },
+    大促BDLD: { bg: '#fef2f2', border: '#fef2f2', text: '#dc2626' },
+    基础活动类型: { bg: '#ecfeff', border: '#ecfeff', text: '#0e7490' },
+    固定活动类型: { bg: '#f5f3ff', border: '#f5f3ff', text: '#6d28d9' },
+    不参与: { bg: '#f4f4f5', border: '#f4f4f5', text: '#71717a' },
+  };
+
+  function getDayTypeCategoryStyle(type, categoryMap) {
+    const category = categoryMap?.[type];
+    return DAY_TYPE_CATEGORY_STYLES[category] || DAY_TYPE_CATEGORY_STYLES.不参与;
+  }
+
   function splitDailyTypes(value) {
     return String(value || '')
       .split('、')
@@ -169,17 +186,18 @@ async function run() {
     { field: 'weighted_sales', width: 77, align: 'right' },
     { field: 'maybe_sales', width: 85, align: 'right', headerColor: '#F2BABA' },
     { field: 'inventory', width: 80, align: 'right', headerColor: '#F2BABA' },
-    { field: 'v2_inventory', width: 84, align: 'right', headerColor: '#DCEBFF' },
     { field: 'sale_maybe_sales', width: 112, align: 'right', headerColor: '#EB6793' },
     { field: 'sale_inventory', width: 114, align: 'right', headerColor: '#EB6793' },
+    { field: 'sale_estimate_type', width: 126, headerColor: '#EB6793' },
     { field: 'sales_store', width: 85, headerColor: '#5DBEAC' },
     { field: 'add', width: 58, align: 'right' },
-    { field: 'v2_add', width: 78, align: 'right', headerColor: '#DCEBFF' },
     { field: 'on_the_way', width: 57, align: 'right' },
-    { field: 'v2_on_the_way', width: 78, align: 'right', headerColor: '#DCEBFF' },
     { field: 'days_for_sale', width: 98, align: 'right' },
-    { field: 'v2_days_for_sale', width: 112, align: 'right', headerColor: '#DCEBFF' },
     { field: 'estimate_days_for_sales', width: 126, align: 'right' },
+    { field: 'v2_inventory', width: 84, align: 'right', headerColor: '#DCEBFF' },
+    { field: 'v2_add', width: 78, align: 'right', headerColor: '#DCEBFF' },
+    { field: 'v2_on_the_way', width: 78, align: 'right', headerColor: '#DCEBFF' },
+    { field: 'v2_days_for_sale', width: 112, align: 'right', headerColor: '#DCEBFF' },
     { field: 'quantity_receive', width: 73, align: 'right' },
     { field: 'overseas_warehouse_test_product', width: 97, title: '海外检测品' },
     { field: 'overseas_warehouse_new_product', width: 100, title: '海外全新品' },
@@ -210,7 +228,7 @@ async function run() {
   ];
 
   const EXPORT_SALES_FIELDS = [
-    'country', 'shop', 'asin', 'date', 'week', 'type', 'maybe_sales', 'sale_maybe_sales', 'sales_store',
+    'country', 'shop', 'asin', 'date', 'week', 'type', 'maybe_sales', 'sale_maybe_sales', 'sale_estimate_type', 'sales_store',
   ];
 
   function parseSearch(search) {
@@ -407,7 +425,7 @@ async function run() {
       : numberValue.toLocaleString(undefined, { maximumFractionDigits: 2 });
   }
 
-  function renderValue(field, value) {
+  function renderValue(field, value, dayTypeCategoryMap = {}) {
     if (field === 'date') {
       const dateText = formatDateYMD(value);
       if (!dateText) return '';
@@ -416,7 +434,7 @@ async function run() {
       const weekDays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
       return `${dateText} ${weekDays[parsed.getDay()]}`;
     }
-    if (field === 'type') {
+    if (field === 'type' || field === 'sale_estimate_type') {
       if (!value) return '';
       const types = splitDailyTypes(value);
       return React.createElement('span', {
@@ -428,7 +446,7 @@ async function run() {
           whiteSpace: 'nowrap',
         },
       }, types.map((type) => {
-        const style = getTypeStyle(type);
+        const style = getDayTypeCategoryStyle(type, dayTypeCategoryMap);
         return React.createElement('span', {
           key: type,
           style: {
@@ -460,6 +478,52 @@ async function run() {
       return formatNumber(value);
     }
     return value == null ? '' : String(value);
+  }
+
+  function renderDataBarValue(field, value, maxAbs) {
+    const numberValue = Number(value);
+    const hasBar = value !== null
+      && value !== undefined
+      && value !== ''
+      && Number.isFinite(numberValue)
+      && numberValue !== 0
+      && maxAbs > 0;
+    const width = hasBar ? Math.min(100, (Math.abs(numberValue) / maxAbs) * 100) : 0;
+
+    return React.createElement('span', {
+      style: {
+        position: 'relative',
+        display: 'block',
+        minWidth: 0,
+        padding: TABLE_CELL_PADDING,
+        boxSizing: 'border-box',
+        overflow: 'hidden',
+        fontVariantNumeric: 'tabular-nums',
+      },
+    },
+      hasBar
+        ? React.createElement('span', {
+          'aria-hidden': true,
+          style: {
+            position: 'absolute',
+            top: 0,
+            bottom: 0,
+            [numberValue > 0 ? 'left' : 'right']: 0,
+            width: `${width}%`,
+            background: numberValue > 0
+              ? 'rgba(34,197,94,0.38)'
+              : 'rgba(239,68,68,0.40)',
+            pointerEvents: 'none',
+          },
+        })
+        : null,
+      React.createElement('span', {
+        style: {
+          position: 'relative',
+          zIndex: 1,
+        },
+      }, renderValue(field, value)),
+    );
   }
 
   function getTextColorForBg(color) {
@@ -758,6 +822,36 @@ async function run() {
       });
   }
 
+  async function requestDayTypeCategoryMap(country) {
+    if (!country) return {};
+    const response = await apiRequest({
+      url: 'datetypetime:list',
+      method: 'get',
+      params: {
+        page: 1,
+        pageSize: 1000,
+        fields: 'country,daytype,daytype_category',
+      },
+    });
+
+    const targetCountry = String(country).trim();
+    return pickRows(response).reduce((map, row) => {
+      const countries = String(row.country || '')
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean);
+      if (
+        countries.includes(targetCountry)
+        && row.daytype
+        && row.daytype_category
+        && !map[row.daytype]
+      ) {
+        map[row.daytype] = row.daytype_category;
+      }
+      return map;
+    }, {});
+  }
+
   function toCsvCell(value) {
     const text = value == null ? '' : String(value);
     if (/[",\n\r]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
@@ -941,7 +1035,7 @@ async function run() {
   }
 
   async function importSalesCsv(file, onDone) {
-    const requiredColumns = ['国家', '店铺', 'ASIN', '日期', '周几', '日类型', '预估销量', '销售预估销量', '销售店铺'];
+    const requiredColumns = ['国家', '店铺', 'ASIN', '日期', '周几', '日类型', '预估销量', '销售预估销量', '销售预估日类型', '销售店铺'];
     const text = (await file.text()).replace(/^\uFEFF/, '');
     const lines = text.split('\n').map((line) => line.replace(/\r$/, '')).filter((line) => line.trim());
     if (lines.length < 2) throw new Error('CSV 文件内容为空或格式不正确');
@@ -974,6 +1068,7 @@ async function run() {
       });
 
       const saleMaybeSalesRaw = String(row['销售预估销量'] || '').trim();
+      const saleEstimateTypeRaw = String(row['销售预估日类型'] || '').trim();
       const salesStoreRaw = String(row['销售店铺'] || '').trim();
       const countryRaw = String(row['国家'] || '').trim();
       const asinRaw = String(row['ASIN'] || '').trim();
@@ -1001,11 +1096,13 @@ async function run() {
         shop_country_asin_date: `${TOTAL_SHOP_NAME}_${countryRaw}_${asinRaw}_${dateKey}`,
         sales_store: salesStoreRaw || null,
         sale_maybe_sales: saleValue,
+        sale_estimate_type: saleEstimateTypeRaw || null,
       });
       if (salesStoreRaw) {
         updatesSalesStore.push({
           shop_country_asin_date: `${salesStoreRaw}_${countryRaw}_${asinRaw}_${dateKey}`,
           sale_maybe_sales: saleValue,
+          sale_estimate_type: saleEstimateTypeRaw || null,
         });
       }
     }
@@ -1027,12 +1124,19 @@ async function run() {
 
     const resultA = await updateDailySalesRows(
       updatesHeji,
-      (update) => ({ sales_store: update.sales_store, sale_maybe_sales: update.sale_maybe_sales }),
+      (update) => ({
+        sales_store: update.sales_store,
+        sale_maybe_sales: update.sale_maybe_sales,
+        sale_estimate_type: update.sale_estimate_type,
+      }),
       '合计店铺',
     );
     const resultB = await updateDailySalesRows(
       updatesSalesStore,
-      (update) => ({ sale_maybe_sales: update.sale_maybe_sales }),
+      (update) => ({
+        sale_maybe_sales: update.sale_maybe_sales,
+        sale_estimate_type: update.sale_estimate_type,
+      }),
       '销售店铺',
     );
 
@@ -1086,7 +1190,7 @@ async function run() {
   function chooseImportFile(onDone) {
     Modal.confirm({
       title: '导入提示',
-      content: '导入格式：CSV UTF-8（逗号分隔）。将更新 daily_sales 的销售预估销量与销售店铺。',
+      content: '导入格式：CSV UTF-8（逗号分隔）。将更新 daily_sales 的销售预估销量、销售预估日类型与销售店铺。',
       okText: '我知道了，开始导入',
       cancelText: '取消',
       onOk: () => {
@@ -1184,7 +1288,17 @@ async function run() {
     if (typeof onDone === 'function') onDone();
   }
 
-  const SalesTable = ({ title, mode, columns, pageSizeDefault, params, refreshKey, toolbar, headerExtra }) => {
+  const SalesTable = ({
+    title,
+    mode,
+    columns,
+    pageSizeDefault,
+    params,
+    refreshKey,
+    dayTypeCategoryMap,
+    toolbar,
+    headerExtra,
+  }) => {
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(false);
     const [page, setPage] = useState(1);
@@ -1333,6 +1447,17 @@ async function run() {
       const visible = columnDefs.filter((col) => col.hidden !== true);
       return visible.length ? visible : columnDefs;
     }, [columnDefs]);
+
+    const dataBarMaxByField = useMemo(() => {
+      const maxima = {};
+      DATA_BAR_FIELDS.forEach((field) => {
+        maxima[field] = rows.reduce((max, row) => {
+          const value = Number(row?.[field]);
+          return Number.isFinite(value) ? Math.max(max, Math.abs(value)) : max;
+        }, 0);
+      });
+      return maxima;
+    }, [rows]);
 
     const scrollX = useMemo(
       () => visibleColumnDefs.reduce((sum, col) => sum + (col.width || 100), 0),
@@ -1521,7 +1646,7 @@ async function run() {
                   key: col.key,
                   style: {
                     width: col.width || 100,
-                    padding: TABLE_CELL_PADDING,
+                    padding: DATA_BAR_FIELDS.includes(col.field) ? 0 : TABLE_CELL_PADDING,
                     borderRight: '1px solid #f0f0f0',
                     borderBottom: '1px solid #f0f0f0',
                     background: col.important ? IMPORTANT_COLUMN_BG : undefined,
@@ -1535,7 +1660,9 @@ async function run() {
                     boxSizing: 'border-box',
                   },
                   title: typeof row[col.field] === 'object' ? '' : String(row[col.field] ?? ''),
-                }, renderValue(col.field, row[col.field]))),
+                }, DATA_BAR_FIELDS.includes(col.field)
+                  ? renderDataBarValue(col.field, row[col.field], dataBarMaxByField[col.field])
+                  : renderValue(col.field, row[col.field], dayTypeCategoryMap))),
               )),
             ),
           ),
@@ -1718,7 +1845,7 @@ async function run() {
     );
   };
 
-  const CoefficientPanel = ({ rows, loading }) => React.createElement('section', {
+  const CoefficientPanel = ({ rows, loading, dayTypeCategoryMap }) => React.createElement('section', {
     style: {
       background: '#fff',
       border: '1px solid #f0f0f0',
@@ -1771,7 +1898,7 @@ async function run() {
         },
       },
         rows.map((row) => {
-          const style = getTypeStyle(row.type);
+          const style = getDayTypeCategoryStyle(row.type, dayTypeCategoryMap);
           return React.createElement('div', {
             key: row.type,
             title: `${row.type}: ${formatNumber(row.coefficient)}`,
@@ -1819,6 +1946,7 @@ async function run() {
     const [shopLoading, setShopLoading] = useState(false);
     const [coefficientRows, setCoefficientRows] = useState([]);
     const [coefficientLoading, setCoefficientLoading] = useState(false);
+    const [dayTypeCategoryMap, setDayTypeCategoryMap] = useState({});
     const [refreshKey, setRefreshKey] = useState(0);
 
     const reloadAll = useCallback(() => setRefreshKey((value) => value + 1), []);
@@ -1891,6 +2019,21 @@ async function run() {
       return () => { alive = false; };
     }, [params.asin, params.country, refreshKey]);
 
+    useEffect(() => {
+      let alive = true;
+      requestDayTypeCategoryMap(params.country)
+        .then((map) => {
+          if (alive) setDayTypeCategoryMap(map);
+        })
+        .catch((error) => {
+          if (alive) {
+            setDayTypeCategoryMap({});
+            ctx.message?.warning?.(`日类型分类加载失败: ${error?.message || ''}`);
+          }
+        });
+      return () => { alive = false; };
+    }, [params.country, refreshKey]);
+
     const currentShop = params.shop || TOTAL_SHOP_NAME;
     const missingRequired = !params.asin || !params.country;
 
@@ -1958,6 +2101,7 @@ async function run() {
         ? React.createElement(CoefficientPanel, {
           rows: coefficientRows,
           loading: coefficientLoading,
+          dayTypeCategoryMap,
         })
         : null,
       missingRequired
@@ -1986,6 +2130,7 @@ async function run() {
             pageSizeDefault: 200,
             params: { ...params, shop: currentShop },
             refreshKey,
+            dayTypeCategoryMap,
             toolbar: futureToolbar,
             headerExtra: React.createElement(ShopSwitcher, {
               params: { ...params, shop: currentShop },
@@ -2002,6 +2147,7 @@ async function run() {
             pageSizeDefault: 200,
             params: { ...params, shop: currentShop },
             refreshKey,
+            dayTypeCategoryMap,
           }),
         ),
     );
