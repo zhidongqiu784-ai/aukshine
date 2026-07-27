@@ -1034,6 +1034,74 @@ async function run() {
     return { successCount, failCount };
   }
 
+  function parseSalesComboKey(comboKey) {
+    const parts = comboKey.split('_');
+    const country = parts[0];
+    const dateKey = parts[parts.length - 1];
+    const asin = parts.slice(1, -1).join('_');
+    return { country, asin, dateKey };
+  }
+
+  async function fetchSalesRowsByCombo(comboKey) {
+    const { country, asin, dateKey } = parseSalesComboKey(comboKey);
+    const response = await apiRequest({
+      url: 'daily_sales:list',
+      method: 'get',
+      params: {
+        pageSize: 200,
+        fields: 'shop,country,asin,date',
+        filter: JSON.stringify({ country, asin, date: dateKey }),
+      },
+    });
+    return pickRows(response);
+  }
+
+  async function validateSalesStoresBeforeImport(salesStoreCheckMap) {
+    const rowsCache = {};
+    const missingStores = [];
+    const comboKeys = Object.keys(salesStoreCheckMap);
+
+    for (const comboKey of comboKeys) {
+      const targetStores = salesStoreCheckMap[comboKey].filter(Boolean);
+      if (!targetStores.length) continue;
+
+      const { country, asin, dateKey } = parseSalesComboKey(comboKey);
+      let rows = [];
+      try {
+        rows = await fetchSalesRowsByCombo(comboKey);
+      } catch (error) {
+        throw new Error(`销售店铺校验失败：无法查询 ${country} / ${asin} / ${dateKey} 的店铺记录，已停止导入。${error?.message || ''}`);
+      }
+
+      rowsCache[comboKey] = rows;
+      const availableStores = Array.from(new Set(
+        rows
+          .map((record) => String(record.shop || '').trim())
+          .filter((shop) => shop && shop !== TOTAL_SHOP_NAME),
+      ));
+
+      targetStores.forEach((salesStore) => {
+        if (!availableStores.includes(salesStore)) {
+          missingStores.push({ country, asin, dateKey, salesStore, availableStores });
+        }
+      });
+      if (missingStores.length) {
+        break;
+      }
+    }
+
+    if (missingStores.length) {
+      const first = missingStores[0];
+      const availableText = first.availableStores.length ? first.availableStores.join('、') : '无';
+      const moreText = missingStores.length > 1 ? `；另有 ${missingStores.length - 1} 组同类错误` : '';
+      throw new Error(
+        `销售店铺不存在：${first.salesStore}（${first.country} / ${first.asin} / ${first.dateKey}）。当前可选店铺：${availableText}。请先修正 CSV 后再导入${moreText}`,
+      );
+    }
+
+    return rowsCache;
+  }
+
   async function importSalesCsv(file, onDone) {
     const requiredColumns = ['国家', '店铺', 'ASIN', '日期', '周几', '日类型', '预估销量', '销售预估销量', '销售预估日类型', '销售店铺'];
     const text = (await file.text()).replace(/^\uFEFF/, '');
@@ -1048,6 +1116,7 @@ async function run() {
     const updatesHeji = [];
     const updatesSalesStore = [];
     const mainStoreMap = {};
+    const salesStoreCheckMap = {};
     const skippedStats = {
       columnMismatch: 0,
       missingSaleMaybeSales: 0,
@@ -1091,6 +1160,12 @@ async function run() {
       if (!Object.prototype.hasOwnProperty.call(mainStoreMap, comboKey)) {
         mainStoreMap[comboKey] = salesStoreRaw;
       }
+      if (salesStoreRaw) {
+        if (!salesStoreCheckMap[comboKey]) salesStoreCheckMap[comboKey] = [];
+        if (!salesStoreCheckMap[comboKey].includes(salesStoreRaw)) {
+          salesStoreCheckMap[comboKey].push(salesStoreRaw);
+        }
+      }
 
       updatesHeji.push({
         shop_country_asin_date: `${TOTAL_SHOP_NAME}_${countryRaw}_${asinRaw}_${dateKey}`,
@@ -1119,7 +1194,13 @@ async function run() {
     notifyTask(
       'sales-import-main',
       'CSV 导入执行中',
-      `已解析 ${updatesHeji.length} 条有效数据，正在更新合计店铺和销售店铺...`,
+      `已解析 ${updatesHeji.length} 条有效数据，正在校验销售店铺...`,
+    );
+    const salesRowsCache = await validateSalesStoresBeforeImport(salesStoreCheckMap);
+    notifyTask(
+      'sales-import-main',
+      'CSV 导入执行中',
+      '销售店铺校验通过，正在更新合计店铺和销售店铺...',
     );
 
     const resultA = await updateDailySalesRows(
@@ -1139,27 +1220,19 @@ async function run() {
       }),
       '销售店铺',
     );
+    if (resultB.failCount > 0) {
+      throw new Error(`销售店铺更新失败 ${resultB.failCount} 条，已停止非主店铺置零，避免误清销量。请检查错误后重试。`);
+    }
 
     const zeroUpdates = [];
     notifyTask('sales-import-main', 'CSV 导入执行中', '正在查询并置零非主销售店铺...');
     for (const comboKey of Object.keys(mainStoreMap)) {
-      const parts = comboKey.split('_');
-      const country = parts[0];
-      const dateKey = parts[parts.length - 1];
-      const asin = parts.slice(1, -1).join('_');
+      const { country, asin, dateKey } = parseSalesComboKey(comboKey);
       const mainStore = mainStoreMap[comboKey];
 
       try {
-        const response = await apiRequest({
-          url: 'daily_sales:list',
-          method: 'get',
-          params: {
-            pageSize: 200,
-            fields: 'shop,country,asin,date',
-            filter: JSON.stringify({ country, asin, date: dateKey }),
-          },
-        });
-        pickRows(response).forEach((record) => {
+        const rows = salesRowsCache[comboKey] || await fetchSalesRowsByCombo(comboKey);
+        rows.forEach((record) => {
           if (!record.shop || record.shop === mainStore || record.shop === TOTAL_SHOP_NAME) return;
           zeroUpdates.push({
             shop_country_asin_date: `${record.shop}_${country}_${asin}_${dateKey}`,
