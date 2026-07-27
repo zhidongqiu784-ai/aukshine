@@ -1,0 +1,105 @@
+{
+  "data": {
+    "id": 376599341563904,
+    "createdAt": "2026-07-21T02:22:39.000Z",
+    "updatedAt": "2026-07-21T03:42:31.000Z",
+    "key": "ppdw5s21mzc",
+    "title": "自动校准日类型的系数",
+    "enabled": true,
+    "description": "每天8点，自动校准日类型的系数\n1、计算系数 - 基于过去数据（不含今天），按asin/country/type分组计算平均日系数 SUM(sales)/SUM(weighted_sales)，保留一位小数，更新到sales_coefficient表。\n2、同步系数 - 将sales_coefficient中的coefficient值同步到daily_sales表中日期>=今天的记录中。\n3、更新预计销量",
+    "type": "schedule",
+    "triggerTitle": "自动校准日类型的系数",
+    "config": {
+      "mode": 0,
+      "repeat": 86400000,
+      "startsOn": "2025-12-01T00:30:00.000Z"
+    },
+    "invalid": false,
+    "executed": 0,
+    "allExecuted": 0,
+    "current": true,
+    "sync": false,
+    "options": {
+      "timeout": 900000,
+      "stackLimit": 1,
+      "deleteExecutionOnStatus": []
+    },
+    "createdById": null,
+    "updatedById": 3,
+    "nodes": [
+      {
+        "id": 376599341563905,
+        "createdAt": "2026-07-21T02:22:39.000Z",
+        "updatedAt": "2026-07-21T02:23:09.000Z",
+        "key": "1bbaijfre5q",
+        "title": "自动计算活动系数 ：\n基于过去数据（不含今天），某日类型有一天算一天，按asin/country/type分组计算平均日系数 SUM(sales)/SUM(weighted_sales)，保留2位小数，更新到sales_coefficient表。",
+        "upstreamId": 376599341563908,
+        "branchIndex": null,
+        "downstreamId": 376599341563906,
+        "type": "sql",
+        "config": {
+          "sql": "UPDATE sales_coefficient AS sc\nINNER JOIN (\n    SELECT\n        ds.asin,\n        ds.country,\n        REPLACE(\n            REPLACE(\n                REPLACE(ds.type, '、', ','),\n                '，',\n                ','\n            ),\n            ' ',\n            ''\n        ) AS normalized_type,\n        ROUND(\n            SUM(ds.sales) / NULLIF(SUM(ds.weighted_sales), 0),\n            2\n        ) AS calculated_coefficient\n    FROM daily_sales AS ds\n    WHERE ds.shop = '合计'\n      AND ds.date < CURDATE()\n      AND ds.sales IS NOT NULL\n      AND ds.weighted_sales IS NOT NULL\n      AND ds.weighted_sales != 0\n\n      -- 排除复合日类型\n      AND REPLACE(\n              REPLACE(\n                  REPLACE(ds.type, '、', ','),\n                  '，',\n                  ','\n              ),\n              ' ',\n              ''\n          ) NOT LIKE '%,%'\n\n      -- 只计算基础活动类型\n      AND EXISTS (\n          SELECT 1\n          FROM datetypetime AS dtt\n          WHERE dtt.daytype = REPLACE(\n                    REPLACE(\n                        REPLACE(ds.type, '、', ','),\n                        '，',\n                        ','\n                    ),\n                    ' ',\n                    ''\n                )\n            AND dtt.daytype_category = '基础活动类型'\n            AND FIND_IN_SET(ds.country, dtt.country) > 0\n      )\n    GROUP BY\n        ds.asin,\n        ds.country,\n        REPLACE(\n            REPLACE(\n                REPLACE(ds.type, '、', ','),\n                '，',\n                ','\n            ),\n            ' ',\n            ''\n        )\n    HAVING calculated_coefficient IS NOT NULL\n) AS calc\n    ON calc.asin = sc.asin\n   AND calc.country = sc.country\n   AND calc.normalized_type = sc.type\nSET\n    sc.coefficient = calc.calculated_coefficient\nWHERE sc.type != '日常';",
+          "variables": [],
+          "dataSource": "main"
+        },
+        "workflowId": 376599341563904
+      },
+      {
+        "id": 376599341563906,
+        "createdAt": "2026-07-21T02:22:39.000Z",
+        "updatedAt": "2026-07-21T02:22:39.000Z",
+        "key": "rbqovmyvse9",
+        "title": "同步系数 - 将sales_coefficient中的coefficient值同步到daily_sales表中日期>=今天的记录中。",
+        "upstreamId": 376599341563905,
+        "branchIndex": null,
+        "downstreamId": 376599341563907,
+        "type": "sql",
+        "config": {
+          "sql": "DROP TEMPORARY TABLE IF EXISTS temp_daily_type_coefficient;\n\nCREATE TEMPORARY TABLE temp_daily_type_coefficient AS\nWITH RECURSIVE\nfuture_types AS (\n    SELECT DISTINCT\n        ds.asin,\n        ds.country,\n        ds.type AS original_type,\n        REPLACE(\n            REPLACE(\n                REPLACE(\n                    REPLACE(\n                        REPLACE(ds.type, '、', ','),\n                        '，',\n                        ','\n                    ),\n                    ' ',\n                    ''\n                ),\n                'BD（预测）',\n                'BD'\n            ),\n            'BD(预测)',\n            'BD'\n        ) AS normalized_type\n    FROM daily_sales AS ds\n    WHERE ds.date >= CURDATE()\n      AND ds.asin IS NOT NULL\n      AND ds.country IS NOT NULL\n      AND ds.type IS NOT NULL\n      AND TRIM(ds.type) != ''\n),\ntype_parts AS (\n    SELECT\n        ft.asin,\n        ft.country,\n        ft.original_type,\n        SUBSTRING_INDEX(ft.normalized_type, ',', 1) AS part_type,\n        CASE\n            WHEN INSTR(ft.normalized_type, ',') > 0\n            THEN SUBSTRING(\n                ft.normalized_type,\n                INSTR(ft.normalized_type, ',') + 1\n            )\n            ELSE ''\n        END AS rest_type\n    FROM future_types AS ft\n\n    UNION ALL\n\n    SELECT\n        tp.asin,\n        tp.country,\n        tp.original_type,\n        SUBSTRING_INDEX(tp.rest_type, ',', 1) AS part_type,\n        CASE\n            WHEN INSTR(tp.rest_type, ',') > 0\n            THEN SUBSTRING(\n                tp.rest_type,\n                INSTR(tp.rest_type, ',') + 1\n            )\n            ELSE ''\n        END AS rest_type\n    FROM type_parts AS tp\n    WHERE tp.rest_type != ''\n),\ncoefficient_lookup AS (\n    SELECT\n        sc.asin,\n        sc.country,\n        REPLACE(\n            REPLACE(\n                REPLACE(sc.type, '、', ','),\n                '，',\n                ','\n            ),\n            ' ',\n            ''\n        ) AS normalized_type,\n        MAX(sc.coefficient) AS coefficient\n    FROM sales_coefficient AS sc\n    WHERE sc.coefficient IS NOT NULL\n      AND sc.coefficient > 0\n    GROUP BY\n        sc.asin,\n        sc.country,\n        REPLACE(\n            REPLACE(\n                REPLACE(sc.type, '、', ','),\n                '，',\n                ','\n            ),\n            ' ',\n            ''\n        )\n    HAVING COUNT(DISTINCT sc.coefficient) = 1\n)\nSELECT\n    tp.asin,\n    tp.country,\n    tp.original_type,\n    ROUND(\n        EXP(SUM(LN(cl.coefficient))),\n        2\n    ) AS calculated_coefficient\nFROM type_parts AS tp\nLEFT JOIN coefficient_lookup AS cl\n    ON cl.asin = tp.asin\n   AND cl.country = tp.country\n   AND cl.normalized_type = tp.part_type\nGROUP BY\n    tp.asin,\n    tp.country,\n    tp.original_type\nHAVING COUNT(*) = COUNT(cl.coefficient);\n\nALTER TABLE temp_daily_type_coefficient\nADD INDEX idx_type_lookup (asin, country, original_type);\n\nUPDATE daily_sales AS ds\nINNER JOIN temp_daily_type_coefficient AS calc\n    ON calc.asin = ds.asin\n   AND calc.country = ds.country\n   AND calc.original_type = ds.type\nSET ds.coefficient = calc.calculated_coefficient\nWHERE ds.date >= CURDATE()\n  AND NOT (\n      ds.coefficient <=> calc.calculated_coefficient\n  );\n\nDROP TEMPORARY TABLE IF EXISTS temp_daily_type_coefficient;",
+          "variables": [],
+          "dataSource": "main"
+        },
+        "workflowId": 376599341563904
+      },
+      {
+        "id": 376599341563907,
+        "createdAt": "2026-07-21T02:22:39.000Z",
+        "updatedAt": "2026-07-21T02:22:39.000Z",
+        "key": "9uyp07gvgoi",
+        "title": "更新预计销量",
+        "upstreamId": 376599341563906,
+        "branchIndex": null,
+        "downstreamId": null,
+        "type": "sql",
+        "config": {
+          "sql": "UPDATE nocobase.daily_sales\nSET maybe_sales = weighted_sales * coefficient\nWHERE date >= CURRENT_DATE;",
+          "dataSource": "main"
+        },
+        "workflowId": 376599341563904
+      },
+      {
+        "id": 376599341563908,
+        "createdAt": "2026-07-21T02:22:39.000Z",
+        "updatedAt": "2026-07-21T02:22:45.000Z",
+        "key": "ggzglywe1i9",
+        "title": "01-非自动计算类型（基础活动类型）恢复初始系数",
+        "upstreamId": null,
+        "branchIndex": null,
+        "downstreamId": 376599341563905,
+        "type": "sql",
+        "config": {
+          "sql": "UPDATE sales_coefficient AS sc\nINNER JOIN (\n    SELECT\n        dtt.country AS activity_region,\n        dtt.daytype,\n        MAX(dtt.chushixishu) AS initial_coefficient\n    FROM datetypetime AS dtt\n    WHERE dtt.daytype_category <> '基础活动类型'\n      AND dtt.daytype IS NOT NULL\n      AND TRIM(dtt.daytype) != ''\n      AND dtt.chushixishu IS NOT NULL\n    GROUP BY\n        dtt.country,\n        dtt.daytype\n    HAVING COUNT(DISTINCT dtt.chushixishu) = 1\n) AS cfg\n    ON cfg.daytype = sc.type\n   AND FIND_IN_SET(sc.country, cfg.activity_region) > 0\nSET\n    sc.coefficient = cfg.initial_coefficient\nWHERE NOT (\n    sc.coefficient <=> cfg.initial_coefficient\n);",
+          "variables": [],
+          "dataSource": "main"
+        },
+        "workflowId": 376599341563904
+      }
+    ],
+    "versionStats": {
+      "createdAt": "2026-07-21T02:22:39.000Z",
+      "updatedAt": "2026-07-24T06:59:51.000Z",
+      "id": 376599341563904,
+      "executed": 5
+    }
+  }
+}

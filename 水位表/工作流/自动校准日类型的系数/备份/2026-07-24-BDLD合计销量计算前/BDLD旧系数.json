@@ -1,0 +1,4503 @@
+{
+  "data": [
+    {
+      "asin": "B0D2R95KQR",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "CA_B0D2R95KQR_BD"
+    },
+    {
+      "asin": "B0D2R95KQR",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0D2R95KQR_LD"
+    },
+    {
+      "asin": "B0D9XBD49H",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "CA_B0D9XBD49H_BD"
+    },
+    {
+      "asin": "B0D9XBD49H",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0D9XBD49H_LD"
+    },
+    {
+      "asin": "B0DK6DXKSK",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "CA_B0DK6DXKSK_BD"
+    },
+    {
+      "asin": "B0DK6DXKSK",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0DK6DXKSK_LD"
+    },
+    {
+      "asin": "B0DPGHCDXV",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "CA_B0DPGHCDXV_BD"
+    },
+    {
+      "asin": "B0DPGHCDXV",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0DPGHCDXV_LD"
+    },
+    {
+      "asin": "B0DPQJLG4L",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "CA_B0DPQJLG4L_BD"
+    },
+    {
+      "asin": "B0DPQJLG4L",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0DPQJLG4L_LD"
+    },
+    {
+      "asin": "B0F5VXXJRK",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.37,
+      "country_asin_type": "CA_B0F5VXXJRK_BD"
+    },
+    {
+      "asin": "B0F5VXXJRK",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0F5VXXJRK_LD"
+    },
+    {
+      "asin": "B0F6LGJY2V",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "CA_B0F6LGJY2V_BD"
+    },
+    {
+      "asin": "B0F6LGJY2V",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0F6LGJY2V_LD"
+    },
+    {
+      "asin": "B0F6VGFMTP",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "CA_B0F6VGFMTP_BD"
+    },
+    {
+      "asin": "B0F6VGFMTP",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0F6VGFMTP_LD"
+    },
+    {
+      "asin": "B0F83MMX3K",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "CA_B0F83MMX3K_BD"
+    },
+    {
+      "asin": "B0F83MMX3K",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0F83MMX3K_LD"
+    },
+    {
+      "asin": "B0F83N81M8",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "CA_B0F83N81M8_BD"
+    },
+    {
+      "asin": "B0F83N81M8",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0F83N81M8_LD"
+    },
+    {
+      "asin": "B0F8TPK7DT",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "CA_B0F8TPK7DT_BD"
+    },
+    {
+      "asin": "B0F8TPK7DT",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0F8TPK7DT_LD"
+    },
+    {
+      "asin": "B0F9YRRNMR",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "CA_B0F9YRRNMR_BD"
+    },
+    {
+      "asin": "B0F9YRRNMR",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0F9YRRNMR_LD"
+    },
+    {
+      "asin": "B0F9YV9KNF",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "CA_B0F9YV9KNF_BD"
+    },
+    {
+      "asin": "B0F9YV9KNF",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0F9YV9KNF_LD"
+    },
+    {
+      "asin": "B0FC2VLSP2",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "CA_B0FC2VLSP2_BD"
+    },
+    {
+      "asin": "B0FC2VLSP2",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0FC2VLSP2_LD"
+    },
+    {
+      "asin": "B0FCF8HMC5",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "CA_B0FCF8HMC5_BD"
+    },
+    {
+      "asin": "B0FCF8HMC5",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0FCF8HMC5_LD"
+    },
+    {
+      "asin": "B0FCF9F77M",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "CA_B0FCF9F77M_BD"
+    },
+    {
+      "asin": "B0FCF9F77M",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0FCF9F77M_LD"
+    },
+    {
+      "asin": "B0FCFBVVZ8",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "CA_B0FCFBVVZ8_BD"
+    },
+    {
+      "asin": "B0FCFBVVZ8",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0FCFBVVZ8_LD"
+    },
+    {
+      "asin": "B0FGD57ZCR",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "CA_B0FGD57ZCR_BD"
+    },
+    {
+      "asin": "B0FGD57ZCR",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0FGD57ZCR_LD"
+    },
+    {
+      "asin": "B0FGD5V9V5",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "CA_B0FGD5V9V5_BD"
+    },
+    {
+      "asin": "B0FGD5V9V5",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0FGD5V9V5_LD"
+    },
+    {
+      "asin": "B0FGD8JP4T",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "CA_B0FGD8JP4T_BD"
+    },
+    {
+      "asin": "B0FGD8JP4T",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0FGD8JP4T_LD"
+    },
+    {
+      "asin": "B0FGD94MNC",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "CA_B0FGD94MNC_BD"
+    },
+    {
+      "asin": "B0FGD94MNC",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0FGD94MNC_LD"
+    },
+    {
+      "asin": "B0FGDDKQBG",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "CA_B0FGDDKQBG_BD"
+    },
+    {
+      "asin": "B0FGDDKQBG",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0FGDDKQBG_LD"
+    },
+    {
+      "asin": "B0FKG2MVQC",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "CA_B0FKG2MVQC_BD"
+    },
+    {
+      "asin": "B0FKG2MVQC",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0FKG2MVQC_LD"
+    },
+    {
+      "asin": "B0FKG5YT3H",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 0.53,
+      "country_asin_type": "CA_B0FKG5YT3H_BD"
+    },
+    {
+      "asin": "B0FKG5YT3H",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0FKG5YT3H_LD"
+    },
+    {
+      "asin": "B0FKGGV53L",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "CA_B0FKGGV53L_BD"
+    },
+    {
+      "asin": "B0FKGGV53L",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0FKGGV53L_LD"
+    },
+    {
+      "asin": "B0FKGLYKYK",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "CA_B0FKGLYKYK_BD"
+    },
+    {
+      "asin": "B0FKGLYKYK",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0FKGLYKYK_LD"
+    },
+    {
+      "asin": "B0FNQXD2TB",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "CA_B0FNQXD2TB_BD"
+    },
+    {
+      "asin": "B0FNQXD2TB",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0FNQXD2TB_LD"
+    },
+    {
+      "asin": "B0FSRTKZTJ",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "CA_B0FSRTKZTJ_BD"
+    },
+    {
+      "asin": "B0FSRTKZTJ",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0FSRTKZTJ_LD"
+    },
+    {
+      "asin": "B0FSSL4WT1",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "CA_B0FSSL4WT1_BD"
+    },
+    {
+      "asin": "B0FSSL4WT1",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0FSSL4WT1_LD"
+    },
+    {
+      "asin": "B0FT81GZPY",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "CA_B0FT81GZPY_BD"
+    },
+    {
+      "asin": "B0FT81GZPY",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0FT81GZPY_LD"
+    },
+    {
+      "asin": "B0FT821RJB",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "CA_B0FT821RJB_BD"
+    },
+    {
+      "asin": "B0FT821RJB",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0FT821RJB_LD"
+    },
+    {
+      "asin": "B0FT8MDDQV",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.68,
+      "country_asin_type": "CA_B0FT8MDDQV_BD"
+    },
+    {
+      "asin": "B0FT8MDDQV",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 1.88,
+      "country_asin_type": "CA_B0FT8MDDQV_LD"
+    },
+    {
+      "asin": "B0G1THP41F",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "CA_B0G1THP41F_BD"
+    },
+    {
+      "asin": "B0G1THP41F",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0G1THP41F_LD"
+    },
+    {
+      "asin": "B0G2YC49MR",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "CA_B0G2YC49MR_BD"
+    },
+    {
+      "asin": "B0G2YC49MR",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0G2YC49MR_LD"
+    },
+    {
+      "asin": "B0G35PYVR6",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.07,
+      "country_asin_type": "CA_B0G35PYVR6_BD"
+    },
+    {
+      "asin": "B0G35PYVR6",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0G35PYVR6_LD"
+    },
+    {
+      "asin": "B0G37L2V46",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.4,
+      "country_asin_type": "CA_B0G37L2V46_BD"
+    },
+    {
+      "asin": "B0G37L2V46",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0G37L2V46_LD"
+    },
+    {
+      "asin": "B0G6JYGRN8",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "CA_B0G6JYGRN8_BD"
+    },
+    {
+      "asin": "B0G6JYGRN8",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0G6JYGRN8_LD"
+    },
+    {
+      "asin": "B0GCDC6LSZ",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "CA_B0GCDC6LSZ_BD"
+    },
+    {
+      "asin": "B0GCDC6LSZ",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0GCDC6LSZ_LD"
+    },
+    {
+      "asin": "B0GCF7SRCH",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "CA_B0GCF7SRCH_BD"
+    },
+    {
+      "asin": "B0GCF7SRCH",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0GCF7SRCH_LD"
+    },
+    {
+      "asin": "B0GD71R479",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "CA_B0GD71R479_BD"
+    },
+    {
+      "asin": "B0GD71R479",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0GD71R479_LD"
+    },
+    {
+      "asin": "B0GJS6SN69",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.03,
+      "country_asin_type": "CA_B0GJS6SN69_BD"
+    },
+    {
+      "asin": "B0GJS6SN69",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.13,
+      "country_asin_type": "CA_B0GJS6SN69_LD"
+    },
+    {
+      "asin": "B0GVDVK1DL",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 2.83,
+      "country_asin_type": "CA_B0GVDVK1DL_BD"
+    },
+    {
+      "asin": "B0GVDVK1DL",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 1.15,
+      "country_asin_type": "CA_B0GVDVK1DL_LD"
+    },
+    {
+      "asin": "B0GWLN5RNP",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 3.07,
+      "country_asin_type": "CA_B0GWLN5RNP_BD"
+    },
+    {
+      "asin": "B0GWLN5RNP",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 0.23,
+      "country_asin_type": "CA_B0GWLN5RNP_LD"
+    },
+    {
+      "asin": "B0H32PPTXC",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 0.19,
+      "country_asin_type": "CA_B0H32PPTXC_BD"
+    },
+    {
+      "asin": "B0H32PPTXC",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0H32PPTXC_LD"
+    },
+    {
+      "asin": "B0H369S1V7",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "CA_B0H369S1V7_BD"
+    },
+    {
+      "asin": "B0H369S1V7",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0H369S1V7_LD"
+    },
+    {
+      "asin": "B0H392ZTKX",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "CA_B0H392ZTKX_BD"
+    },
+    {
+      "asin": "B0H392ZTKX",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0H392ZTKX_LD"
+    },
+    {
+      "asin": "B0H39593JH",
+      "country": "CA",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "CA_B0H39593JH_BD"
+    },
+    {
+      "asin": "B0H39593JH",
+      "country": "CA",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "CA_B0H39593JH_LD"
+    },
+    {
+      "asin": "B09XWYSBZB",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B09XWYSBZB_BD"
+    },
+    {
+      "asin": "B09XWYSBZB",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B09XWYSBZB_LD"
+    },
+    {
+      "asin": "B0CCPDYF3B",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0CCPDYF3B_BD"
+    },
+    {
+      "asin": "B0CCPDYF3B",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0CCPDYF3B_LD"
+    },
+    {
+      "asin": "B0CLQXHGRV",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0CLQXHGRV_BD"
+    },
+    {
+      "asin": "B0CLQXHGRV",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0CLQXHGRV_LD"
+    },
+    {
+      "asin": "B0CSG9GZK1",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0CSG9GZK1_BD"
+    },
+    {
+      "asin": "B0CSG9GZK1",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0CSG9GZK1_LD"
+    },
+    {
+      "asin": "B0CSG9L4JG",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0CSG9L4JG_BD"
+    },
+    {
+      "asin": "B0CSG9L4JG",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0CSG9L4JG_LD"
+    },
+    {
+      "asin": "B0CT85F9BP",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0CT85F9BP_BD"
+    },
+    {
+      "asin": "B0CT85F9BP",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0CT85F9BP_LD"
+    },
+    {
+      "asin": "B0CY4HT5NK",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0CY4HT5NK_BD"
+    },
+    {
+      "asin": "B0CY4HT5NK",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0CY4HT5NK_LD"
+    },
+    {
+      "asin": "B0D9VB9VD5",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0D9VB9VD5_BD"
+    },
+    {
+      "asin": "B0D9VB9VD5",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0D9VB9VD5_LD"
+    },
+    {
+      "asin": "B0D9VVTSQR",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0D9VVTSQR_BD"
+    },
+    {
+      "asin": "B0D9VVTSQR",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0D9VVTSQR_LD"
+    },
+    {
+      "asin": "B0DBSSZ6X8",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0DBSSZ6X8_BD"
+    },
+    {
+      "asin": "B0DBSSZ6X8",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0DBSSZ6X8_LD"
+    },
+    {
+      "asin": "B0DBT4DVX8",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0DBT4DVX8_BD"
+    },
+    {
+      "asin": "B0DBT4DVX8",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0DBT4DVX8_LD"
+    },
+    {
+      "asin": "B0DCYY9CVB",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0DCYY9CVB_BD"
+    },
+    {
+      "asin": "B0DCYY9CVB",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0DCYY9CVB_LD"
+    },
+    {
+      "asin": "B0DG5FWD16",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0DG5FWD16_BD"
+    },
+    {
+      "asin": "B0DG5FWD16",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0DG5FWD16_LD"
+    },
+    {
+      "asin": "B0DHKLB5MQ",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0DHKLB5MQ_BD"
+    },
+    {
+      "asin": "B0DHKLB5MQ",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0DHKLB5MQ_LD"
+    },
+    {
+      "asin": "B0DJ34XBZ6",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0DJ34XBZ6_BD"
+    },
+    {
+      "asin": "B0DJ34XBZ6",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0DJ34XBZ6_LD"
+    },
+    {
+      "asin": "B0DJ3587NV",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0DJ3587NV_BD"
+    },
+    {
+      "asin": "B0DJ3587NV",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0DJ3587NV_LD"
+    },
+    {
+      "asin": "B0DK9832JZ",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0DK9832JZ_BD"
+    },
+    {
+      "asin": "B0DK9832JZ",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0DK9832JZ_LD"
+    },
+    {
+      "asin": "B0DKF1N7DX",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0DKF1N7DX_BD"
+    },
+    {
+      "asin": "B0DKF1N7DX",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0DKF1N7DX_LD"
+    },
+    {
+      "asin": "B0DLGRYH3W",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0DLGRYH3W_BD"
+    },
+    {
+      "asin": "B0DLGRYH3W",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0DLGRYH3W_LD"
+    },
+    {
+      "asin": "B0DLNSKQ3S",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0DLNSKQ3S_BD"
+    },
+    {
+      "asin": "B0DLNSKQ3S",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0DLNSKQ3S_LD"
+    },
+    {
+      "asin": "B0DMZ9Q993",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0DMZ9Q993_BD"
+    },
+    {
+      "asin": "B0DMZ9Q993",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0DMZ9Q993_LD"
+    },
+    {
+      "asin": "B0DN13KL1V",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0DN13KL1V_BD"
+    },
+    {
+      "asin": "B0DN13KL1V",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0DN13KL1V_LD"
+    },
+    {
+      "asin": "B0DNFGKZBQ",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0DNFGKZBQ_BD"
+    },
+    {
+      "asin": "B0DNFGKZBQ",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0DNFGKZBQ_LD"
+    },
+    {
+      "asin": "B0DP647J1F",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0DP647J1F_BD"
+    },
+    {
+      "asin": "B0DP647J1F",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0DP647J1F_LD"
+    },
+    {
+      "asin": "B0DPGV9HB2",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0DPGV9HB2_BD"
+    },
+    {
+      "asin": "B0DPGV9HB2",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0DPGV9HB2_LD"
+    },
+    {
+      "asin": "B0DPYK1RTY",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0DPYK1RTY_BD"
+    },
+    {
+      "asin": "B0DPYK1RTY",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0DPYK1RTY_LD"
+    },
+    {
+      "asin": "B0DWT25PRR",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0DWT25PRR_BD"
+    },
+    {
+      "asin": "B0DWT25PRR",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0DWT25PRR_LD"
+    },
+    {
+      "asin": "B0DXL7ZTRB",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0DXL7ZTRB_BD"
+    },
+    {
+      "asin": "B0DXL7ZTRB",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0DXL7ZTRB_LD"
+    },
+    {
+      "asin": "B0DYF1WMN2",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0DYF1WMN2_BD"
+    },
+    {
+      "asin": "B0DYF1WMN2",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0DYF1WMN2_LD"
+    },
+    {
+      "asin": "B0F3CFG72T",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0F3CFG72T_BD"
+    },
+    {
+      "asin": "B0F3CFG72T",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0F3CFG72T_LD"
+    },
+    {
+      "asin": "B0F42CQ3L8",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0F42CQ3L8_BD"
+    },
+    {
+      "asin": "B0F42CQ3L8",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0F42CQ3L8_LD"
+    },
+    {
+      "asin": "B0F43H88TF",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0F43H88TF_BD"
+    },
+    {
+      "asin": "B0F43H88TF",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0F43H88TF_LD"
+    },
+    {
+      "asin": "B0F4JZQH42",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0F4JZQH42_BD"
+    },
+    {
+      "asin": "B0F4JZQH42",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0F4JZQH42_LD"
+    },
+    {
+      "asin": "B0F5Q5XJTD",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0F5Q5XJTD_BD"
+    },
+    {
+      "asin": "B0F5Q5XJTD",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0F5Q5XJTD_LD"
+    },
+    {
+      "asin": "B0F6LGJY2V",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0F6LGJY2V_BD"
+    },
+    {
+      "asin": "B0F6LGJY2V",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0F6LGJY2V_LD"
+    },
+    {
+      "asin": "B0F6X3865N",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0F6X3865N_BD"
+    },
+    {
+      "asin": "B0F6X3865N",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0F6X3865N_LD"
+    },
+    {
+      "asin": "B0F7XDHV2F",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0F7XDHV2F_BD"
+    },
+    {
+      "asin": "B0F7XDHV2F",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0F7XDHV2F_LD"
+    },
+    {
+      "asin": "B0F83JBGMF",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0F83JBGMF_BD"
+    },
+    {
+      "asin": "B0F83JBGMF",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0F83JBGMF_LD"
+    },
+    {
+      "asin": "B0F83KLX8W",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0F83KLX8W_BD"
+    },
+    {
+      "asin": "B0F83KLX8W",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0F83KLX8W_LD"
+    },
+    {
+      "asin": "B0F8N6DCF8",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0F8N6DCF8_BD"
+    },
+    {
+      "asin": "B0F8N6DCF8",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0F8N6DCF8_LD"
+    },
+    {
+      "asin": "B0F9FLL1DF",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0F9FLL1DF_BD"
+    },
+    {
+      "asin": "B0F9FLL1DF",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0F9FLL1DF_LD"
+    },
+    {
+      "asin": "B0F9FLYCJF",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0F9FLYCJF_BD"
+    },
+    {
+      "asin": "B0F9FLYCJF",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0F9FLYCJF_LD"
+    },
+    {
+      "asin": "B0F9FPZN6L",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0F9FPZN6L_BD"
+    },
+    {
+      "asin": "B0F9FPZN6L",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0F9FPZN6L_LD"
+    },
+    {
+      "asin": "B0FGHV2TZC",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.35,
+      "country_asin_type": "DE_B0FGHV2TZC_BD"
+    },
+    {
+      "asin": "B0FGHV2TZC",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0FGHV2TZC_LD"
+    },
+    {
+      "asin": "B0FHB14N23",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0FHB14N23_BD"
+    },
+    {
+      "asin": "B0FHB14N23",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0FHB14N23_LD"
+    },
+    {
+      "asin": "B0FJ2BXF8X",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0FJ2BXF8X_BD"
+    },
+    {
+      "asin": "B0FJ2BXF8X",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0FJ2BXF8X_LD"
+    },
+    {
+      "asin": "B0FK4R6TPM",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0FK4R6TPM_BD"
+    },
+    {
+      "asin": "B0FK4R6TPM",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0FK4R6TPM_LD"
+    },
+    {
+      "asin": "B0FM2FF46L",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.57,
+      "country_asin_type": "DE_B0FM2FF46L_BD"
+    },
+    {
+      "asin": "B0FM2FF46L",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 1.67,
+      "country_asin_type": "DE_B0FM2FF46L_LD"
+    },
+    {
+      "asin": "B0FMK5WF98",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0FMK5WF98_BD"
+    },
+    {
+      "asin": "B0FMK5WF98",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0FMK5WF98_LD"
+    },
+    {
+      "asin": "B0FS6TKXV1",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0FS6TKXV1_BD"
+    },
+    {
+      "asin": "B0FS6TKXV1",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0FS6TKXV1_LD"
+    },
+    {
+      "asin": "B0FWJ297HL",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0FWJ297HL_BD"
+    },
+    {
+      "asin": "B0FWJ297HL",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0FWJ297HL_LD"
+    },
+    {
+      "asin": "B0FWJJ9F62",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0FWJJ9F62_BD"
+    },
+    {
+      "asin": "B0FWJJ9F62",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0FWJJ9F62_LD"
+    },
+    {
+      "asin": "B0FWKB1N2T",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0FWKB1N2T_BD"
+    },
+    {
+      "asin": "B0FWKB1N2T",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0FWKB1N2T_LD"
+    },
+    {
+      "asin": "B0FY2RKWLK",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0FY2RKWLK_BD"
+    },
+    {
+      "asin": "B0FY2RKWLK",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0FY2RKWLK_LD"
+    },
+    {
+      "asin": "B0FZL5J4VZ",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0FZL5J4VZ_BD"
+    },
+    {
+      "asin": "B0FZL5J4VZ",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0FZL5J4VZ_LD"
+    },
+    {
+      "asin": "B0G1YSFWVK",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0G1YSFWVK_BD"
+    },
+    {
+      "asin": "B0G1YSFWVK",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0G1YSFWVK_LD"
+    },
+    {
+      "asin": "B0G41T6B8R",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.38,
+      "country_asin_type": "DE_B0G41T6B8R_BD"
+    },
+    {
+      "asin": "B0G41T6B8R",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0G41T6B8R_LD"
+    },
+    {
+      "asin": "B0G58S9NKB",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.03,
+      "country_asin_type": "DE_B0G58S9NKB_BD"
+    },
+    {
+      "asin": "B0G58S9NKB",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0G58S9NKB_LD"
+    },
+    {
+      "asin": "B0GCCLR5DD",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0GCCLR5DD_BD"
+    },
+    {
+      "asin": "B0GCCLR5DD",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0GCCLR5DD_LD"
+    },
+    {
+      "asin": "B0GMZW9R6X",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0GMZW9R6X_BD"
+    },
+    {
+      "asin": "B0GMZW9R6X",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0GMZW9R6X_LD"
+    },
+    {
+      "asin": "B0GRB39S7G",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0GRB39S7G_BD"
+    },
+    {
+      "asin": "B0GRB39S7G",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0GRB39S7G_LD"
+    },
+    {
+      "asin": "B0GX9TWLD7",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0GX9TWLD7_BD"
+    },
+    {
+      "asin": "B0GX9TWLD7",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0GX9TWLD7_LD"
+    },
+    {
+      "asin": "B0GXKD9T6L",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.32,
+      "country_asin_type": "DE_B0GXKD9T6L_BD"
+    },
+    {
+      "asin": "B0GXKD9T6L",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0GXKD9T6L_LD"
+    },
+    {
+      "asin": "B0GXKT35KN",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0GXKT35KN_BD"
+    },
+    {
+      "asin": "B0GXKT35KN",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0GXKT35KN_LD"
+    },
+    {
+      "asin": "B0H7WRVDXB",
+      "country": "DE",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "DE_B0H7WRVDXB_BD"
+    },
+    {
+      "asin": "B0H7WRVDXB",
+      "country": "DE",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "DE_B0H7WRVDXB_LD"
+    },
+    {
+      "asin": "B0CQYWCMKX",
+      "country": "ES",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "ES_B0CQYWCMKX_BD"
+    },
+    {
+      "asin": "B0CQYWCMKX",
+      "country": "ES",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "ES_B0CQYWCMKX_LD"
+    },
+    {
+      "asin": "B0CRVNRBRB",
+      "country": "ES",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "ES_B0CRVNRBRB_BD"
+    },
+    {
+      "asin": "B0CRVNRBRB",
+      "country": "ES",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "ES_B0CRVNRBRB_LD"
+    },
+    {
+      "asin": "B0D1R3FXY6",
+      "country": "ES",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "ES_B0D1R3FXY6_BD"
+    },
+    {
+      "asin": "B0D1R3FXY6",
+      "country": "ES",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "ES_B0D1R3FXY6_LD"
+    },
+    {
+      "asin": "B0D1V3KVJV",
+      "country": "ES",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "ES_B0D1V3KVJV_BD"
+    },
+    {
+      "asin": "B0D1V3KVJV",
+      "country": "ES",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "ES_B0D1V3KVJV_LD"
+    },
+    {
+      "asin": "B0D2J1NPL9",
+      "country": "ES",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "ES_B0D2J1NPL9_BD"
+    },
+    {
+      "asin": "B0D2J1NPL9",
+      "country": "ES",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "ES_B0D2J1NPL9_LD"
+    },
+    {
+      "asin": "B0DCYY9CVB",
+      "country": "ES",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "ES_B0DCYY9CVB_BD"
+    },
+    {
+      "asin": "B0DCYY9CVB",
+      "country": "ES",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "ES_B0DCYY9CVB_LD"
+    },
+    {
+      "asin": "B0DKF1N7DX",
+      "country": "ES",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "ES_B0DKF1N7DX_BD"
+    },
+    {
+      "asin": "B0DKF1N7DX",
+      "country": "ES",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "ES_B0DKF1N7DX_LD"
+    },
+    {
+      "asin": "B0DNFGKZBQ",
+      "country": "ES",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "ES_B0DNFGKZBQ_BD"
+    },
+    {
+      "asin": "B0DNFGKZBQ",
+      "country": "ES",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "ES_B0DNFGKZBQ_LD"
+    },
+    {
+      "asin": "B0DP647J1F",
+      "country": "ES",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "ES_B0DP647J1F_BD"
+    },
+    {
+      "asin": "B0DP647J1F",
+      "country": "ES",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "ES_B0DP647J1F_LD"
+    },
+    {
+      "asin": "B0DRP2BC9M",
+      "country": "ES",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "ES_B0DRP2BC9M_BD"
+    },
+    {
+      "asin": "B0DRP2BC9M",
+      "country": "ES",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "ES_B0DRP2BC9M_LD"
+    },
+    {
+      "asin": "B0DRXM58QS",
+      "country": "ES",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "ES_B0DRXM58QS_BD"
+    },
+    {
+      "asin": "B0DRXM58QS",
+      "country": "ES",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "ES_B0DRXM58QS_LD"
+    },
+    {
+      "asin": "B0DYF1WMN2",
+      "country": "ES",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "ES_B0DYF1WMN2_BD"
+    },
+    {
+      "asin": "B0DYF1WMN2",
+      "country": "ES",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "ES_B0DYF1WMN2_LD"
+    },
+    {
+      "asin": "B0FM2FF46L",
+      "country": "ES",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "ES_B0FM2FF46L_BD"
+    },
+    {
+      "asin": "B0FM2FF46L",
+      "country": "ES",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "ES_B0FM2FF46L_LD"
+    },
+    {
+      "asin": "B0CRYDKFZH",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0CRYDKFZH_BD"
+    },
+    {
+      "asin": "B0CRYDKFZH",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0CRYDKFZH_LD"
+    },
+    {
+      "asin": "B0CSJYDM8Q",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0CSJYDM8Q_BD"
+    },
+    {
+      "asin": "B0CSJYDM8Q",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0CSJYDM8Q_LD"
+    },
+    {
+      "asin": "B0CSKFJWZD",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0CSKFJWZD_BD"
+    },
+    {
+      "asin": "B0CSKFJWZD",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0CSKFJWZD_LD"
+    },
+    {
+      "asin": "B0CTKL82DM",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0CTKL82DM_BD"
+    },
+    {
+      "asin": "B0CTKL82DM",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0CTKL82DM_LD"
+    },
+    {
+      "asin": "B0D1BG1NTJ",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0D1BG1NTJ_BD"
+    },
+    {
+      "asin": "B0D1BG1NTJ",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0D1BG1NTJ_LD"
+    },
+    {
+      "asin": "B0DG5FWD16",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0DG5FWD16_BD"
+    },
+    {
+      "asin": "B0DG5FWD16",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0DG5FWD16_LD"
+    },
+    {
+      "asin": "B0DPGV9HB2",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0DPGV9HB2_BD"
+    },
+    {
+      "asin": "B0DPGV9HB2",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0DPGV9HB2_LD"
+    },
+    {
+      "asin": "B0DQ1B7HT9",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0DQ1B7HT9_BD"
+    },
+    {
+      "asin": "B0DQ1B7HT9",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0DQ1B7HT9_LD"
+    },
+    {
+      "asin": "B0DQTTNZNJ",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0DQTTNZNJ_BD"
+    },
+    {
+      "asin": "B0DQTTNZNJ",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0DQTTNZNJ_LD"
+    },
+    {
+      "asin": "B0DWT25PRR",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0DWT25PRR_BD"
+    },
+    {
+      "asin": "B0DWT25PRR",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0DWT25PRR_LD"
+    },
+    {
+      "asin": "B0DZ6HW6W2",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0DZ6HW6W2_BD"
+    },
+    {
+      "asin": "B0DZ6HW6W2",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0DZ6HW6W2_LD"
+    },
+    {
+      "asin": "B0F7X46G3W",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0F7X46G3W_BD"
+    },
+    {
+      "asin": "B0F7X46G3W",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0F7X46G3W_LD"
+    },
+    {
+      "asin": "B0F8NDRG9T",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0F8NDRG9T_BD"
+    },
+    {
+      "asin": "B0F8NDRG9T",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0F8NDRG9T_LD"
+    },
+    {
+      "asin": "B0F8P1QX4Q",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0F8P1QX4Q_BD"
+    },
+    {
+      "asin": "B0F8P1QX4Q",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0F8P1QX4Q_LD"
+    },
+    {
+      "asin": "B0F9FLYCJF",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0F9FLYCJF_BD"
+    },
+    {
+      "asin": "B0F9FLYCJF",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0F9FLYCJF_LD"
+    },
+    {
+      "asin": "B0F9XXPRJ5",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 0.3,
+      "country_asin_type": "FR_B0F9XXPRJ5_BD"
+    },
+    {
+      "asin": "B0F9XXPRJ5",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0F9XXPRJ5_LD"
+    },
+    {
+      "asin": "B0FB9C6VS4",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0FB9C6VS4_BD"
+    },
+    {
+      "asin": "B0FB9C6VS4",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0FB9C6VS4_LD"
+    },
+    {
+      "asin": "B0FGJ9BBYT",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0FGJ9BBYT_BD"
+    },
+    {
+      "asin": "B0FGJ9BBYT",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0FGJ9BBYT_LD"
+    },
+    {
+      "asin": "B0FH78NK8W",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 0.61,
+      "country_asin_type": "FR_B0FH78NK8W_BD"
+    },
+    {
+      "asin": "B0FH78NK8W",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0FH78NK8W_LD"
+    },
+    {
+      "asin": "B0FJ26YXZN",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0FJ26YXZN_BD"
+    },
+    {
+      "asin": "B0FJ26YXZN",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0FJ26YXZN_LD"
+    },
+    {
+      "asin": "B0FJ2BXF8X",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0FJ2BXF8X_BD"
+    },
+    {
+      "asin": "B0FJ2BXF8X",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0FJ2BXF8X_LD"
+    },
+    {
+      "asin": "B0FKFWQQB1",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0FKFWQQB1_BD"
+    },
+    {
+      "asin": "B0FKFWQQB1",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0FKFWQQB1_LD"
+    },
+    {
+      "asin": "B0FKN2VK62",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0FKN2VK62_BD"
+    },
+    {
+      "asin": "B0FKN2VK62",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0FKN2VK62_LD"
+    },
+    {
+      "asin": "B0FLPY3FYJ",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0FLPY3FYJ_BD"
+    },
+    {
+      "asin": "B0FLPY3FYJ",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0FLPY3FYJ_LD"
+    },
+    {
+      "asin": "B0FMF1MBC6",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0FMF1MBC6_BD"
+    },
+    {
+      "asin": "B0FMF1MBC6",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0FMF1MBC6_LD"
+    },
+    {
+      "asin": "B0FPKNPBB7",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0FPKNPBB7_BD"
+    },
+    {
+      "asin": "B0FPKNPBB7",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0FPKNPBB7_LD"
+    },
+    {
+      "asin": "B0FPMFPV7Y",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0FPMFPV7Y_BD"
+    },
+    {
+      "asin": "B0FPMFPV7Y",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0FPMFPV7Y_LD"
+    },
+    {
+      "asin": "B0FPWPNQWQ",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0FPWPNQWQ_BD"
+    },
+    {
+      "asin": "B0FPWPNQWQ",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0FPWPNQWQ_LD"
+    },
+    {
+      "asin": "B0FS6TKXV1",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0FS6TKXV1_BD"
+    },
+    {
+      "asin": "B0FS6TKXV1",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0FS6TKXV1_LD"
+    },
+    {
+      "asin": "B0FS7SPD5C",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0FS7SPD5C_BD"
+    },
+    {
+      "asin": "B0FS7SPD5C",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0FS7SPD5C_LD"
+    },
+    {
+      "asin": "B0FWJJ9F62",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0FWJJ9F62_BD"
+    },
+    {
+      "asin": "B0FWJJ9F62",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0FWJJ9F62_LD"
+    },
+    {
+      "asin": "B0G1M8WW5H",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0G1M8WW5H_BD"
+    },
+    {
+      "asin": "B0G1M8WW5H",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0G1M8WW5H_LD"
+    },
+    {
+      "asin": "B0G1YSFWVK",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0G1YSFWVK_BD"
+    },
+    {
+      "asin": "B0G1YSFWVK",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0G1YSFWVK_LD"
+    },
+    {
+      "asin": "B0G2KX6G88",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0G2KX6G88_BD"
+    },
+    {
+      "asin": "B0G2KX6G88",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0G2KX6G88_LD"
+    },
+    {
+      "asin": "B0G3LQY8SV",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0G3LQY8SV_BD"
+    },
+    {
+      "asin": "B0G3LQY8SV",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0G3LQY8SV_LD"
+    },
+    {
+      "asin": "B0G4WPFDRX",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0G4WPFDRX_BD"
+    },
+    {
+      "asin": "B0G4WPFDRX",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0G4WPFDRX_LD"
+    },
+    {
+      "asin": "B0G52QCHM1",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0G52QCHM1_BD"
+    },
+    {
+      "asin": "B0G52QCHM1",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0G52QCHM1_LD"
+    },
+    {
+      "asin": "B0G5PR2P4N",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0G5PR2P4N_BD"
+    },
+    {
+      "asin": "B0G5PR2P4N",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0G5PR2P4N_LD"
+    },
+    {
+      "asin": "B0G6Y9NS8K",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0G6Y9NS8K_BD"
+    },
+    {
+      "asin": "B0G6Y9NS8K",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0G6Y9NS8K_LD"
+    },
+    {
+      "asin": "B0G8JJTHRL",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0G8JJTHRL_BD"
+    },
+    {
+      "asin": "B0G8JJTHRL",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0G8JJTHRL_LD"
+    },
+    {
+      "asin": "B0G8JTJHBW",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0G8JTJHBW_BD"
+    },
+    {
+      "asin": "B0G8JTJHBW",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0G8JTJHBW_LD"
+    },
+    {
+      "asin": "B0GLZ1Y3QG",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0GLZ1Y3QG_BD"
+    },
+    {
+      "asin": "B0GLZ1Y3QG",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0GLZ1Y3QG_LD"
+    },
+    {
+      "asin": "B0GRB39S7G",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.67,
+      "country_asin_type": "FR_B0GRB39S7G_BD"
+    },
+    {
+      "asin": "B0GRB39S7G",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0GRB39S7G_LD"
+    },
+    {
+      "asin": "B0GX9TWLD7",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0GX9TWLD7_BD"
+    },
+    {
+      "asin": "B0GX9TWLD7",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0GX9TWLD7_LD"
+    },
+    {
+      "asin": "B0GXYP9SHR",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0GXYP9SHR_BD"
+    },
+    {
+      "asin": "B0GXYP9SHR",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0GXYP9SHR_LD"
+    },
+    {
+      "asin": "B0H33Y34S3",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0H33Y34S3_BD"
+    },
+    {
+      "asin": "B0H33Y34S3",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0H33Y34S3_LD"
+    },
+    {
+      "asin": "B0H38VH55N",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0H38VH55N_BD"
+    },
+    {
+      "asin": "B0H38VH55N",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0H38VH55N_LD"
+    },
+    {
+      "asin": "B0H7WRVDXB",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0H7WRVDXB_BD"
+    },
+    {
+      "asin": "B0H7WRVDXB",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0H7WRVDXB_LD"
+    },
+    {
+      "asin": "B0H9M476PT",
+      "country": "FR",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "FR_B0H9M476PT_BD"
+    },
+    {
+      "asin": "B0H9M476PT",
+      "country": "FR",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "FR_B0H9M476PT_LD"
+    },
+    {
+      "asin": "B0DL68TM6W",
+      "country": "IT",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "IT_B0DL68TM6W_BD"
+    },
+    {
+      "asin": "B0DL68TM6W",
+      "country": "IT",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "IT_B0DL68TM6W_LD"
+    },
+    {
+      "asin": "B0CJVFJMVF",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 0.86,
+      "country_asin_type": "JP_B0CJVFJMVF_BD"
+    },
+    {
+      "asin": "B0CJVFJMVF",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 1.56,
+      "country_asin_type": "JP_B0CJVFJMVF_LD"
+    },
+    {
+      "asin": "B0CSPPFPHY",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "JP_B0CSPPFPHY_BD"
+    },
+    {
+      "asin": "B0CSPPFPHY",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "JP_B0CSPPFPHY_LD"
+    },
+    {
+      "asin": "B0D5XVMYNC",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "JP_B0D5XVMYNC_BD"
+    },
+    {
+      "asin": "B0D5XVMYNC",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "JP_B0D5XVMYNC_LD"
+    },
+    {
+      "asin": "B0DBL12322",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 0.84,
+      "country_asin_type": "JP_B0DBL12322_BD"
+    },
+    {
+      "asin": "B0DBL12322",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 2.18,
+      "country_asin_type": "JP_B0DBL12322_LD"
+    },
+    {
+      "asin": "B0DFBLKB9X",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "JP_B0DFBLKB9X_BD"
+    },
+    {
+      "asin": "B0DFBLKB9X",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "JP_B0DFBLKB9X_LD"
+    },
+    {
+      "asin": "B0DFBT2CMN",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "JP_B0DFBT2CMN_BD"
+    },
+    {
+      "asin": "B0DFBT2CMN",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "JP_B0DFBT2CMN_LD"
+    },
+    {
+      "asin": "B0DFBZ14LR",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "JP_B0DFBZ14LR_BD"
+    },
+    {
+      "asin": "B0DFBZ14LR",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "JP_B0DFBZ14LR_LD"
+    },
+    {
+      "asin": "B0DFC7XZWT",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "JP_B0DFC7XZWT_BD"
+    },
+    {
+      "asin": "B0DFC7XZWT",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "JP_B0DFC7XZWT_LD"
+    },
+    {
+      "asin": "B0F37MY6TR",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "JP_B0F37MY6TR_BD"
+    },
+    {
+      "asin": "B0F37MY6TR",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "JP_B0F37MY6TR_LD"
+    },
+    {
+      "asin": "B0F43ZNXKH",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 1.19,
+      "country_asin_type": "JP_B0F43ZNXKH_BD"
+    },
+    {
+      "asin": "B0F43ZNXKH",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "JP_B0F43ZNXKH_LD"
+    },
+    {
+      "asin": "B0FDK3JZPQ",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "JP_B0FDK3JZPQ_BD"
+    },
+    {
+      "asin": "B0FDK3JZPQ",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "JP_B0FDK3JZPQ_LD"
+    },
+    {
+      "asin": "B0FHHCCC4M",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "JP_B0FHHCCC4M_BD"
+    },
+    {
+      "asin": "B0FHHCCC4M",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "JP_B0FHHCCC4M_LD"
+    },
+    {
+      "asin": "B0FK9QCX7Z",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "JP_B0FK9QCX7Z_BD"
+    },
+    {
+      "asin": "B0FK9QCX7Z",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "JP_B0FK9QCX7Z_LD"
+    },
+    {
+      "asin": "B0FKGX4PYG",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 1.54,
+      "country_asin_type": "JP_B0FKGX4PYG_BD"
+    },
+    {
+      "asin": "B0FKGX4PYG",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 2.5,
+      "country_asin_type": "JP_B0FKGX4PYG_LD"
+    },
+    {
+      "asin": "B0FKH6L6FJ",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 0.67,
+      "country_asin_type": "JP_B0FKH6L6FJ_BD"
+    },
+    {
+      "asin": "B0FKH6L6FJ",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 1.01,
+      "country_asin_type": "JP_B0FKH6L6FJ_LD"
+    },
+    {
+      "asin": "B0FL27MGB6",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "JP_B0FL27MGB6_BD"
+    },
+    {
+      "asin": "B0FL27MGB6",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "JP_B0FL27MGB6_LD"
+    },
+    {
+      "asin": "B0FMXSG2Y1",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "JP_B0FMXSG2Y1_BD"
+    },
+    {
+      "asin": "B0FMXSG2Y1",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "JP_B0FMXSG2Y1_LD"
+    },
+    {
+      "asin": "B0FMXY79X9",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "JP_B0FMXY79X9_BD"
+    },
+    {
+      "asin": "B0FMXY79X9",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "JP_B0FMXY79X9_LD"
+    },
+    {
+      "asin": "B0FMY2DHN3",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "JP_B0FMY2DHN3_BD"
+    },
+    {
+      "asin": "B0FMY2DHN3",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "JP_B0FMY2DHN3_LD"
+    },
+    {
+      "asin": "B0FN3TPBJ3",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "JP_B0FN3TPBJ3_BD"
+    },
+    {
+      "asin": "B0FN3TPBJ3",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "JP_B0FN3TPBJ3_LD"
+    },
+    {
+      "asin": "B0FVF5F9HC",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "JP_B0FVF5F9HC_BD"
+    },
+    {
+      "asin": "B0FVF5F9HC",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "JP_B0FVF5F9HC_LD"
+    },
+    {
+      "asin": "B0FVF7N7NF",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "JP_B0FVF7N7NF_BD"
+    },
+    {
+      "asin": "B0FVF7N7NF",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "JP_B0FVF7N7NF_LD"
+    },
+    {
+      "asin": "B0FWK4RN65",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 0.91,
+      "country_asin_type": "JP_B0FWK4RN65_BD"
+    },
+    {
+      "asin": "B0FWK4RN65",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "JP_B0FWK4RN65_LD"
+    },
+    {
+      "asin": "B0FXZY9QT4",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "JP_B0FXZY9QT4_BD"
+    },
+    {
+      "asin": "B0FXZY9QT4",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "JP_B0FXZY9QT4_LD"
+    },
+    {
+      "asin": "B0G136Q1SP",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "JP_B0G136Q1SP_BD"
+    },
+    {
+      "asin": "B0G136Q1SP",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "JP_B0G136Q1SP_LD"
+    },
+    {
+      "asin": "B0G2XX7MVH",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 0.9,
+      "country_asin_type": "JP_B0G2XX7MVH_BD"
+    },
+    {
+      "asin": "B0G2XX7MVH",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 1.4,
+      "country_asin_type": "JP_B0G2XX7MVH_LD"
+    },
+    {
+      "asin": "B0G5Y41YQK",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "JP_B0G5Y41YQK_BD"
+    },
+    {
+      "asin": "B0G5Y41YQK",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "JP_B0G5Y41YQK_LD"
+    },
+    {
+      "asin": "B0G7H1PP2J",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 1.24,
+      "country_asin_type": "JP_B0G7H1PP2J_BD"
+    },
+    {
+      "asin": "B0G7H1PP2J",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 1.18,
+      "country_asin_type": "JP_B0G7H1PP2J_LD"
+    },
+    {
+      "asin": "B0G7HVHFXS",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "JP_B0G7HVHFXS_BD"
+    },
+    {
+      "asin": "B0G7HVHFXS",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "JP_B0G7HVHFXS_LD"
+    },
+    {
+      "asin": "B0G7HXPMQW",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "JP_B0G7HXPMQW_BD"
+    },
+    {
+      "asin": "B0G7HXPMQW",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "JP_B0G7HXPMQW_LD"
+    },
+    {
+      "asin": "B0GC4TXNHW",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "JP_B0GC4TXNHW_BD"
+    },
+    {
+      "asin": "B0GC4TXNHW",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "JP_B0GC4TXNHW_LD"
+    },
+    {
+      "asin": "B0GC5H364M",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "JP_B0GC5H364M_BD"
+    },
+    {
+      "asin": "B0GC5H364M",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "JP_B0GC5H364M_LD"
+    },
+    {
+      "asin": "B0GMHFXXC6",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "JP_B0GMHFXXC6_BD"
+    },
+    {
+      "asin": "B0GMHFXXC6",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "JP_B0GMHFXXC6_LD"
+    },
+    {
+      "asin": "B0GS2W2T44",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 1.26,
+      "country_asin_type": "JP_B0GS2W2T44_BD"
+    },
+    {
+      "asin": "B0GS2W2T44",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 2.44,
+      "country_asin_type": "JP_B0GS2W2T44_LD"
+    },
+    {
+      "asin": "B0GTR52LSK",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "JP_B0GTR52LSK_BD"
+    },
+    {
+      "asin": "B0GTR52LSK",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "JP_B0GTR52LSK_LD"
+    },
+    {
+      "asin": "B0GX5JB19Y",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "JP_B0GX5JB19Y_BD"
+    },
+    {
+      "asin": "B0GX5JB19Y",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "JP_B0GX5JB19Y_LD"
+    },
+    {
+      "asin": "B0H5PJ1R1Z",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "JP_B0H5PJ1R1Z_BD"
+    },
+    {
+      "asin": "B0H5PJ1R1Z",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "JP_B0H5PJ1R1Z_LD"
+    },
+    {
+      "asin": "B0H7GF4J8Y",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "JP_B0H7GF4J8Y_BD"
+    },
+    {
+      "asin": "B0H7GF4J8Y",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "JP_B0H7GF4J8Y_LD"
+    },
+    {
+      "asin": "B0H8BTRS1W",
+      "country": "JP",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "JP_B0H8BTRS1W_BD"
+    },
+    {
+      "asin": "B0H8BTRS1W",
+      "country": "JP",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "JP_B0H8BTRS1W_LD"
+    },
+    {
+      "asin": "B0DRCTV7CC",
+      "country": "UK",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "UK_B0DRCTV7CC_BD"
+    },
+    {
+      "asin": "B0DRCTV7CC",
+      "country": "UK",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "UK_B0DRCTV7CC_LD"
+    },
+    {
+      "asin": "B0F9YCJNLB",
+      "country": "UK",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "UK_B0F9YCJNLB_BD"
+    },
+    {
+      "asin": "B0F9YCJNLB",
+      "country": "UK",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "UK_B0F9YCJNLB_LD"
+    },
+    {
+      "asin": "B0G247JJ9C",
+      "country": "UK",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "UK_B0G247JJ9C_BD"
+    },
+    {
+      "asin": "B0G247JJ9C",
+      "country": "UK",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "UK_B0G247JJ9C_LD"
+    },
+    {
+      "asin": "B0CCRWGSQ1",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0CCRWGSQ1_BD"
+    },
+    {
+      "asin": "B0CCRWGSQ1",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0CCRWGSQ1_LD"
+    },
+    {
+      "asin": "B0CSFH3XD3",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0CSFH3XD3_BD"
+    },
+    {
+      "asin": "B0CSFH3XD3",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0CSFH3XD3_LD"
+    },
+    {
+      "asin": "B0CVVWP9QH",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0CVVWP9QH_BD"
+    },
+    {
+      "asin": "B0CVVWP9QH",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0CVVWP9QH_LD"
+    },
+    {
+      "asin": "B0CVX7FKXJ",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0CVX7FKXJ_BD"
+    },
+    {
+      "asin": "B0CVX7FKXJ",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0CVX7FKXJ_LD"
+    },
+    {
+      "asin": "B0D4LL5NHX",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0D4LL5NHX_BD"
+    },
+    {
+      "asin": "B0D4LL5NHX",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0D4LL5NHX_LD"
+    },
+    {
+      "asin": "B0D66D792T",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.54,
+      "country_asin_type": "US_B0D66D792T_BD"
+    },
+    {
+      "asin": "B0D66D792T",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.47,
+      "country_asin_type": "US_B0D66D792T_LD"
+    },
+    {
+      "asin": "B0D66MDGWQ",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0D66MDGWQ_BD"
+    },
+    {
+      "asin": "B0D66MDGWQ",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0D66MDGWQ_LD"
+    },
+    {
+      "asin": "B0DB1RJ5Z8",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0DB1RJ5Z8_BD"
+    },
+    {
+      "asin": "B0DB1RJ5Z8",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0DB1RJ5Z8_LD"
+    },
+    {
+      "asin": "B0DC6GPFZH",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0DC6GPFZH_BD"
+    },
+    {
+      "asin": "B0DC6GPFZH",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0DC6GPFZH_LD"
+    },
+    {
+      "asin": "B0DHD33N8Y",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0DHD33N8Y_BD"
+    },
+    {
+      "asin": "B0DHD33N8Y",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0DHD33N8Y_LD"
+    },
+    {
+      "asin": "B0DHXYPF6F",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0DHXYPF6F_BD"
+    },
+    {
+      "asin": "B0DHXYPF6F",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0DHXYPF6F_LD"
+    },
+    {
+      "asin": "B0DK8J1MWF",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0DK8J1MWF_BD"
+    },
+    {
+      "asin": "B0DK8J1MWF",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0DK8J1MWF_LD"
+    },
+    {
+      "asin": "B0DLGN1RK6",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0DLGN1RK6_BD"
+    },
+    {
+      "asin": "B0DLGN1RK6",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0DLGN1RK6_LD"
+    },
+    {
+      "asin": "B0DQPSY3HK",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0DQPSY3HK_BD"
+    },
+    {
+      "asin": "B0DQPSY3HK",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0DQPSY3HK_LD"
+    },
+    {
+      "asin": "B0DX1KQHBB",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0DX1KQHBB_BD"
+    },
+    {
+      "asin": "B0DX1KQHBB",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0DX1KQHBB_LD"
+    },
+    {
+      "asin": "B0DXFD2KJ8",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0DXFD2KJ8_BD"
+    },
+    {
+      "asin": "B0DXFD2KJ8",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0DXFD2KJ8_LD"
+    },
+    {
+      "asin": "B0DYDJK73L",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0DYDJK73L_BD"
+    },
+    {
+      "asin": "B0DYDJK73L",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0DYDJK73L_LD"
+    },
+    {
+      "asin": "B0DZ72JTGZ",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0DZ72JTGZ_BD"
+    },
+    {
+      "asin": "B0DZ72JTGZ",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0DZ72JTGZ_LD"
+    },
+    {
+      "asin": "B0DZHMYVT4",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0DZHMYVT4_BD"
+    },
+    {
+      "asin": "B0DZHMYVT4",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0DZHMYVT4_LD"
+    },
+    {
+      "asin": "B0F5VRVST4",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0F5VRVST4_BD"
+    },
+    {
+      "asin": "B0F5VRVST4",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0F5VRVST4_LD"
+    },
+    {
+      "asin": "B0F7KFBTZW",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0F7KFBTZW_BD"
+    },
+    {
+      "asin": "B0F7KFBTZW",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0F7KFBTZW_LD"
+    },
+    {
+      "asin": "B0F83MMX3K",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0F83MMX3K_BD"
+    },
+    {
+      "asin": "B0F83MMX3K",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0F83MMX3K_LD"
+    },
+    {
+      "asin": "B0F83N81M8",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0F83N81M8_BD"
+    },
+    {
+      "asin": "B0F83N81M8",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0F83N81M8_LD"
+    },
+    {
+      "asin": "B0F9FLHRLL",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0F9FLHRLL_BD"
+    },
+    {
+      "asin": "B0F9FLHRLL",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0F9FLHRLL_LD"
+    },
+    {
+      "asin": "B0F9FNB496",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0F9FNB496_BD"
+    },
+    {
+      "asin": "B0F9FNB496",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0F9FNB496_LD"
+    },
+    {
+      "asin": "B0F9FNQZH4",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0F9FNQZH4_BD"
+    },
+    {
+      "asin": "B0F9FNQZH4",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0F9FNQZH4_LD"
+    },
+    {
+      "asin": "B0F9YNLLCN",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.52,
+      "country_asin_type": "US_B0F9YNLLCN_BD"
+    },
+    {
+      "asin": "B0F9YNLLCN",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0F9YNLLCN_LD"
+    },
+    {
+      "asin": "B0FB3P6H48",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 3.09,
+      "country_asin_type": "US_B0FB3P6H48_BD"
+    },
+    {
+      "asin": "B0FB3P6H48",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0FB3P6H48_LD"
+    },
+    {
+      "asin": "B0FB3QGP68",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0FB3QGP68_BD"
+    },
+    {
+      "asin": "B0FB3QGP68",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0FB3QGP68_LD"
+    },
+    {
+      "asin": "B0FB9867ZJ",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0FB9867ZJ_BD"
+    },
+    {
+      "asin": "B0FB9867ZJ",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0FB9867ZJ_LD"
+    },
+    {
+      "asin": "B0FJRQQFWG",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0FJRQQFWG_BD"
+    },
+    {
+      "asin": "B0FJRQQFWG",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0FJRQQFWG_LD"
+    },
+    {
+      "asin": "B0FJS42WP1",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0FJS42WP1_BD"
+    },
+    {
+      "asin": "B0FJS42WP1",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0FJS42WP1_LD"
+    },
+    {
+      "asin": "B0FK4KCTDJ",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0FK4KCTDJ_BD"
+    },
+    {
+      "asin": "B0FK4KCTDJ",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0FK4KCTDJ_LD"
+    },
+    {
+      "asin": "B0FKBNVD7H",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0FKBNVD7H_BD"
+    },
+    {
+      "asin": "B0FKBNVD7H",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0FKBNVD7H_LD"
+    },
+    {
+      "asin": "B0FKBS26NZ",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0FKBS26NZ_BD"
+    },
+    {
+      "asin": "B0FKBS26NZ",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0FKBS26NZ_LD"
+    },
+    {
+      "asin": "B0FKH6B2VN",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0FKH6B2VN_BD"
+    },
+    {
+      "asin": "B0FKH6B2VN",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0FKH6B2VN_LD"
+    },
+    {
+      "asin": "B0FKTGP69S",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0FKTGP69S_BD"
+    },
+    {
+      "asin": "B0FKTGP69S",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0FKTGP69S_LD"
+    },
+    {
+      "asin": "B0FKTGQT9S",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0FKTGQT9S_BD"
+    },
+    {
+      "asin": "B0FKTGQT9S",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0FKTGQT9S_LD"
+    },
+    {
+      "asin": "B0FL6SSHKD",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0FL6SSHKD_BD"
+    },
+    {
+      "asin": "B0FL6SSHKD",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0FL6SSHKD_LD"
+    },
+    {
+      "asin": "B0FN4C59SC",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0FN4C59SC_BD"
+    },
+    {
+      "asin": "B0FN4C59SC",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0FN4C59SC_LD"
+    },
+    {
+      "asin": "B0FN4H88SH",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0FN4H88SH_BD"
+    },
+    {
+      "asin": "B0FN4H88SH",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0FN4H88SH_LD"
+    },
+    {
+      "asin": "B0FN764LZF",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0FN764LZF_BD"
+    },
+    {
+      "asin": "B0FN764LZF",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0FN764LZF_LD"
+    },
+    {
+      "asin": "B0FNWV3QGW",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0FNWV3QGW_BD"
+    },
+    {
+      "asin": "B0FNWV3QGW",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0FNWV3QGW_LD"
+    },
+    {
+      "asin": "B0FPG7QC9P",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0FPG7QC9P_BD"
+    },
+    {
+      "asin": "B0FPG7QC9P",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0FPG7QC9P_LD"
+    },
+    {
+      "asin": "B0FPM9NVXQ",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0FPM9NVXQ_BD"
+    },
+    {
+      "asin": "B0FPM9NVXQ",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0FPM9NVXQ_LD"
+    },
+    {
+      "asin": "B0FPQ3XPJJ",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0FPQ3XPJJ_BD"
+    },
+    {
+      "asin": "B0FPQ3XPJJ",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0FPQ3XPJJ_LD"
+    },
+    {
+      "asin": "B0FPXFH81F",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0FPXFH81F_BD"
+    },
+    {
+      "asin": "B0FPXFH81F",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0FPXFH81F_LD"
+    },
+    {
+      "asin": "B0FQ5P2WT1",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0FQ5P2WT1_BD"
+    },
+    {
+      "asin": "B0FQ5P2WT1",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0FQ5P2WT1_LD"
+    },
+    {
+      "asin": "B0FQ67831J",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0FQ67831J_BD"
+    },
+    {
+      "asin": "B0FQ67831J",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0FQ67831J_LD"
+    },
+    {
+      "asin": "B0FQC3JCWS",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0FQC3JCWS_BD"
+    },
+    {
+      "asin": "B0FQC3JCWS",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0FQC3JCWS_LD"
+    },
+    {
+      "asin": "B0FQCJ4TWV",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0FQCJ4TWV_BD"
+    },
+    {
+      "asin": "B0FQCJ4TWV",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0FQCJ4TWV_LD"
+    },
+    {
+      "asin": "B0FQJ63JKB",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0FQJ63JKB_BD"
+    },
+    {
+      "asin": "B0FQJ63JKB",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0FQJ63JKB_LD"
+    },
+    {
+      "asin": "B0FQP2QD2P",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0FQP2QD2P_BD"
+    },
+    {
+      "asin": "B0FQP2QD2P",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0FQP2QD2P_LD"
+    },
+    {
+      "asin": "B0FQP71WS9",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0FQP71WS9_BD"
+    },
+    {
+      "asin": "B0FQP71WS9",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0FQP71WS9_LD"
+    },
+    {
+      "asin": "B0FQPDHQZ8",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0FQPDHQZ8_BD"
+    },
+    {
+      "asin": "B0FQPDHQZ8",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0FQPDHQZ8_LD"
+    },
+    {
+      "asin": "B0FR3N74VD",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 0.42,
+      "country_asin_type": "US_B0FR3N74VD_BD"
+    },
+    {
+      "asin": "B0FR3N74VD",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0FR3N74VD_LD"
+    },
+    {
+      "asin": "B0FRGCGZXH",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0FRGCGZXH_BD"
+    },
+    {
+      "asin": "B0FRGCGZXH",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0FRGCGZXH_LD"
+    },
+    {
+      "asin": "B0FRGF6XB4",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0FRGF6XB4_BD"
+    },
+    {
+      "asin": "B0FRGF6XB4",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0FRGF6XB4_LD"
+    },
+    {
+      "asin": "B0FT6XV24V",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0FT6XV24V_BD"
+    },
+    {
+      "asin": "B0FT6XV24V",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0FT6XV24V_LD"
+    },
+    {
+      "asin": "B0FWCJHQJN",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0FWCJHQJN_BD"
+    },
+    {
+      "asin": "B0FWCJHQJN",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0FWCJHQJN_LD"
+    },
+    {
+      "asin": "B0FX4MSX4X",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0FX4MSX4X_BD"
+    },
+    {
+      "asin": "B0FX4MSX4X",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0FX4MSX4X_LD"
+    },
+    {
+      "asin": "B0FX4S5FCG",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0FX4S5FCG_BD"
+    },
+    {
+      "asin": "B0FX4S5FCG",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0FX4S5FCG_LD"
+    },
+    {
+      "asin": "B0FX4S7B8H",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0FX4S7B8H_BD"
+    },
+    {
+      "asin": "B0FX4S7B8H",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0FX4S7B8H_LD"
+    },
+    {
+      "asin": "B0FY64Q2HS",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.35,
+      "country_asin_type": "US_B0FY64Q2HS_BD"
+    },
+    {
+      "asin": "B0FY64Q2HS",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0FY64Q2HS_LD"
+    },
+    {
+      "asin": "B0FYFP7NG5",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0FYFP7NG5_BD"
+    },
+    {
+      "asin": "B0FYFP7NG5",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0FYFP7NG5_LD"
+    },
+    {
+      "asin": "B0G13VRCW2",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0G13VRCW2_BD"
+    },
+    {
+      "asin": "B0G13VRCW2",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0G13VRCW2_LD"
+    },
+    {
+      "asin": "B0G3981SLQ",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 2.5,
+      "country_asin_type": "US_B0G3981SLQ_BD"
+    },
+    {
+      "asin": "B0G3981SLQ",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0G3981SLQ_LD"
+    },
+    {
+      "asin": "B0G49VCMHJ",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 0.53,
+      "country_asin_type": "US_B0G49VCMHJ_BD"
+    },
+    {
+      "asin": "B0G49VCMHJ",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0G49VCMHJ_LD"
+    },
+    {
+      "asin": "B0G4D9NJRX",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.72,
+      "country_asin_type": "US_B0G4D9NJRX_BD"
+    },
+    {
+      "asin": "B0G4D9NJRX",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.51,
+      "country_asin_type": "US_B0G4D9NJRX_LD"
+    },
+    {
+      "asin": "B0G4TT9X5J",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0G4TT9X5J_BD"
+    },
+    {
+      "asin": "B0G4TT9X5J",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0G4TT9X5J_LD"
+    },
+    {
+      "asin": "B0G4WHH6TP",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 0.79,
+      "country_asin_type": "US_B0G4WHH6TP_BD"
+    },
+    {
+      "asin": "B0G4WHH6TP",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0G4WHH6TP_LD"
+    },
+    {
+      "asin": "B0G5L9J11Z",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 2.5,
+      "country_asin_type": "US_B0G5L9J11Z_BD"
+    },
+    {
+      "asin": "B0G5L9J11Z",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0G5L9J11Z_LD"
+    },
+    {
+      "asin": "B0G64QDQRV",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0G64QDQRV_BD"
+    },
+    {
+      "asin": "B0G64QDQRV",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0G64QDQRV_LD"
+    },
+    {
+      "asin": "B0G64X9B1G",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0G64X9B1G_BD"
+    },
+    {
+      "asin": "B0G64X9B1G",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0G64X9B1G_LD"
+    },
+    {
+      "asin": "B0G6ZGC5CC",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0G6ZGC5CC_BD"
+    },
+    {
+      "asin": "B0G6ZGC5CC",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0G6ZGC5CC_LD"
+    },
+    {
+      "asin": "B0G6ZT396C",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0G6ZT396C_BD"
+    },
+    {
+      "asin": "B0G6ZT396C",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0G6ZT396C_LD"
+    },
+    {
+      "asin": "B0G7FRCDXH",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0G7FRCDXH_BD"
+    },
+    {
+      "asin": "B0G7FRCDXH",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0G7FRCDXH_LD"
+    },
+    {
+      "asin": "B0G8GNJK8M",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0G8GNJK8M_BD"
+    },
+    {
+      "asin": "B0G8GNJK8M",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0G8GNJK8M_LD"
+    },
+    {
+      "asin": "B0GD5PRTNH",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0GD5PRTNH_BD"
+    },
+    {
+      "asin": "B0GD5PRTNH",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0GD5PRTNH_LD"
+    },
+    {
+      "asin": "B0GJD3H3WF",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0GJD3H3WF_BD"
+    },
+    {
+      "asin": "B0GJD3H3WF",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0GJD3H3WF_LD"
+    },
+    {
+      "asin": "B0GJR25SWL",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0GJR25SWL_BD"
+    },
+    {
+      "asin": "B0GJR25SWL",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0GJR25SWL_LD"
+    },
+    {
+      "asin": "B0GJR897J3",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0GJR897J3_BD"
+    },
+    {
+      "asin": "B0GJR897J3",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0GJR897J3_LD"
+    },
+    {
+      "asin": "B0GJRMTQPF",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0GJRMTQPF_BD"
+    },
+    {
+      "asin": "B0GJRMTQPF",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0GJRMTQPF_LD"
+    },
+    {
+      "asin": "B0GKXZ8PS9",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0GKXZ8PS9_BD"
+    },
+    {
+      "asin": "B0GKXZ8PS9",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0GKXZ8PS9_LD"
+    },
+    {
+      "asin": "B0GMD43632",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 2.05,
+      "country_asin_type": "US_B0GMD43632_BD"
+    },
+    {
+      "asin": "B0GMD43632",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.63,
+      "country_asin_type": "US_B0GMD43632_LD"
+    },
+    {
+      "asin": "B0GMRFQFWC",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.8,
+      "country_asin_type": "US_B0GMRFQFWC_BD"
+    },
+    {
+      "asin": "B0GMRFQFWC",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 0.13,
+      "country_asin_type": "US_B0GMRFQFWC_LD"
+    },
+    {
+      "asin": "B0GQRHTDV5",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 0.91,
+      "country_asin_type": "US_B0GQRHTDV5_BD"
+    },
+    {
+      "asin": "B0GQRHTDV5",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 0.98,
+      "country_asin_type": "US_B0GQRHTDV5_LD"
+    },
+    {
+      "asin": "B0GV39MFZJ",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0GV39MFZJ_BD"
+    },
+    {
+      "asin": "B0GV39MFZJ",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0GV39MFZJ_LD"
+    },
+    {
+      "asin": "B0GWDCFMXY",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0GWDCFMXY_BD"
+    },
+    {
+      "asin": "B0GWDCFMXY",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0GWDCFMXY_LD"
+    },
+    {
+      "asin": "B0GXFWNK2Q",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0GXFWNK2Q_BD"
+    },
+    {
+      "asin": "B0GXFWNK2Q",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0GXFWNK2Q_LD"
+    },
+    {
+      "asin": "B0GY8PJS3K",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 3.78,
+      "country_asin_type": "US_B0GY8PJS3K_BD"
+    },
+    {
+      "asin": "B0GY8PJS3K",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0GY8PJS3K_LD"
+    },
+    {
+      "asin": "B0H2Z287HC",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 3.04,
+      "country_asin_type": "US_B0H2Z287HC_BD"
+    },
+    {
+      "asin": "B0H2Z287HC",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0H2Z287HC_LD"
+    },
+    {
+      "asin": "B0H36FQFG7",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0H36FQFG7_BD"
+    },
+    {
+      "asin": "B0H36FQFG7",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0H36FQFG7_LD"
+    },
+    {
+      "asin": "B0H36Q25JL",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0H36Q25JL_BD"
+    },
+    {
+      "asin": "B0H36Q25JL",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0H36Q25JL_LD"
+    },
+    {
+      "asin": "B0H3741G9Y",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0H3741G9Y_BD"
+    },
+    {
+      "asin": "B0H3741G9Y",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0H3741G9Y_LD"
+    },
+    {
+      "asin": "B0H3V3L6ZJ",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0H3V3L6ZJ_BD"
+    },
+    {
+      "asin": "B0H3V3L6ZJ",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0H3V3L6ZJ_LD"
+    },
+    {
+      "asin": "B0H3V7P9KP",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0H3V7P9KP_BD"
+    },
+    {
+      "asin": "B0H3V7P9KP",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0H3V7P9KP_LD"
+    },
+    {
+      "asin": "B0H5KR72FW",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0H5KR72FW_BD"
+    },
+    {
+      "asin": "B0H5KR72FW",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0H5KR72FW_LD"
+    },
+    {
+      "asin": "B0H5P5HMS8",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0H5P5HMS8_BD"
+    },
+    {
+      "asin": "B0H5P5HMS8",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0H5P5HMS8_LD"
+    },
+    {
+      "asin": "B0H5QP1BMC",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0H5QP1BMC_BD"
+    },
+    {
+      "asin": "B0H5QP1BMC",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0H5QP1BMC_LD"
+    },
+    {
+      "asin": "B0H6J1XLJ9",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0H6J1XLJ9_BD"
+    },
+    {
+      "asin": "B0H6J1XLJ9",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0H6J1XLJ9_LD"
+    },
+    {
+      "asin": "B0H6KGZTLX",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0H6KGZTLX_BD"
+    },
+    {
+      "asin": "B0H6KGZTLX",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0H6KGZTLX_LD"
+    },
+    {
+      "asin": "B0H6L64ZHP",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0H6L64ZHP_BD"
+    },
+    {
+      "asin": "B0H6L64ZHP",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0H6L64ZHP_LD"
+    },
+    {
+      "asin": "B0H9RS9V7L",
+      "country": "US",
+      "type": "BD",
+      "coefficient": 1.7,
+      "country_asin_type": "US_B0H9RS9V7L_BD"
+    },
+    {
+      "asin": "B0H9RS9V7L",
+      "country": "US",
+      "type": "LD",
+      "coefficient": 2.2,
+      "country_asin_type": "US_B0H9RS9V7L_LD"
+    }
+  ],
+  "meta": {
+    "hasNext": false,
+    "page": 1,
+    "pageSize": 1000
+  }
+}
