@@ -180,7 +180,7 @@ SELECT
     scope.country,
     scope.asin,
     ds.`date`,
-    SUM(ds.sales) / NULLIF(MAX(ds.coefficient), 0) AS daily_base_sales
+    SUM(ds.sales) / NULLIF(MAX(ds.coefficient), 0) AS calculated_base_sales
 FROM temp_bd_repair_scope AS scope
 INNER JOIN daily_sales AS ds
     ON ds.country = scope.country
@@ -203,13 +203,13 @@ SELECT
     ds.shop,
     ds.`date`,
     ds.base_sales AS old_base_sales,
-    CAST(ROUND(base.daily_base_sales, 0) AS SIGNED) AS new_base_sales
+    CAST(ROUND(base.calculated_base_sales, 0) AS SIGNED) AS new_base_sales
 FROM temp_bd_repair_daily_base AS base
 INNER JOIN daily_sales AS ds
     ON ds.country = base.country
    AND ds.asin = base.asin
    AND ds.`date` = base.`date`
-WHERE base.daily_base_sales IS NOT NULL;
+WHERE base.calculated_base_sales IS NOT NULL;
 
 ALTER TABLE temp_bd_repair_base_recalc
 ADD PRIMARY KEY (shop_country_asin_date),
@@ -242,22 +242,19 @@ SET @corrected_bd_base_sales_rows = ROW_COUNT();
 
 /* 3. 仅重算前30天窗口包含实际变更基准销量日期的记录。 */
 CREATE TEMPORARY TABLE temp_bd_repair_weighted_recalc AS
-WITH daily_base_source AS (
+WITH base_sales_source AS (
     SELECT
         ds.country,
         ds.asin,
         ds.`date` AS history_date,
-        SUM(ds.sales) / NULLIF(MAX(ds.coefficient), 0) AS daily_base_sales
+        ds.base_sales
     FROM daily_sales AS ds
     INNER JOIN temp_bd_repair_scope AS scope
         ON scope.country = ds.country
        AND scope.asin = ds.asin
-    WHERE ds.shop <> '合计'
+    WHERE ds.shop = '合计'
+      AND ds.base_sales IS NOT NULL
       AND ds.`date` < CURDATE()
-    GROUP BY
-        ds.country,
-        ds.asin,
-        ds.`date`
 ),
 affected_targets AS (
     SELECT DISTINCT
@@ -283,21 +280,20 @@ history_ranked AS (
         target.shop,
         target.target_date,
         target.old_weighted_sales,
-        source.daily_base_sales,
+        source.base_sales,
         ROW_NUMBER() OVER (
             PARTITION BY target.shop_country_asin_date
             ORDER BY source.history_date DESC
         ) AS row_num,
-        COUNT(*) OVER (
+        COUNT(source.base_sales) OVER (
             PARTITION BY target.shop_country_asin_date
         ) AS total_count
     FROM affected_targets AS target
-    INNER JOIN daily_base_source AS source
+    LEFT JOIN base_sales_source AS source
         ON source.country = target.country
        AND source.asin = target.asin
        AND source.history_date BETWEEN DATE_SUB(target.target_date, INTERVAL 30 DAY)
                                   AND DATE_SUB(target.target_date, INTERVAL 1 DAY)
-    WHERE source.daily_base_sales IS NOT NULL
 ),
 weighted AS (
     SELECT
@@ -310,52 +306,52 @@ weighted AS (
         ROUND(
             CASE
                 WHEN total_count BETWEEN 1 AND 3 THEN
-                    AVG(daily_base_sales)
+                    AVG(base_sales)
                 WHEN total_count BETWEEN 4 AND 7 THEN
                     AVG(
                         CASE
                             WHEN row_num <= CEIL(total_count * 0.3)
-                                THEN daily_base_sales
+                                THEN base_sales
                         END
                     ) * 0.7
                     + AVG(
                         CASE
                             WHEN row_num > CEIL(total_count * 0.3)
-                                THEN daily_base_sales
+                                THEN base_sales
                         END
                     ) * 0.3
                 WHEN total_count BETWEEN 8 AND 15 THEN
                     AVG(
                         CASE
                             WHEN row_num <= CEIL(total_count * 0.33)
-                                THEN daily_base_sales
+                                THEN base_sales
                         END
                     ) * 0.6
                     + AVG(
                         CASE
                             WHEN row_num BETWEEN CEIL(total_count * 0.33) + 1
                                              AND CEIL(total_count * 0.66)
-                                THEN daily_base_sales
+                                THEN base_sales
                         END
                     ) * 0.3
                     + AVG(
                         CASE
                             WHEN row_num > CEIL(total_count * 0.66)
-                                THEN daily_base_sales
+                                THEN base_sales
                         END
                     ) * 0.1
                 ELSE
                     AVG(
-                        CASE WHEN row_num <= 7 THEN daily_base_sales END
+                        CASE WHEN row_num <= 7 THEN base_sales END
                     ) * 0.5
                     + AVG(
                         CASE
-                            WHEN row_num BETWEEN 8 AND 15 THEN daily_base_sales
+                            WHEN row_num BETWEEN 8 AND 15 THEN base_sales
                         END
                     ) * 0.3
                     + AVG(
                         CASE
-                            WHEN row_num BETWEEN 16 AND 30 THEN daily_base_sales
+                            WHEN row_num BETWEEN 16 AND 30 THEN base_sales
                         END
                     ) * 0.2
             END,
@@ -382,8 +378,7 @@ UPDATE daily_sales AS ds
 INNER JOIN temp_bd_repair_weighted_recalc AS recalc
     ON recalc.shop_country_asin_date = ds.shop_country_asin_date
 SET ds.weighted_sales = recalc.new_weighted_sales
-WHERE recalc.new_weighted_sales IS NOT NULL
-  AND (ds.weighted_sales <=> recalc.old_weighted_sales)
+WHERE (ds.weighted_sales <=> recalc.old_weighted_sales)
   AND NOT (ds.weighted_sales <=> recalc.new_weighted_sales);
 
 SET @corrected_bd_weighted_sales_rows = ROW_COUNT();
@@ -677,8 +672,7 @@ SELECT
         FROM temp_bd_repair_weighted_recalc AS recalc
         INNER JOIN daily_sales AS ds
             ON ds.shop_country_asin_date = recalc.shop_country_asin_date
-        WHERE recalc.new_weighted_sales IS NOT NULL
-          AND NOT (ds.weighted_sales <=> recalc.new_weighted_sales)
+        WHERE NOT (ds.weighted_sales <=> recalc.new_weighted_sales)
     ) AS remaining_weighted_sales_rows,
     (
         SELECT COUNT(*)

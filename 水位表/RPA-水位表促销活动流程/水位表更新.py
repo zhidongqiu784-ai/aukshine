@@ -76,10 +76,61 @@ def step_1_update_base_sales(cursor):
                 country,
                 date,
                 SUM(sales) AS total_sales,
-                MAX(coefficient) AS max_coefficient,
-                SUM(sales) / NULLIF(MAX(coefficient), 0) AS calculated_base_sales
-            FROM daily_sales
-            WHERE shop != '合计'
+                MAX(CASE WHEN type_rank = 1 THEN coefficient END) AS target_coefficient,
+                CAST(
+                    ROUND(SUM(sales) / NULLIF(MAX(CASE WHEN type_rank = 1 THEN coefficient END), 0), 0)
+                    AS SIGNED
+                ) AS calculated_base_sales
+            FROM (
+                SELECT
+                    asin,
+                    country,
+                    date,
+                    shop,
+                    sales,
+                    coefficient,
+                    type,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY asin, country, date
+                        ORDER BY
+                            category_priority,
+                            coefficient IS NULL,
+                            coefficient DESC,
+                            type DESC,
+                            shop DESC
+                    ) AS type_rank
+                FROM (
+                    SELECT
+                        base.asin,
+                        base.country,
+                        base.date,
+                        base.shop,
+                        base.sales,
+                        base.coefficient,
+                        base.type,
+                        COALESCE((
+                            SELECT MIN(
+                                CASE dtt.daytype_category
+                                    WHEN '大促BDLD' THEN 1
+                                    WHEN '基础活动类型' THEN 2
+                                    WHEN '专享类型' THEN 3
+                                    WHEN '固定活动类型' THEN 4
+                                    WHEN '叠加基础类型' THEN 5
+                                    WHEN '基础类型' THEN 6
+                                    WHEN '不参与' THEN 7
+                                    ELSE 9
+                                END
+                            )
+                            FROM datetypetime AS dtt
+                            WHERE dtt.daytype IS NOT NULL
+                              AND base.type IS NOT NULL
+                              AND FIND_IN_SET(dtt.daytype, REPLACE(base.type, '、', ',')) > 0
+                              AND FIND_IN_SET(base.country, dtt.country) > 0
+                        ), 9) AS category_priority
+                    FROM daily_sales AS base
+                    WHERE base.shop != '合计'
+                ) categorized
+            ) ranked
             GROUP BY asin, country, date
         ) agg
             ON ds.asin = agg.asin
@@ -98,26 +149,26 @@ def step_2_update_shop_weighted_sales(cursor):
     sql = """
         UPDATE daily_sales AS d
         JOIN (
-            WITH base_sales_calc AS (
+            WITH base_sales_history AS (
                 SELECT
                     asin,
                     country,
                     date,
-                    SUM(sales) / NULLIF(MAX(coefficient), 0) AS daily_base_sales
+                    base_sales
                 FROM daily_sales
-                WHERE shop <> '合计'
+                WHERE shop = '合计'
+                  AND base_sales IS NOT NULL
                   AND date BETWEEN DATE_SUB(CURDATE(), INTERVAL 30 DAY)
                               AND DATE_SUB(CURDATE(), INTERVAL 1 DAY)
-                GROUP BY asin, country, date
             ),
             sales_history AS (
                 SELECT
                     asin,
                     country,
-                    daily_base_sales,
+                    base_sales,
                     ROW_NUMBER() OVER (PARTITION BY asin, country ORDER BY date DESC) AS row_num,
                     COUNT(*) OVER (PARTITION BY asin, country) AS total_count
-                FROM base_sales_calc
+                FROM base_sales_history
             ),
             weighted_avg AS (
                 SELECT
@@ -125,33 +176,34 @@ def step_2_update_shop_weighted_sales(cursor):
                     country,
                     ROUND(
                         CASE
-                            WHEN total_count BETWEEN 1 AND 3 THEN AVG(daily_base_sales)
+                            WHEN total_count BETWEEN 1 AND 3 THEN AVG(base_sales)
                             WHEN total_count BETWEEN 4 AND 7 THEN
-                                (AVG(CASE WHEN row_num <= CEIL(total_count*0.3) THEN daily_base_sales END)*0.7
-                                 + AVG(CASE WHEN row_num > CEIL(total_count*0.3) THEN daily_base_sales END)*0.3)
+                                (AVG(CASE WHEN row_num <= CEIL(total_count*0.3) THEN base_sales END)*0.7
+                                 + AVG(CASE WHEN row_num > CEIL(total_count*0.3) THEN base_sales END)*0.3)
                             WHEN total_count BETWEEN 8 AND 15 THEN
-                                (AVG(CASE WHEN row_num <= CEIL(total_count*0.33) THEN daily_base_sales END)*0.6
-                                 + AVG(CASE WHEN row_num BETWEEN CEIL(total_count*0.33)+1 AND CEIL(total_count*0.66) THEN daily_base_sales END)*0.3
-                                 + AVG(CASE WHEN row_num > CEIL(total_count*0.66) THEN daily_base_sales END)*0.1)
+                                (AVG(CASE WHEN row_num <= CEIL(total_count*0.33) THEN base_sales END)*0.6
+                                 + AVG(CASE WHEN row_num BETWEEN CEIL(total_count*0.33)+1 AND CEIL(total_count*0.66) THEN base_sales END)*0.3
+                                 + AVG(CASE WHEN row_num > CEIL(total_count*0.66) THEN base_sales END)*0.1)
                             ELSE
-                                (AVG(CASE WHEN row_num <= 7 THEN daily_base_sales END)*0.5
-                                 + AVG(CASE WHEN row_num BETWEEN 8 AND 15 THEN daily_base_sales END)*0.3
-                                 + AVG(CASE WHEN row_num BETWEEN 16 AND 30 THEN daily_base_sales END)*0.2)
+                                (AVG(CASE WHEN row_num <= 7 THEN base_sales END)*0.5
+                                 + AVG(CASE WHEN row_num BETWEEN 8 AND 15 THEN base_sales END)*0.3
+                                 + AVG(CASE WHEN row_num BETWEEN 16 AND 30 THEN base_sales END)*0.2)
                         END
                     , 1) AS weighted_sales_value
                 FROM sales_history
                 GROUP BY asin, country
             )
-            SELECT
+            SELECT DISTINCT
                 d2.asin,
                 d2.country,
                 d2.date,
                 w.weighted_sales_value
             FROM daily_sales d2
-            JOIN weighted_avg w
+            LEFT JOIN weighted_avg w
                 ON d2.asin = w.asin
                AND d2.country = w.country
-            WHERE d2.date IS NOT NULL
+            WHERE d2.shop <> '合计'
+              AND d2.date >= CURDATE()
         ) AS r
             ON r.asin = d.asin
            AND r.country = d.country
@@ -376,7 +428,7 @@ def step_4_upsert_summary_rows(cursor):
         -- 节点名称：为同一ASIN、国家、日期的所有店铺数据创建汇总记录（"合计"记录）
         -- 节点说明：
         -- 1、汇总补货、库存（取基础库存各店铺的可售+待调仓的合计）、在途
-        -- 2、基准销量：合并销量/类型系数（最大值）
+        -- 2、基准销量：合并销量/代表日类型系数
         -- 3、加权基准销量：按过去30天的平均值，但是过去7天的权重为50%，过去8-15天的权重30%，过去16-30天的权重为20%
         -- 4、兼容领星昨日销量延迟：昨天仅回补销量和基准销量；其他汇总字段及加权销量仅更新今天及以后
 
@@ -387,14 +439,49 @@ def step_4_upsert_summary_rows(cursor):
             overseas_warehouse_new_product, type, sale_maybe_sales
         )
         WITH
+        categorized_sales AS (
+            SELECT
+                ds.asin, ds.country, ds.date, ds.shop, ds.sales, ds.inventory, ds.coefficient,
+                ds.`add`, ds.on_the_way, ds.model, ds.week,
+                ds.overseas_warehouse_test_product, ds.overseas_warehouse_new_product,
+                ds.maybe_sales, ds.sale_inventory, ds.sale_maybe_sales, ds.type, ds.sales_store,
+                COALESCE((
+                    SELECT MIN(
+                        CASE dtt.daytype_category
+                            WHEN '大促BDLD' THEN 1
+                            WHEN '基础活动类型' THEN 2
+                            WHEN '专享类型' THEN 3
+                            WHEN '固定活动类型' THEN 4
+                            WHEN '叠加基础类型' THEN 5
+                            WHEN '基础类型' THEN 6
+                            WHEN '不参与' THEN 7
+                            ELSE 9
+                        END
+                    )
+                    FROM datetypetime AS dtt
+                    WHERE dtt.daytype IS NOT NULL
+                      AND ds.type IS NOT NULL
+                      AND FIND_IN_SET(dtt.daytype, REPLACE(ds.type, '、', ',')) > 0
+                      AND FIND_IN_SET(ds.country, dtt.country) > 0
+                ), 9) AS category_priority
+            FROM daily_sales AS ds
+            WHERE ds.shop <> '合计'
+        ),
         filtered_sales_with_type AS (
             SELECT 
-                asin, country, date, sales, inventory, coefficient, `add`, on_the_way,
+                asin, country, date, shop, sales, inventory, coefficient, `add`, on_the_way,
                 model, week, overseas_warehouse_test_product, overseas_warehouse_new_product, 
                 maybe_sales, sale_inventory, sale_maybe_sales, type, sales_store,
-                FIRST_VALUE(type) OVER (PARTITION BY asin, country, date ORDER BY coefficient DESC, type DESC) AS max_coeff_type
-            FROM daily_sales
-            WHERE shop <> '合计'
+                ROW_NUMBER() OVER (
+                    PARTITION BY asin, country, date
+                    ORDER BY
+                        category_priority,
+                        coefficient IS NULL,
+                        coefficient DESC,
+                        type DESC,
+                        shop DESC
+                ) AS type_rank
+            FROM categorized_sales
         ),
         summary_sales_store AS (
             SELECT asin, country, date, sales_store
@@ -420,8 +507,8 @@ def step_4_upsert_summary_rows(cursor):
                 SUM(on_the_way) AS total_on_the_way,
                 SUM(sales) AS total_sales,
                 SUM(COALESCE(maybe_sales, 0)) AS total_maybe_sales,
-                MAX(coefficient) AS max_coefficient,
-                MAX(max_coeff_type) AS max_coeff_type,
+                MAX(CASE WHEN type_rank = 1 THEN coefficient END) AS max_coefficient,
+                MAX(CASE WHEN type_rank = 1 THEN type END) AS max_coeff_type,
                 MAX(model) AS model,
                 MAX(week) AS week,
                 MAX(overseas_warehouse_test_product) AS overseas_warehouse_test_product,
@@ -437,35 +524,44 @@ def step_4_upsert_summary_rows(cursor):
                 sc.*,
                 COALESCE(inv.calculated_inv, 0) AS final_inventory,
                 COALESCE(inv.calculated_sale_inv, 0) AS final_sale_inventory,  -- ✅ 新增
-                sc.total_sales / NULLIF(sc.max_coefficient, 0) AS daily_base_sales
+                CAST(
+                    ROUND(sc.total_sales / NULLIF(sc.max_coefficient, 0), 0)
+                    AS SIGNED
+                ) AS calculated_base_sales
             FROM shop_combined sc
             LEFT JOIN real_inventory_agg inv
                 ON sc.asin = inv.asin AND sc.country = inv.country AND sc.date = inv.date
         ),
+        base_sales_history AS (
+            SELECT asin, country, date, base_sales
+            FROM daily_sales
+            WHERE shop = '合计'
+              AND base_sales IS NOT NULL
+              AND date BETWEEN DATE_SUB(CURDATE(), INTERVAL 30 DAY) AND DATE_SUB(CURDATE(), INTERVAL 1 DAY)
+        ),
         sales_history AS (
-            SELECT asin, country, daily_base_sales,
+            SELECT asin, country, base_sales,
                    ROW_NUMBER() OVER (PARTITION BY asin, country ORDER BY date DESC) AS row_num,
                    COUNT(*) OVER (PARTITION BY asin, country) AS total_count
-            FROM base_calculated
-            WHERE date BETWEEN DATE_SUB(CURDATE(), INTERVAL 30 DAY) AND DATE_SUB(CURDATE(), INTERVAL 1 DAY)
+            FROM base_sales_history
         ),
         weighted_sales_current AS (
             SELECT
                 asin, country,
                 ROUND(
                     CASE
-                        WHEN total_count BETWEEN 1 AND 3 THEN AVG(daily_base_sales)
+                        WHEN total_count BETWEEN 1 AND 3 THEN AVG(base_sales)
                         WHEN total_count BETWEEN 4 AND 7 THEN
-                            (AVG(CASE WHEN row_num <= CEIL(total_count*0.3) THEN daily_base_sales END)*0.7
-                             + AVG(CASE WHEN row_num >  CEIL(total_count*0.3) THEN daily_base_sales END)*0.3)
+                            (AVG(CASE WHEN row_num <= CEIL(total_count*0.3) THEN base_sales END)*0.7
+                             + AVG(CASE WHEN row_num >  CEIL(total_count*0.3) THEN base_sales END)*0.3)
                         WHEN total_count BETWEEN 8 AND 15 THEN
-                            (AVG(CASE WHEN row_num <= CEIL(total_count*0.33) THEN daily_base_sales END)*0.6
-                             + AVG(CASE WHEN row_num BETWEEN CEIL(total_count*0.33)+1 AND CEIL(total_count*0.66) THEN daily_base_sales END)*0.3
-                             + AVG(CASE WHEN row_num >  CEIL(total_count*0.66) THEN daily_base_sales END)*0.1)
+                            (AVG(CASE WHEN row_num <= CEIL(total_count*0.33) THEN base_sales END)*0.6
+                             + AVG(CASE WHEN row_num BETWEEN CEIL(total_count*0.33)+1 AND CEIL(total_count*0.66) THEN base_sales END)*0.3
+                             + AVG(CASE WHEN row_num >  CEIL(total_count*0.66) THEN base_sales END)*0.1)
                         ELSE
-                            (AVG(CASE WHEN row_num <= 7 THEN daily_base_sales END)*0.5
-                             + AVG(CASE WHEN row_num BETWEEN 8 AND 15 THEN daily_base_sales END)*0.3
-                             + AVG(CASE WHEN row_num BETWEEN 16 AND 30 THEN daily_base_sales END)*0.2)
+                            (AVG(CASE WHEN row_num <= 7 THEN base_sales END)*0.5
+                             + AVG(CASE WHEN row_num BETWEEN 8 AND 15 THEN base_sales END)*0.3
+                             + AVG(CASE WHEN row_num BETWEEN 16 AND 30 THEN base_sales END)*0.2)
                     END, 1
                 ) AS weighted_sales
             FROM sales_history
@@ -478,29 +574,15 @@ def step_4_upsert_summary_rows(cursor):
             bc.final_inventory,
             bc.final_sale_inventory,  -- ✅ 替换原来的 bc.total_sale_inventory
 
-            ROUND(bc.max_coefficient, 2), bc.week, bc.daily_base_sales,
+            ROUND(bc.max_coefficient, 2), bc.week, bc.calculated_base_sales,
 
-            COALESCE(
-                w.weighted_sales,
-                ROUND(bc.total_maybe_sales / NULLIF(bc.max_coefficient, 0), 1),
-                0
-            ) AS weighted_sales,
+            w.weighted_sales,
 
             CASE
                 WHEN bc.final_inventory <= 0 THEN 0
-                WHEN COALESCE(
-                         w.weighted_sales,
-                         ROUND(bc.total_maybe_sales / NULLIF(bc.max_coefficient, 0), 1),
-                         0
-                     ) > 0
+                WHEN w.weighted_sales > 0
                 THEN LEAST(
-                    FLOOR(
-                        bc.final_inventory / COALESCE(
-                            w.weighted_sales,
-                            ROUND(bc.total_maybe_sales / NULLIF(bc.max_coefficient, 0), 1),
-                            0
-                        )
-                    ),
+                    FLOOR(bc.final_inventory / w.weighted_sales),
                     65535
                 )
                 ELSE NULL
@@ -508,12 +590,11 @@ def step_4_upsert_summary_rows(cursor):
 
             bc.total_add, bc.total_on_the_way,
 
-            FLOOR(
-                bc.max_coefficient * COALESCE(
-                    w.weighted_sales,
-                    ROUND(bc.total_maybe_sales / NULLIF(bc.max_coefficient, 0), 1),
+            CAST(
+                ROUND(
+                    bc.max_coefficient * w.weighted_sales,
                     0
-                )
+                ) AS SIGNED
             ) AS maybe_sales,
 
             bc.overseas_warehouse_test_product, bc.overseas_warehouse_new_product, bc.max_coeff_type,
@@ -833,7 +914,7 @@ def step_4_1_update_summary_bd_prediction(cursor):
         """,
         """
         UPDATE daily_sales
-        SET maybe_sales = weighted_sales * coefficient
+        SET maybe_sales = CAST(ROUND(weighted_sales * coefficient, 0) AS SIGNED)
         WHERE shop = '合计'
           AND FIND_IN_SET('BD（预测）', REPLACE(type, '、', ',')) > 0
           AND date BETWEEN CURDATE()
@@ -993,7 +1074,7 @@ def step_5_fix_summary_inventory(cursor):
 def step_7_update_maybe_sales(cursor):
     sql = """
         UPDATE daily_sales
-        SET maybe_sales = weighted_sales * coefficient
+        SET maybe_sales = CAST(ROUND(weighted_sales * coefficient, 0) AS SIGNED)
     """
     return execute_sql(cursor, "步骤7 更新预估销量", sql)
 

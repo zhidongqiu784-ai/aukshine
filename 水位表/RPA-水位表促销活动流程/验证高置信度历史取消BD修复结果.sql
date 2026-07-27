@@ -77,23 +77,20 @@ weighted_target_rows AS (
             AND ds.`date` BETWEEN '2026-05-28' AND '2026-07-07'
           )
 ),
-daily_base_source AS (
+base_sales_source AS (
     SELECT
         ds.country,
         ds.asin,
         ds.`date` AS history_date,
-        SUM(ds.sales) / NULLIF(MAX(ds.coefficient), 0) AS daily_base_sales
+        ds.base_sales
     FROM daily_sales AS ds
-    WHERE ds.shop <> '合计'
+    WHERE ds.shop = '合计'
+      AND ds.base_sales IS NOT NULL
       AND ds.`date` < CURDATE()
       AND (
             (ds.country = 'FR' AND ds.asin = 'B0GRB39S7G')
          OR (ds.country = 'US' AND ds.asin = 'B0FB3P6H48')
       )
-    GROUP BY
-        ds.country,
-        ds.asin,
-        ds.`date`
 ),
 history_ranked AS (
     SELECT
@@ -103,73 +100,72 @@ history_ranked AS (
         target.shop,
         target.target_date,
         target.weighted_sales,
-        source.daily_base_sales,
+        source.base_sales,
         ROW_NUMBER() OVER (
             PARTITION BY target.shop_country_asin_date
             ORDER BY source.history_date DESC
         ) AS row_num,
-        COUNT(*) OVER (
+        COUNT(source.base_sales) OVER (
             PARTITION BY target.shop_country_asin_date
         ) AS total_count
     FROM weighted_target_rows AS target
-    INNER JOIN daily_base_source AS source
+    LEFT JOIN base_sales_source AS source
         ON source.country = target.country
        AND source.asin = target.asin
        AND source.history_date BETWEEN DATE_SUB(target.target_date, INTERVAL 30 DAY)
                                   AND DATE_SUB(target.target_date, INTERVAL 1 DAY)
-    WHERE source.daily_base_sales IS NOT NULL
 ),
 weighted_expected AS (
     SELECT
         shop_country_asin_date,
         ROUND(
             CASE
-                WHEN total_count BETWEEN 1 AND 3 THEN AVG(daily_base_sales)
+                WHEN total_count BETWEEN 1 AND 3 THEN AVG(base_sales)
                 WHEN total_count BETWEEN 4 AND 7 THEN
                     AVG(
                         CASE
                             WHEN row_num <= CEIL(total_count * 0.3)
-                            THEN daily_base_sales
+                            THEN base_sales
                         END
                     ) * 0.7
                     + AVG(
                         CASE
                             WHEN row_num > CEIL(total_count * 0.3)
-                            THEN daily_base_sales
+                            THEN base_sales
                         END
                     ) * 0.3
                 WHEN total_count BETWEEN 8 AND 15 THEN
                     AVG(
                         CASE
                             WHEN row_num <= CEIL(total_count * 0.33)
-                            THEN daily_base_sales
+                            THEN base_sales
                         END
                     ) * 0.6
                     + AVG(
                         CASE
                             WHEN row_num BETWEEN CEIL(total_count * 0.33) + 1
                                              AND CEIL(total_count * 0.66)
-                            THEN daily_base_sales
+                            THEN base_sales
                         END
                     ) * 0.3
                     + AVG(
                         CASE
                             WHEN row_num > CEIL(total_count * 0.66)
-                            THEN daily_base_sales
+                            THEN base_sales
                         END
                     ) * 0.1
                 ELSE
                     AVG(
-                        CASE WHEN row_num <= 7 THEN daily_base_sales END
+                        CASE WHEN row_num <= 7 THEN base_sales END
                     ) * 0.5
                     + AVG(
                         CASE
-                            WHEN row_num BETWEEN 8 AND 15 THEN daily_base_sales
+                            WHEN row_num BETWEEN 8 AND 15 THEN base_sales
                         END
                     ) * 0.3
                     + AVG(
                         CASE
-                            WHEN row_num BETWEEN 16 AND 30 THEN daily_base_sales
+                            WHEN row_num BETWEEN 16 AND 30 THEN base_sales
                         END
                     ) * 0.2
             END,

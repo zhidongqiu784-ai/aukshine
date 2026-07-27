@@ -72,7 +72,20 @@ def step_1_reset_daily_sales_type(cursor):
                 FROM datetypetime dtt
                 WHERE dtt.daytype_category IN ('基础类型', '叠加基础类型')
                   AND FIND_IN_SET(ds.country, dtt.country) > 0
-                  AND ds.date BETWEEN dtt.startdate AND dtt.enddate
+                  AND (
+                      (
+                          DATE_FORMAT(dtt.startdate, '%m%d') <= DATE_FORMAT(dtt.enddate, '%m%d')
+                          AND DATE_FORMAT(ds.date, '%m%d') BETWEEN DATE_FORMAT(dtt.startdate, '%m%d')
+                                                              AND DATE_FORMAT(dtt.enddate, '%m%d')
+                      )
+                      OR (
+                          DATE_FORMAT(dtt.startdate, '%m%d') > DATE_FORMAT(dtt.enddate, '%m%d')
+                          AND (
+                              DATE_FORMAT(ds.date, '%m%d') >= DATE_FORMAT(dtt.startdate, '%m%d')
+                              OR DATE_FORMAT(ds.date, '%m%d') <= DATE_FORMAT(dtt.enddate, '%m%d')
+                          )
+                      )
+                  )
             ),
             '日常'
         )
@@ -89,7 +102,20 @@ def step_1_1_apply_fixed_activity_type(cursor):
     sql = """
         UPDATE daily_sales ds
         INNER JOIN datetypetime dtt
-            ON ds.date BETWEEN dtt.startdate AND dtt.enddate
+            ON (
+                (
+                    DATE_FORMAT(dtt.startdate, '%m%d') <= DATE_FORMAT(dtt.enddate, '%m%d')
+                    AND DATE_FORMAT(ds.date, '%m%d') BETWEEN DATE_FORMAT(dtt.startdate, '%m%d')
+                                                        AND DATE_FORMAT(dtt.enddate, '%m%d')
+                )
+                OR (
+                    DATE_FORMAT(dtt.startdate, '%m%d') > DATE_FORMAT(dtt.enddate, '%m%d')
+                    AND (
+                        DATE_FORMAT(ds.date, '%m%d') >= DATE_FORMAT(dtt.startdate, '%m%d')
+                        OR DATE_FORMAT(ds.date, '%m%d') <= DATE_FORMAT(dtt.enddate, '%m%d')
+                    )
+                )
+            )
            AND dtt.daytype_category = '固定活动类型'
            AND FIND_IN_SET(ds.country, dtt.country) > 0
         SET ds.type = dtt.daytype
@@ -129,8 +155,20 @@ def step_3_update_big_event_and_exclusive(cursor):
     sql = """
         UPDATE daily_sales ds
             INNER JOIN datetypetime dtt
-            ON ds.date >= dtt.startdate
-               AND ds.date <= dtt.enddate
+            ON (
+                (
+                    DATE_FORMAT(dtt.startdate, '%m%d') <= DATE_FORMAT(dtt.enddate, '%m%d')
+                    AND DATE_FORMAT(ds.date, '%m%d') BETWEEN DATE_FORMAT(dtt.startdate, '%m%d')
+                                                        AND DATE_FORMAT(dtt.enddate, '%m%d')
+                )
+                OR (
+                    DATE_FORMAT(dtt.startdate, '%m%d') > DATE_FORMAT(dtt.enddate, '%m%d')
+                    AND (
+                        DATE_FORMAT(ds.date, '%m%d') >= DATE_FORMAT(dtt.startdate, '%m%d')
+                        OR DATE_FORMAT(ds.date, '%m%d') <= DATE_FORMAT(dtt.enddate, '%m%d')
+                    )
+                )
+            )
                AND dtt.daytype_category IN ('大促BDLD', '专享类型')
                AND FIND_IN_SET(ds.country, dtt.country) > 0
                AND (
@@ -304,7 +342,7 @@ def main(args=None):
         # 步骤3：修正大促 BD/LD 与专享类型
         # 作用：
         #   根据 datetypetime 表里的分类配置，进一步修正日类型。
-        #   例如：把 BD 修正成 BD (7月PD)、BD (黑五网一) 等大促类型。
+        #   例如：把 BD 修正成 BD (夏季PD)、BD (黑五网一) 等大促类型。
         #   大促 BD/LD 和专享类型均单独显示，不保留基础叠加部分。
         # 注意：
         #   专享类型不覆盖真实 BD/LD，真实活动再由大促配置修正名称。

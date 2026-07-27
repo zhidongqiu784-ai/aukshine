@@ -204,7 +204,7 @@ WHERE ds.shop = '合计'
                     AND DATE_ADD(CURDATE(), INTERVAL 180 DAY);
 
 UPDATE daily_sales
-SET maybe_sales = weighted_sales * coefficient
+SET maybe_sales = CAST(ROUND(weighted_sales * coefficient, 0) AS SIGNED)
 WHERE shop = '合计'
   AND type = 'BD（预测）'
   AND date BETWEEN CURDATE()
