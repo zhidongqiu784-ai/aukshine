@@ -19,6 +19,7 @@
     default_1: '完整列',
     default_2: '核心列',
   };
+  const CUSTOM_DEFAULT_COLUMN_VIEW_PREFIX = 'default_custom_';
   const CORE_COLUMN_VIEW_ID = DEFAULT_COLUMN_VIEW_IDS[1];
 
   const FONT_SIZE    = 15;
@@ -449,7 +450,6 @@
     { key:'weekly_zongliuliang',            src:'weekly', field:'zongliuliang',            label:'汇总流量-会话量',          group:'traffic_conversion', axis:'left',  valueType:'integer' },
     { key:'weekly_organic_traffic',         src:'weekly', field:'organic_traffic',         label:'自然流量（会话量-广告点击）', group:'traffic_conversion', axis:'left',  valueType:'integer' },
     { key:'weekly_session_conversion_rate', src:'weekly', field:'session_conversion_rate', label:'会话转化率',                group:'traffic_conversion', axis:'right', valueType:'percent' },
-    { key:'order_link_total_onsite_orders', src:'order_link', field:'total_onsite_orders',  label:'②站内总单量',              group:'order_structure',    axis:'left',  valueType:'integer' },
     { key:'order_link_onsite_organic_orders', src:'order_link', field:'onsite_organic_orders', label:'③站内纯自然单',          group:'order_structure',    axis:'left',  valueType:'integer' },
     { key:'order_link_onsite_ad_orders',    src:'order_link', field:'onsite_ad_orders',     label:'④站内总广告单',            group:'order_structure',    axis:'left',  valueType:'integer' },
     { key:'weekly_adv_rate',                src:'weekly', field:'adv_rate',                label:'广告订单量占比',            group:'ad_data',            axis:'right', valueType:'percent' },
@@ -478,7 +478,7 @@
   ];
   const TREND_CHART_PRESETS = {
     traffic: ['weekly_zongliuliang', 'weekly_organic_traffic', 'weekly_guanggaodianji'],
-    orderStructure: ['order_link_total_onsite_orders', 'order_link_onsite_organic_orders', 'order_link_onsite_ad_orders'],
+    orderStructure: ['order_link_onsite_organic_orders', 'order_link_onsite_ad_orders'],
     adConversion: ['weekly_ctr', 'weekly_guanggaocvr'],
     adEfficiency: ['weekly_cpa', 'weekly_cpu'],
     adInvestment: ['weekly_guanggaohuafei', 'weekly_ad_sales_amount'],
@@ -938,7 +938,7 @@
     category: '类别 = 从小类排名数组取第一个类别。\ncategory = small_cate_rank[0].category。',
   };
 
-  const WEEKLY_PERFORMANCE_UPDATE_TOOLTIP_TEXT = '每天更新2次（早上8点、16点），每次更新过去30天的数据；';
+  const WEEKLY_PERFORMANCE_UPDATE_TOOLTIP_TEXT = '每天更新2次（早上8点、16点），每次更新过去60天的数据；';
   const WEEKLY_PERFORMANCE_DIRECT_VALUE_FIELDS = new Set([
     'sales', 'guanggaodan', 'zongliuliang', 'guanggaodianji', 'guanggaohuafei',
     'ranking', 'reviews_count', 'avg_star', 'prev_star', 'prev_rank',
@@ -956,6 +956,7 @@
     'US/CA站点：晚场 22/23 任一时间同步。',
     '欧洲站点（DE/FR）：早场 13/14/15 任一时间同步；晚场 20/21 任一时间同步。',
   ].join('\n');
+  const CURRENT_DAY_DATA_TOOLTIP_TEXT = '每次更新当天的数据。';
 
   const DAILY_SYNC_SOURCE_INFOS = [
     { workflow: '每日生成类型、asin数据', schedule: '早场 06/07/08 任一时间；晚场 18/19 任一时间', scope: 'JP', node: '1更新 非US、CA的推广天数、星级、评论、LP价、购物车价、售卖账号' },
@@ -966,11 +967,11 @@
   const SQL_UPDATED_FIELD_TEXT = {
     'daily.date': '每天自动生成从今天起未来 3 个月的日期。',
     'daily.activity_annotation': '每天5:30更新，自动同步领星的BD/LD，其他如专享/coupon等需要手动填写',
-    'daily.daily_price': `购物车价格\n${DAILY_SYNC_TOOLTIP_TEXT}`,
-    'daily.list_price': `LP/WP/TP\n${DAILY_SYNC_TOOLTIP_TEXT}`,
+    'daily.daily_price': `购物车价格\n${DAILY_SYNC_TOOLTIP_TEXT}\n${CURRENT_DAY_DATA_TOOLTIP_TEXT}`,
+    'daily.list_price': `LP/WP/TP\n${DAILY_SYNC_TOOLTIP_TEXT}\n${CURRENT_DAY_DATA_TOOLTIP_TEXT}`,
     'daily.star_rating': `星级\n${DAILY_SYNC_TOOLTIP_TEXT}`,
-    'daily.number_of_comments': `Review 数量\n${DAILY_SYNC_TOOLTIP_TEXT}`,
-    'daily.selling_accounts': `售卖账号\n${DAILY_SYNC_TOOLTIP_TEXT}`,
+    'daily.number_of_comments': `Review 数量\n${DAILY_SYNC_TOOLTIP_TEXT}\n${CURRENT_DAY_DATA_TOOLTIP_TEXT}`,
+    'daily.selling_accounts': `售卖账号\n${DAILY_SYNC_TOOLTIP_TEXT}\n${CURRENT_DAY_DATA_TOOLTIP_TEXT}`,
     'daily.promotion_days': '每天 5:30 同步昨日推广天数。',
     'target.sales_mom_rate': '每天早上 8:30 自动对比当天和前一天实际总单量，计算销量环比变化。',
   };
@@ -993,7 +994,7 @@
   const FIELD_TOOLTIP_DATA = {
     page_screenshot: {
       title: '自己页面截图',
-      formula: `自己页面截图\n${DAILY_SYNC_TOOLTIP_TEXT}`,
+      formula: `自己页面截图\n${DAILY_SYNC_TOOLTIP_TEXT}\n${CURRENT_DAY_DATA_TOOLTIP_TEXT}`,
       fields: [{ label: '字段来源（自己页面截图）', field: 'daily_order_link_tracking.page_screenshot' }],
       writeBackField: 'daily_order_link_tracking.page_screenshot',
       hideEmptyRules: true,
@@ -1614,7 +1615,9 @@
     return id || DEFAULT_COLUMN_VIEW_IDS[0];
   };
 
-  const isDefaultColumnViewId = (viewId) => DEFAULT_COLUMN_VIEW_IDS.includes(viewId);
+  const isBuiltinDefaultColumnViewId = (viewId) => DEFAULT_COLUMN_VIEW_IDS.includes(viewId);
+  const isCustomDefaultColumnViewId = (viewId) => normalizeColumnViewId(viewId).startsWith(CUSTOM_DEFAULT_COLUMN_VIEW_PREFIX);
+  const isDefaultColumnViewId = (viewId) => isBuiltinDefaultColumnViewId(viewId) || isCustomDefaultColumnViewId(viewId);
   const isCoreColumnViewId = (viewId) => normalizeColumnViewId(viewId) === CORE_COLUMN_VIEW_ID;
 
   const normalizeColumnViewName = (id, name) => {
@@ -1657,7 +1660,7 @@
     }
     return [
       ...(includeDefaultViews ? DEFAULT_COLUMN_VIEW_IDS.map((id) => viewMap[id]).filter(Boolean) : []),
-      ...Object.values(viewMap).filter((view) => !isDefaultColumnViewId(view.id)),
+      ...Object.values(viewMap).filter((view) => !isBuiltinDefaultColumnViewId(view.id)),
     ];
   };
 
@@ -1665,15 +1668,9 @@
     const defaultViews = normalizeColumnViewList(setting[DEFAULT_COLUMN_VIEWS_KEY]);
     const personalRaw = setting[COLUMN_VIEW_SETTING_KEY] || {};
     const personalViews = normalizeColumnViewList(personalRaw, { includeDefaultViews: false, onlyCustomViews: true });
-    const defaultMap = Object.fromEntries(defaultViews.map((view) => [view.id, view]));
     const customViews = personalViews.filter((view) => !isDefaultColumnViewId(view.id));
     const views = [
-      ...DEFAULT_COLUMN_VIEW_IDS.map((id) => ({
-        ...defaultMap[id],
-        id,
-        name: normalizeColumnViewName(id, defaultMap[id]?.name),
-        type: 'default',
-      })),
+      ...defaultViews,
       ...customViews,
     ];
     const activeViewId = normalizeColumnViewId(personalRaw.activeViewId || personalRaw.active_view_id || DEFAULT_COLUMN_VIEW_IDS[0]);
@@ -1730,8 +1727,8 @@
     const state = normalizeColumnViewState(existingSetting);
     const now = new Date().toISOString();
     const sourceHeaderColorMap = getHeaderColorMapFromPayload(payload);
-    const defaultViews = DEFAULT_COLUMN_VIEW_IDS.map((id) => {
-      const existing = state.defaultViews.find((view) => view.id === id);
+    const defaultViews = state.defaultViews.map((existing) => {
+      const id = existing.id;
       return {
         id,
         name: id === viewId ? normalizeColumnViewName(id, name || existing?.name) : normalizeColumnViewName(id, existing?.name),
@@ -1770,8 +1767,8 @@
     const existingSetting = userRes?.data?.data?.setting || {};
     const state = normalizeColumnViewState(existingSetting);
     const now = new Date().toISOString();
-    const defaultViews = DEFAULT_COLUMN_VIEW_IDS.map((id) => {
-      const existing = state.defaultViews.find((view) => view.id === id);
+    const defaultViews = state.defaultViews.map((existing) => {
+      const id = existing.id;
       return {
         id,
         name: id === viewId ? normalizeColumnViewName(id, name || existing?.name) : normalizeColumnViewName(id, existing?.name),
@@ -1797,6 +1794,54 @@
       },
     });
     return true;
+  };
+
+  const createDefaultColumnViewForCurrentUser = async (payload, name) => {
+    if (!currentUserId || !IS_ADMIN) return null;
+    const baseName = String(name || '').trim();
+    if (!baseName) return null;
+    const userRes = await ctx.request({ url: 'users:get', method: 'get', params: { filterByTk: currentUserId } });
+    const existingSetting = userRes?.data?.data?.setting || {};
+    const state = normalizeColumnViewState(existingSetting);
+    const now = new Date().toISOString();
+    const usedIds = new Set(state.views.map((view) => view.id).filter(Boolean));
+    const usedNames = new Set(state.views.map((view) => getViewLabel(view)).filter(Boolean));
+    let id = `${CUSTOM_DEFAULT_COLUMN_VIEW_PREFIX}${Date.now()}`;
+    let idSuffix = 2;
+    while (usedIds.has(id)) {
+      id = `${CUSTOM_DEFAULT_COLUMN_VIEW_PREFIX}${Date.now()}_${idSuffix}`;
+      idSuffix += 1;
+    }
+    let finalName = baseName;
+    let nameSuffix = 2;
+    while (usedNames.has(finalName)) {
+      finalName = `${baseName}${nameSuffix}`;
+      nameSuffix += 1;
+    }
+    const nextView = {
+      id,
+      name: finalName,
+      type: 'default',
+      payload: Array.isArray(payload) ? payload : [],
+      updated_at: now,
+    };
+    const nextDefaultViews = [...state.defaultViews, nextView];
+    const customViews = state.views.filter((view) => !isDefaultColumnViewId(view?.id));
+    const nextViews = [...nextDefaultViews, ...customViews];
+    await ctx.request({
+      url: 'users:update',
+      method: 'post',
+      params: { filterByTk: currentUserId },
+      data: {
+        setting: {
+          ...existingSetting,
+          [DEFAULT_COLUMN_VIEWS_KEY]: { views: nextDefaultViews },
+          [COLUMN_VIEW_SETTING_KEY]: buildColumnViewSettingPayload({ activeViewId: id, views: nextViews }, id),
+          [BLOCK_NAME_SETTING_KEY]: BLOCK_NAME,
+        },
+      },
+    });
+    return { view: nextView, views: nextViews, defaultViews: nextDefaultViews };
   };
 
   const loadColumnViewStateFromUser = async () => {
@@ -1965,7 +2010,7 @@
       ? getHeaderColorMapFromPayload(sourceMap[customHeaderSourceViewId]?.payload)
       : {};
     if (Object.keys(customHeaderColorMap).length) {
-      DEFAULT_COLUMN_VIEW_IDS.forEach((id) => {
+      Object.keys(sourceMap).forEach((id) => {
         sourceMap[id] = {
           ...sourceMap[id],
           payload: mergeHeaderColorsIntoColumnPayload(sourceMap[id]?.payload, customHeaderColorMap),
@@ -1990,7 +2035,11 @@
         const existingSetting = userRes?.data?.data?.setting || {};
         const now = new Date().toISOString();
         const currentDefaults = normalizeColumnViewList(existingSetting[DEFAULT_COLUMN_VIEWS_KEY]);
-        const nextDefaults = currentDefaults.map((view) => sourceMap[view.id] ? { ...view, ...sourceMap[view.id], updated_at: now } : view);
+        const nextDefaultMap = Object.fromEntries(currentDefaults.map((view) => [view.id, view]));
+        Object.values(sourceMap).forEach((view) => {
+          nextDefaultMap[view.id] = { ...(nextDefaultMap[view.id] || {}), ...view, updated_at: now };
+        });
+        const nextDefaults = normalizeColumnViewList({ views: Object.values(nextDefaultMap) });
         const existingState = normalizeColumnViewState(existingSetting);
         const shouldSyncCustomHeaderColors = Object.keys(customHeaderColorMap).length > 0;
         const nextViews = shouldSyncCustomHeaderColors
@@ -6599,7 +6648,7 @@
       if (columnViewSaving || columnViewSwitching) return;
       const viewId = normalizeColumnViewId(activeColumnViewIdRef.current || activeColumnViewId);
       if (!isDefaultColumnViewId(viewId)) {
-        ctx.message.warning('只有完整列和核心列可以保存为默认视图');
+        ctx.message.warning('只有默认视图可以保存为默认视图');
         return;
       }
       setColumnViewSaving(true);
@@ -6659,11 +6708,12 @@
         const views = columnViewsRef.current.length ? columnViewsRef.current : columnViews;
         const currentPayload = buildCurrentColumnViewPayload();
         const sourceHeaderColorMap = getHeaderColorMapFromPayload(currentPayload);
-        const defaultViews = syncHeaderColorsIntoColumnViews(DEFAULT_COLUMN_VIEW_IDS.map((id) => {
-          const savedView = views.find((view) => view.id === id);
+        const existingDefaultViews = normalizeColumnViewList({ views: views.filter((view) => isDefaultColumnViewId(view?.id)) });
+        const defaultViews = syncHeaderColorsIntoColumnViews(existingDefaultViews.map((savedView) => {
+          const id = savedView.id;
           return {
             id,
-            name: getViewLabel(savedView) || DEFAULT_COLUMN_VIEW_LABELS[id],
+            name: getViewLabel(savedView) || DEFAULT_COLUMN_VIEW_LABELS[id] || '默认视图',
             type: 'default',
             payload: id === activeColumnViewId
               ? currentPayload
@@ -6853,15 +6903,52 @@
         doCreate(nameArg);
         return;
       }
+      const doCreateDefault = async (rawName) => {
+        if (!IS_ADMIN) return false;
+        const name = String(rawName || '').trim();
+        if (!name) {
+          ctx.message.warning('请先输入视图名称');
+          return false;
+        }
+        setColumnViewCreating(true);
+        try {
+          const payload = buildCurrentColumnViewPayload();
+          const result = await createDefaultColumnViewForCurrentUser(payload, name);
+          if (!result?.view) throw new Error('默认视图未保存');
+          columnViewSwitchSeqRef.current += 1;
+          setColumnViewsLocal(result.views);
+          setActiveColumnViewLocal(result.view.id);
+          applyColumnPayloadToLocal(result.view.payload);
+          ctx.message.success(`默认视图「${getViewLabel(result.view)}」已创建`);
+          return true;
+        } catch (err) {
+          ctx.message.error(`新增默认视图失败：${err?.message || '未知错误'}`);
+          return false;
+        } finally {
+          setColumnViewCreating(false);
+        }
+      };
       let nextName = '';
-      Modal.confirm({
+      let modalRef = null;
+      modalRef = Modal.confirm({
         title: '复制并保存视图',
-        content: React.createElement(Input, {
-          autoFocus: true,
-          placeholder: '请输入视图名称',
-          onChange: (e) => { nextName = e.target.value; },
-          onPressEnter: (e) => e.currentTarget?.blur?.(),
-        }),
+        content: React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '10px' } },
+          React.createElement(Input, {
+            autoFocus: true,
+            placeholder: '请输入视图名称',
+            onChange: (e) => { nextName = e.target.value; },
+            onPressEnter: (e) => e.currentTarget?.blur?.(),
+          }),
+          IS_ADMIN && React.createElement(Button, {
+            type: 'default',
+            disabled: !currentUserId || columnViewCreating || columnViewSaving || columnViewSwitching,
+            onClick: async () => {
+              const created = await doCreateDefault(nextName);
+              if (created) modalRef?.destroy?.();
+            },
+            style: { alignSelf: 'flex-start', fontWeight: 700 },
+          }, columnViewCreating ? '保存中...' : '保存默认视图')
+        ),
         okText: '复制并保存',
         cancelText: '取消',
         onOk: async () => {
@@ -6869,7 +6956,7 @@
           if (!created) return Promise.reject(new Error('视图未创建'));
         },
       });
-    }, [activeColumnViewId, applyColumnPayloadToLocal, buildCurrentColumnViewPayload, columnViewCreating, columnViewSwitching, columnViews, setActiveColumnViewLocal, setColumnViewsLocal]);
+    }, [activeColumnViewId, applyColumnPayloadToLocal, buildCurrentColumnViewPayload, columnViewCreating, columnViewSaving, columnViewSwitching, columnViews, setActiveColumnViewLocal, setColumnViewsLocal]);
 
     const deleteColumnView = useCallback(async (viewIdArg = null) => {
       if (!currentUserId) {
@@ -8734,6 +8821,9 @@
         const weeklyFormulaLines = [weeklyTooltipLines[0] || '直接展示该指标值'];
         if (WEEKLY_PERFORMANCE_DIRECT_VALUE_FIELDS.has(col.field)) {
           weeklyFormulaLines.push(WEEKLY_PERFORMANCE_UPDATE_TOOLTIP_TEXT);
+        }
+        if (col.field === 'reviews_count') {
+          weeklyFormulaLines.push(CURRENT_DAY_DATA_TOOLTIP_TEXT);
         }
         return renderTooltip({
           title: col.label,
