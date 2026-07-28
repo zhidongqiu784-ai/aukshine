@@ -13,6 +13,7 @@
   const DEFAULT_COLUMN_VIEWS_KEY = `${BLOCK_UID}__default_column_views`;
   const BLOCK_NAME       = '推新板块';
   const BLOCK_NAME_SETTING_KEY = `${BLOCK_UID}__block_name`;
+  const COLUMN_GROUP_ORDER_KEY = '__column_group_order';
   const IS_ADMIN         = currentUserLevel === 3;
   const DEFAULT_COLUMN_VIEW_IDS = ['default_1'];
   const DEFAULT_COLUMN_VIEW_LABELS = { default_1: '默认视图' };
@@ -220,7 +221,7 @@
   const IMPORTANT_COLUMN_BODY_COLOR = '#BADDB1';
 
   const SRC_DEFAULT_COLOR = {
-    daily: COLOR_GREEN, weekly: COLOR_ORANGE, keyword_tracking: '#b5796a', tool: '#fa8c16',
+    daily: COLOR_GREEN, weekly: COLOR_ORANGE, keyword_tracking: '#b5796a', keyword_screenshot: '#d4380d', tool: '#fa8c16',
   };
 
   const getColHeaderColor = (col) => col.headerColor || SRC_DEFAULT_COLOR[col.src] || COLOR_GREEN;
@@ -469,37 +470,80 @@
 
 
   const INITIAL_COLUMNS = [
-    { key:'daily_country',         src:'daily',  field:'country',         label:'国家',       hidden:false, pinned:true,  width:70,  editable:false },
-    { key:'daily_asin',            src:'daily',  field:'asin',            label:'ASIN',       hidden:false, pinned:true,  width:110, editable:false },
-    { key:'daily_date',            src:'daily',  field:'date',            label:'站点时间',       hidden:false, pinned:true,  width:100, editable:false },
-    { key:'daily_sale_owner',      src:'daily',  field:'sale_owner',      label:'销售',       hidden:false, pinned:true,  width:80,  editable:false },
-    { key:'daily_model',           src:'daily',  field:'model',           label:'型号',       hidden:false, pinned:false, width:100, editable:false },
-    { key:'daily_activity_annotation', src:'daily', field:'activity_annotation', label:'活动标注', hidden:false, pinned:false, width:90, editable:false },
-    { key:'daily_promotion_days',  src:'daily',  field:'promotion_days',  label:'推广天数',   hidden:false, pinned:false, width:85,  editable:false },
-    { key:'daily_daily_price',     src:'daily',  field:'daily_price',     label:'购物车价格',   hidden:false, pinned:false, width:90,  editable:false },
-    { key:'daily_list_price',      src:'daily',  field:'list_price',      label:'LP/WP/TP',    hidden:false, pinned:false, width:85,  editable:false },
-    { key:'daily_off',             src:'daily',  field:'off',             label:'Off 力度',   hidden:false, pinned:false, width:85,  editable:false },
-    { key:'daily_price_after_discount', src:'daily', field:'price_after_discount', label:'折后售价', hidden:false, pinned:false, width:85, editable:false },
-    { key:'daily_selling_accounts', src:'daily', field:'selling_accounts', label:'售卖账号', hidden:false, pinned:false, width:100, editable:false },
-    { key:'daily_rsg_number',      src:'daily',  field:'rsg_number',      label:'实际刷单总数', hidden:false, pinned:false, width:95, editable:false },
-    { key:'weekly_order_items',    src:'weekly', field:'sales',           label:'实际总单量',   hidden:false, pinned:false, width:90,  editable:false },
-    { key:'weekly_order_items_2',  src:'weekly', field:'sales',           label:'实际总单量',   hidden:false, pinned:false, width:90,  editable:false },
-    { key:'weekly_zirandan',       src:'weekly', field:'zirandan',        label:'实际自然单',   hidden:false, pinned:false, width:90,  editable:false },
-    { key:'weekly_guanggaodan',    src:'weekly', field:'guanggaodan',     label:'实际广告单',   hidden:false, pinned:false, width:90,  editable:false },
-    { key:'keyword_tracking_actual_natural_order', src:'keyword_tracking', field:'actual_natural_order', label:'实际自然单', hidden:false, pinned:false, width:105, editable:false },
-    { key:'weekly_zongliuliang',   src:'weekly', field:'zongliuliang',    label:'实际流量',     hidden:false, pinned:false, width:85,  editable:false },
-    { key:'weekly_zongcvr',        src:'weekly', field:'session_conversion_rate', label:'实际转化率', hidden:false, pinned:false, width:110, editable:false },
-    { key:'keyword_tracking_est_review_total',    src:'keyword_tracking', field:'est_review_total',     label:'预计刷单总数',            hidden:false, pinned:false, width:100, editable:false },
-    { key:'keyword_tracking_est_traffic',         src:'keyword_tracking', field:'est_traffic',          label:'预计流量',                hidden:false, pinned:false, width:90,  editable:false },
-    { key:'keyword_tracking_target_cvr',          src:'keyword_tracking', field:'target_cvr',           label:'目标转化率-有备注',              hidden:false, pinned:false, width:90,  editable:false },
-    { key:'keyword_tracking_est_nat_order',       src:'keyword_tracking', field:'est_nat_order',        label:'预计自然单 (不含广告单)', hidden:false, pinned:false, width:130, editable:false },
-    { key:'keyword_tracking_daily_eval_demand',   src:'keyword_tracking', field:'daily_eval_demand',    label:'单日测评应需量',          hidden:false, pinned:false, width:110, editable:false },
-    { key:'keyword_tracking_plan_eval_judgment',  src:'keyword_tracking', field:'plan_eval_judgment',   label:'计划 - 测评单判断',       hidden:false, pinned:false, width:130, editable:false },
-    { key:'keyword_tracking_actual_eval_judgment',src:'keyword_tracking', field:'actual_eval_judgment', label:'实际 - 测评结果判断',     hidden:false, pinned:false, width:130, editable:false },
-    { key:'keyword_tracking_actual_cvr_judgment', src:'keyword_tracking', field:'actual_cvr_judgment',  label:'实际测评转化率判断',      hidden:false, pinned:false, width:140, editable:false },
-    { key:'keyword_tracking_actual_kw_pos', src:'keyword_tracking', field:'actual_keyword_position', label:'整体关键词位实际', hidden:false, pinned:false, width:280, editable:false },
-    { key:'tool_kw_master', src:'tool', field:'tool_kw_master', label:'🔑 管理关键词按钮', hidden:true, pinned:false, width:0, editable:false },
+    { key:'daily_country',         src:'daily',  field:'country',         label:'国家',       hidden:false, pinned:true,  width:70,  editable:false, columnGroup:'fixed' },
+    { key:'daily_asin',            src:'daily',  field:'asin',            label:'ASIN',       hidden:false, pinned:true,  width:110, editable:false, columnGroup:'fixed' },
+    { key:'daily_date',            src:'daily',  field:'date',            label:'站点时间',       hidden:false, pinned:true,  width:100, editable:false, columnGroup:'fixed' },
+    { key:'daily_sale_owner',      src:'daily',  field:'sale_owner',      label:'销售',       hidden:false, pinned:true,  width:80,  editable:false, columnGroup:'fixed' },
+    { key:'daily_model',           src:'daily',  field:'model',           label:'型号',       hidden:false, pinned:false, width:100, editable:false, columnGroup:'fixed' },
+    { key:'daily_activity_annotation', src:'daily', field:'activity_annotation', label:'活动标注', hidden:false, pinned:false, width:90, editable:false, columnGroup:'fixed' },
+    { key:'daily_promotion_days',  src:'daily',  field:'promotion_days',  label:'推广天数',   hidden:false, pinned:false, width:85,  editable:false, columnGroup:'fixed' },
+    { key:'daily_daily_price',     src:'daily',  field:'daily_price',     label:'购物车价格',   hidden:false, pinned:false, width:90,  editable:false, columnGroup:'fixed' },
+    { key:'daily_list_price',      src:'daily',  field:'list_price',      label:'LP/WP/TP',    hidden:false, pinned:false, width:85,  editable:false, columnGroup:'fixed' },
+    { key:'daily_off',             src:'daily',  field:'off',             label:'Off 力度',   hidden:false, pinned:false, width:85,  editable:false, columnGroup:'fixed' },
+    { key:'daily_price_after_discount', src:'daily', field:'price_after_discount', label:'折后售价', hidden:false, pinned:false, width:85, editable:false, columnGroup:'fixed' },
+    { key:'daily_selling_accounts', src:'daily', field:'selling_accounts', label:'售卖账号', hidden:false, pinned:false, width:100, editable:false, columnGroup:'fixed' },
+    { key:'daily_rsg_number',      src:'daily',  field:'rsg_number',      label:'实际刷单总数', hidden:false, pinned:false, width:95, editable:false, columnGroup:'eval_plan_compare' },
+    { key:'weekly_order_items',    src:'weekly', field:'sales',           label:'实际总单量',   hidden:false, pinned:true,  width:90,  editable:false, columnGroup:'fixed' },
+    { key:'weekly_order_items_2',  src:'weekly', field:'sales',           label:'实际总单量',   hidden:false, pinned:true,  width:90,  editable:false, columnGroup:'actual_summary' },
+    { key:'weekly_zirandan',       src:'weekly', field:'zirandan',        label:'实际自然单',   hidden:false, pinned:true,  width:90,  editable:false, columnGroup:'actual_summary' },
+    { key:'weekly_guanggaodan',    src:'weekly', field:'guanggaodan',     label:'实际广告单',   hidden:false, pinned:true,  width:90,  editable:false, columnGroup:'actual_summary' },
+    { key:'keyword_tracking_actual_natural_order', src:'keyword_tracking', field:'actual_natural_order', label:'实际自然单', hidden:false, pinned:true,  width:105, editable:false, columnGroup:'actual_summary' },
+    { key:'weekly_zongliuliang',   src:'weekly', field:'zongliuliang',    label:'实际流量',     hidden:false, pinned:true,  width:85,  editable:false, columnGroup:'actual_summary' },
+    { key:'weekly_zongcvr',        src:'weekly', field:'session_conversion_rate', label:'实际转化率', hidden:false, pinned:true,  width:110, editable:false, columnGroup:'actual_summary' },
+    { key:'keyword_tracking_est_review_total',    src:'keyword_tracking', field:'est_review_total',     label:'预计刷单总数',            hidden:false, pinned:false, width:100, editable:false, columnGroup:'eval_plan_compare' },
+    { key:'keyword_tracking_est_traffic',         src:'keyword_tracking', field:'est_traffic',          label:'预计流量',                hidden:false, pinned:false, width:90,  editable:false, columnGroup:'eval_plan_compare' },
+    { key:'keyword_tracking_target_cvr',          src:'keyword_tracking', field:'target_cvr',           label:'目标转化率-有备注',              hidden:false, pinned:false, width:90,  editable:false, columnGroup:'eval_plan_compare' },
+    { key:'keyword_tracking_est_nat_order',       src:'keyword_tracking', field:'est_nat_order',        label:'预计自然单 (不含广告单)', hidden:false, pinned:false, width:130, editable:false, columnGroup:'eval_plan_compare' },
+    { key:'keyword_tracking_daily_eval_demand',   src:'keyword_tracking', field:'daily_eval_demand',    label:'单日测评应需量',          hidden:false, pinned:false, width:110, editable:false, columnGroup:'eval_plan_compare' },
+    { key:'keyword_tracking_plan_eval_judgment',  src:'keyword_tracking', field:'plan_eval_judgment',   label:'计划 - 测评单判断',       hidden:false, pinned:false, width:130, editable:false, columnGroup:'eval_plan_compare' },
+    { key:'keyword_tracking_actual_eval_judgment',src:'keyword_tracking', field:'actual_eval_judgment', label:'实际 - 测评结果判断',     hidden:false, pinned:false, width:130, editable:false, columnGroup:'eval_plan_compare' },
+    { key:'keyword_tracking_actual_cvr_judgment', src:'keyword_tracking', field:'actual_cvr_judgment',  label:'实际测评转化率判断',      hidden:false, pinned:false, width:140, editable:false, columnGroup:'eval_plan_compare' },
+    { key:'keyword_tracking_actual_kw_pos', src:'keyword_screenshot', field:'actual_keyword_position', label:'整体关键词位实际', hidden:false, pinned:false, width:280, editable:false, columnGroup:'eval_word_tracking' },
+    { key:'tool_kw_master', src:'tool', field:'tool_kw_master', label:'🔑 管理关键词按钮', hidden:true, pinned:false, width:0, editable:false, columnGroup:'tool' },
   ];
+
+  const COLUMN_GROUP_ORDER = ['fixed', 'actual_summary', 'eval_plan_compare', 'eval_word_tracking', 'tool'];
+  const INITIAL_COLUMN_INDEX = Object.fromEntries(INITIAL_COLUMNS.map((c, idx) => [c.key, idx]));
+  const getColumnGroupKey = (col) => col?.columnGroup || col?.src || 'fixed';
+  const normalizeColumnsByGroup = (cols, options = {}) => {
+    const sortWithinGroups = options.sortWithinGroups === true;
+    const list = Array.isArray(cols) ? cols.filter(Boolean) : [];
+    if (!list.length) return list;
+    const buckets = {};
+    const currentOrder = [];
+    list.forEach((col) => {
+      const groupKey = getColumnGroupKey(col);
+      if (!buckets[groupKey]) {
+        buckets[groupKey] = [];
+        currentOrder.push(groupKey);
+      }
+      buckets[groupKey].push(col);
+    });
+    const orderedKeys = [
+      ...COLUMN_GROUP_ORDER.filter((groupKey) => buckets[groupKey]),
+      ...currentOrder.filter((groupKey) => !COLUMN_GROUP_ORDER.includes(groupKey)),
+    ];
+    return orderedKeys.flatMap((groupKey) => {
+      const bucket = buckets[groupKey] || [];
+      if (!sortWithinGroups) return bucket;
+      return [...bucket].sort((a, b) => {
+        const ai = Object.prototype.hasOwnProperty.call(INITIAL_COLUMN_INDEX, a.key) ? INITIAL_COLUMN_INDEX[a.key] : Number.MAX_SAFE_INTEGER;
+        const bi = Object.prototype.hasOwnProperty.call(INITIAL_COLUMN_INDEX, b.key) ? INITIAL_COLUMN_INDEX[b.key] : Number.MAX_SAFE_INTEGER;
+        if (ai !== bi) return ai - bi;
+        return bucket.indexOf(a) - bucket.indexOf(b);
+      });
+    });
+  };
+  const getSavedColumnGroupOrder = (saved) => {
+    if (!Array.isArray(saved)) return [];
+    const item = saved.find((entry) => entry?.key === COLUMN_GROUP_ORDER_KEY);
+    if (!Array.isArray(item?.order) || !item.order.length) return [];
+    const allowedOrder = COLUMN_GROUP_ORDER.filter((groupKey) => groupKey !== 'tool');
+    const savedOrder = item.order.filter((groupKey, index, list) =>
+      allowedOrder.includes(groupKey) && list.indexOf(groupKey) === index
+    );
+    return [...savedOrder, ...allowedOrder.filter((groupKey) => !savedOrder.includes(groupKey))];
+  };
   
   const WEEKLY_ACTUAL_NATURAL_TRIGGER_FIELDS = new Set(['sales', 'guanggaodan', 'session_conversion_rate']);
   const KT_TRIGGER_FIELDS = new Set(['est_traffic','target_cvr','est_nat_order']);
@@ -788,10 +832,10 @@
 
   const SRC_GROUP_CONFIG = [
     { src:'tool',             label:'🛠️ 工具按钮',           color:'#fa8c16'    },
-    { src:'daily',            label:'📋 每日 ASIN',          color:COLOR_GREEN  },
-    { src:'weekly',           label:'📈 周产品表现',         color:COLOR_ORANGE },
-    { src:'keyword_tracking', label:'🔍 关键词追踪汇总',     color:'#b5796a'    },
-    { src:'keyword_screenshot', label:'📸 整体关键词位实际',       color:'#d4380d'    },
+    { src:'fixed',            label:'固定列',                color:'#B9D7C3'    },
+    { src:'actual_summary',   label:'实际数据汇总',          color:'#F6CCAC'    },
+    { src:'eval_plan_compare', label:'测评计划与实际对比',   color:'#DAD7A6'    },
+    { src:'eval_word_tracking', label:'测评词追踪',          color:'#C9D7F2'    },
   ];
 
   // 【新增】关键词列的 6 个子字段定义（表头和单元格都按此顺序）
@@ -997,7 +1041,7 @@
 
   const mergeColumnsWithInitial = (saved) => {
     if (!saved || !Array.isArray(saved) || !saved.length) {
-      return INITIAL_COLUMNS.map((c) => ({ ...c }));
+      return normalizeColumnsByGroup(INITIAL_COLUMNS.map((c) => ({ ...c })), { sortWithinGroups: true });
     }
     const initMap  = Object.fromEntries(INITIAL_COLUMNS.map((c) => [c.key, c]));
     const savedMap = Object.fromEntries(saved.map((s) => [s.key, s]));
@@ -1007,7 +1051,7 @@
       result.push({ ...initMap[s.key], hidden: s.hidden === true, pinned: s.pinned === true, width: Number(s.width) || initMap[s.key].width, headerColor: migrateLegacyColor(s.headerColor), bodyColor: s.bodyColor || null, editable: s.editable === true });
     });
     INITIAL_COLUMNS.forEach((c) => { if (!savedMap[c.key]) result.push({ ...c }); });
-    return result;
+    return normalizeColumnsByGroup(result);
   };
 
   const normalizeColumnViewId = (viewId) => {
@@ -2853,6 +2897,7 @@
     const [columnViewCreating, setColumnViewCreating] = useState(false);
     const [columnViewSaving, setColumnViewSaving] = useState(false);
     const [kwSubFieldHeaderColors, setKwSubFieldHeaderColors] = useState({});
+    const [columnGroupOrder, setColumnGroupOrder] = useState([]);
     const [sortConfig, setSortConfig]           = useState({ key: 'daily_date', dir: 'asc' });
     const [curPage, setCurPage]                 = useState(1);
     const [pageSize, setPageSize]               = useState(DEFAULT_PAGE_SIZE);
@@ -2949,6 +2994,7 @@
           src: 'keyword_tracking',
           field: `kw_dynamic_${kw.id}`,
           label: label,
+          columnGroup: 'eval_word_tracking',
           hidden: false,
           pinned: false,
           width: calcKeywordHeaderAutoWidth(label, showKwOptionalFields),
@@ -2976,11 +3022,32 @@
     }, [showKwOptionalFields]);
 
 
+    const orderColumnsByGroup = useCallback((cols, groupOrder) => {
+      if (!Array.isArray(groupOrder) || !groupOrder.length) return cols;
+      const buckets = {};
+      const currentOrder = [];
+      cols.forEach((col) => {
+        const groupKey = getColumnGroupKey(col);
+        if (!buckets[groupKey]) {
+          buckets[groupKey] = [];
+          currentOrder.push(groupKey);
+        }
+        buckets[groupKey].push(col);
+      });
+      const orderedKeys = [
+        ...groupOrder.filter((groupKey) => buckets[groupKey]),
+        ...currentOrder.filter((groupKey) => !groupOrder.includes(groupKey)),
+      ];
+      return orderedKeys.flatMap((groupKey) => buckets[groupKey] || []);
+    }, []);
+
     const allColumns = useMemo(() => {
-      const baseCols = columns.filter(c =>
+      const normalizedBaseCols = normalizeColumnsByGroup(columns.filter(c =>
         !['kw_1', 'kw_2', 'kw_3', 'kw_4', 'kw_6'].includes(c.field) &&
         !(c.field && c.field.startsWith('kw_dynamic_'))
-      );
+      ));
+      const actualKeywordPosCols = normalizedBaseCols.filter(isActualKeywordPosColumn);
+      const baseCols = normalizedBaseCols.filter((col) => !isActualKeywordPosColumn(col));
 
       let orderedKwCols = dynamicKwCols.map((col) => ({
         ...col,
@@ -2996,16 +3063,11 @@
         });
       }
 
-      const insertAfterIndex = baseCols.findIndex(c => c.key === 'weekly_order_items');
-
-      if (insertAfterIndex >= 0) {
-        const before = baseCols.slice(0, insertAfterIndex + 1);
-        const after = baseCols.slice(insertAfterIndex + 1);
-        return [...before, ...orderedKwCols, ...after];
-      }
-
-      return [...baseCols, ...orderedKwCols];
-    }, [columns, dynamicKwCols, kwColOrder, showKwOptionalFields]);
+      return orderColumnsByGroup(
+        normalizeColumnsByGroup([...baseCols, ...orderedKwCols, ...actualKeywordPosCols]),
+        columnGroupOrder
+      );
+    }, [columns, dynamicKwCols, kwColOrder, showKwOptionalFields, columnGroupOrder, orderColumnsByGroup]);
 
     const countryAsinOptions = useMemo(() => {
       const seen = new Set();
@@ -3185,6 +3247,7 @@
     const applyColumnPayloadToLocal = useCallback((payload) => {
       activeViewPayloadRef.current = Array.isArray(payload) ? payload : [];
       setColumns(mergeColumnsWithInitial(payload));
+      setColumnGroupOrder(getSavedColumnGroupOrder(payload));
     }, []);
 
     const applyColumnViewToLocal = useCallback((view) => {
@@ -3300,13 +3363,17 @@
           ...c,
           width: getSafeKwColWidth(currentKwWidthMap[c.key] || c.width, showKwOptionalFields),
         }));
-      const payload = mergeColumnPayloadEntries(buildColumnPayload(allColumns), dynamicPayload);
+      const groupOrderPayload = {
+        key: COLUMN_GROUP_ORDER_KEY,
+        order: Array.isArray(columnGroupOrder) ? columnGroupOrder.filter(Boolean) : [],
+      };
+      const payload = mergeColumnPayloadEntries(buildColumnPayload(allColumns, [groupOrderPayload]), dynamicPayload);
       const dynamicDebug = payload
         .filter((c) => String(c?.key || '').startsWith('kw_dynamic_'))
         .map((c) => ({ key: c.key, width: c.width, hidden: c.hidden, pinned: c.pinned, headerColor: c.headerColor, bodyColor: c.bodyColor }));
       console.log('[推新板块视图保存] dynamic keyword payload', dynamicDebug);
       return payload;
-    }, [allColumns, showKwOptionalFields]);
+    }, [allColumns, columnGroupOrder, showKwOptionalFields]);
 
     const saveCurrentCustomColumnView = useCallback(async () => {
       if (!currentUserId) return false;
@@ -5254,8 +5321,28 @@
 
     const pagedData = sortedData;
 
-    const toggleCol      = (key) => updateAndSave((p) => { const col = p.find((c) => c.key === key); if (!col) return p; if (!col.hidden) return p.map((c) => c.key === key ? { ...c, hidden: true } : c); return [...p.filter((c) => c.key !== key), { ...col, hidden: false }]; });
-    const togglePin      = (key) => updateAndSave((p) => p.map((c) => c.key === key ? { ...c, pinned: !c.pinned } : c));
+    const isDynamicKwColumnKey = (key) => String(key || '').startsWith('kw_dynamic_');
+    const setDynamicKwColumnsHidden = (matcher, hidden) => {
+      allColumns
+        .filter((c) => isDynamicKwColumnKey(c.key) && matcher(c))
+        .forEach((c) => syncDynamicKwColumnConfig(c.key, { hidden }));
+    };
+    const toggleCol      = (key) => {
+      if (isDynamicKwColumnKey(key)) {
+        const col = allColumns.find((c) => c.key === key);
+        syncDynamicKwColumnConfig(key, { hidden: !(col?.hidden === true) });
+        return;
+      }
+      updateAndSave((p) => normalizeColumnsByGroup(p.map((c) => c.key === key ? { ...c, hidden: !c.hidden } : c)));
+    };
+    const togglePin      = (key) => {
+      const target = allColumns.find((c) => c.key === key);
+      if (isDynamicKwColumnKey(key)) {
+        syncDynamicKwColumnConfig(key, { pinned: !(target?.pinned === true) });
+        return;
+      }
+      updateAndSave((p) => normalizeColumnsByGroup(p.map((c) => c.key === key ? { ...c, pinned: !c.pinned } : c)));
+    };
     const setHColor      = (key, color) => {
       if (String(key || '').startsWith('kw_dynamic_')) {
         syncDynamicKwColumnConfig(key, { headerColor: color || null });
@@ -5302,11 +5389,42 @@
       saveKwSubFieldHeaderColorsToCurrentView(next).catch((err) => ctx.message.error(`重置词下字段颜色失败：${err?.message || ''}`));
     };
     const toggleEditable = (key) => updateAndSave((p) => p.map((c) => c.key === key ? { ...c, editable: !c.editable } : c));
-    const selectAll      = () => updateAndSave((p) => p.map((c) => ({ ...c, hidden: false })));
-    const deselectAll    = () => updateAndSave((p) => p.map((c) => ({ ...c, hidden: true  })));
-    const selectGroup    = (src) => updateAndSave((p) => p.map((c) => c.src === src ? { ...c, hidden: false } : c));
-    const deselectGroup  = (src) => updateAndSave((p) => p.map((c) => c.src === src ? { ...c, hidden: true  } : c));
+    const selectAll      = () => {
+      setDynamicKwColumnsHidden(() => true, false);
+      updateAndSave((p) => normalizeColumnsByGroup(p.map((c) => ({ ...c, hidden: false }))));
+    };
+    const deselectAll    = () => {
+      setDynamicKwColumnsHidden(() => true, true);
+      updateAndSave((p) => normalizeColumnsByGroup(p.map((c) => ({ ...c, hidden: true  }))));
+    };
+    const selectGroup    = (src) => {
+      setDynamicKwColumnsHidden((c) => getColumnGroupKey(c) === src, false);
+      updateAndSave((p) => normalizeColumnsByGroup(p.map((c) => getColumnGroupKey(c) === src ? { ...c, hidden: false } : c)));
+    };
+    const deselectGroup  = (src) => {
+      setDynamicKwColumnsHidden((c) => getColumnGroupKey(c) === src, true);
+      updateAndSave((p) => normalizeColumnsByGroup(p.map((c) => getColumnGroupKey(c) === src ? { ...c, hidden: true  } : c)));
+    };
 
+    const columnGroupMetaMap = useMemo(() => Object.fromEntries(SRC_GROUP_CONFIG.map((group) => [group.src, group])), []);
+    const panelGroupConfig = useMemo(() => {
+      const seen = [];
+      allColumns.forEach((col) => {
+        const groupKey = getColumnGroupKey(col);
+        if (groupKey !== 'tool' && !seen.includes(groupKey)) seen.push(groupKey);
+      });
+      return seen.map((groupKey) => columnGroupMetaMap[groupKey] || { src: groupKey, label: groupKey || '辅助字段', color: COLOR_GRAY });
+    }, [allColumns, columnGroupMetaMap]);
+    const moveColumnGroup = (src, direction) => {
+      const order = panelGroupConfig.map((group) => group.src);
+      const idx = order.indexOf(src);
+      const nextIdx = idx + direction;
+      if (idx < 0 || nextIdx < 0 || nextIdx >= order.length) return;
+      const nextOrder = [...order];
+      [nextOrder[idx], nextOrder[nextIdx]] = [nextOrder[nextIdx], nextOrder[idx]];
+      markColumnLayoutChanged();
+      setColumnGroupOrder(nextOrder);
+    };
     const visibleCols   = useMemo(() => { const vis = allColumns.filter((c) => !c.hidden && c.src !== 'tool'); return [...vis.filter((c) => c.pinned), ...vis.filter((c) => !c.pinned)]; }, [allColumns]);
     const pinnedLeftMap = useMemo(() => { const map = {}; let left = 0; visibleCols.forEach((col) => { if (col.pinned) { map[col.key] = left; left += col.width || 80; } }); return map; }, [visibleCols]);
     const getKwSubHeaderColor = useCallback((sub) => {
@@ -5353,10 +5471,11 @@
           const fi = next.findIndex((c) => c.key === fromKey);
           const ti = next.findIndex((c) => c.key === targetKey);
           if (fi >= 0 && ti >= 0) {
+            if (getColumnGroupKey(next[fi]) !== getColumnGroupKey(next[ti])) return prev;
             const [moved] = next.splice(fi, 1);
             next.splice(ti, 0, moved);
           }
-          return next;
+          return normalizeColumnsByGroup(next);
         });
       }
 
@@ -6772,16 +6891,33 @@
             })
           )
         ),
-        SRC_GROUP_CONFIG.filter((group) => group.src !== 'tool').map((group) => {
-          const groupCols   = allColumns.filter((c) => c.src === group.src);
+        panelGroupConfig.map((group, groupIndex) => {
+          const groupCols   = allColumns.filter((c) => getColumnGroupKey(c) === group.src);
           if (!groupCols.length) return null;
           const isCollapsed = !!collapsedGroups[group.src];
           const visCount    = groupCols.filter((c) => !c.hidden).length;
-          return React.createElement('div', { key: group.src, style: { marginBottom: '6px', border: `1px solid ${group.color}40`, borderRadius: '6px', overflow: 'hidden' } },
-            React.createElement('div', { onClick: () => toggleGroup(group.src), style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 10px', cursor: 'pointer', userSelect: 'none', background: `${group.color}18`, borderBottom: isCollapsed ? 'none' : `1px solid ${group.color}30` } },
-              React.createElement('span', { style: { fontSize: `${FONT_SIZE_XS}px`, color: group.color, display: 'inline-block', transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' } }, '▼'),
-              React.createElement('span', { style: { fontWeight: 700, fontSize: `${FONT_SIZE_SM}px`, color: group.color, flex: 1 } }, group.label),
-              React.createElement('span', { style: { fontSize: `${FONT_SIZE_XS}px`, color: '#999', marginRight: '6px' } }, `${visCount}/${groupCols.length}`),
+          const isFirstGroup = groupIndex === 0;
+          const isLastGroup = groupIndex === panelGroupConfig.length - 1;
+          return React.createElement('div', { key: group.src, style: { marginBottom: '6px', border: '1px solid #d6dde5', borderRadius: '6px', overflow: 'hidden', background: '#fff' } },
+            React.createElement('div', { onClick: () => toggleGroup(group.src), style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px 6px 0', cursor: 'pointer', userSelect: 'none', background: `${group.color}22`, borderBottom: isCollapsed ? 'none' : '1px solid #dfe5ec' } },
+              React.createElement('span', { style: { alignSelf: 'stretch', width: '4px', background: group.color, flexShrink: 0 } }),
+              React.createElement('span', { style: { fontSize: `${FONT_SIZE_XS}px`, color: '#334155', display: 'inline-block', transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.2s', flexShrink: 0 } }, '▼'),
+              React.createElement('span', { style: { fontWeight: 800, fontSize: `${FONT_SIZE_SM}px`, color: '#1f2933', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, group.label),
+              React.createElement('span', { style: { fontSize: `${FONT_SIZE_XS}px`, color: '#475569', fontWeight: 600, marginRight: '6px' } }, `${visCount}/${groupCols.length}`),
+              canModifyActiveColumnView && React.createElement('button', {
+                title: '板块上移',
+                'aria-label': '板块上移',
+                disabled: isFirstGroup,
+                onClick: (e) => { e.stopPropagation(); moveColumnGroup(group.src, -1); },
+                style: { width: '22px', height: '22px', padding: 0, fontSize: `${FONT_SIZE_SM}px`, background: '#fff', color: isFirstGroup ? '#b8c1cc' : '#475569', border: '1px solid #d9d9d9', borderRadius: '3px', cursor: isFirstGroup ? 'not-allowed' : 'pointer', flexShrink: 0 }
+              }, '↑'),
+              canModifyActiveColumnView && React.createElement('button', {
+                title: '板块下移',
+                'aria-label': '板块下移',
+                disabled: isLastGroup,
+                onClick: (e) => { e.stopPropagation(); moveColumnGroup(group.src, 1); },
+                style: { width: '22px', height: '22px', padding: 0, fontSize: `${FONT_SIZE_SM}px`, background: '#fff', color: isLastGroup ? '#b8c1cc' : '#475569', border: '1px solid #d9d9d9', borderRadius: '3px', cursor: isLastGroup ? 'not-allowed' : 'pointer', flexShrink: 0 }
+              }, '↓'),
               canModifyActiveColumnView && React.createElement('button', {
                 onClick: (e) => { e.stopPropagation(); selectGroup(group.src); },
                 style: { padding: '1px 6px', fontSize: `${FONT_SIZE_XS}px`, background: '#52c41a', color: '#fff', border: 'none', borderRadius: '3px', cursor: 'pointer' }
@@ -6803,15 +6939,42 @@
     );
 
     const tableWidth = visibleCols.reduce((s, c) => s + (c.width || 80), 0);
+    const HEADER_GROUP_HEIGHT = 30;
     const HEADER_MAIN_HEIGHT = 30;
     const HEADER_SUB_HEIGHT = 24;
     const TABLE_BODY_ROW_HEIGHT = 66;
     const TABLE_MIN_VISIBLE_ROWS = 8;
     const TABLE_MAX_VISIBLE_ROWS = 20;
-    const tableHeaderHeight = HEADER_MAIN_HEIGHT + (hasKwColumns ? HEADER_SUB_HEIGHT : 0) + 2;
+    const tableHeaderHeight = HEADER_GROUP_HEIGHT + HEADER_MAIN_HEIGHT + (hasKwColumns ? HEADER_SUB_HEIGHT : 0) + 2;
     const tableWrapMinHeight = tableHeaderHeight + TABLE_BODY_ROW_HEIGHT * TABLE_MIN_VISIBLE_ROWS;
     const tableWrapMaxHeight = tableHeaderHeight + TABLE_BODY_ROW_HEIGHT * TABLE_MAX_VISIBLE_ROWS;
     const tableWrapHeight = `clamp(${tableWrapMinHeight}px, calc(100dvh - 395px), ${tableWrapMaxHeight}px)`;
+    const headerColumnGroups = useMemo(() => {
+      const groups = [];
+      let left = 0;
+      visibleCols.forEach((col) => {
+        const groupKey = getColumnGroupKey(col);
+        const colWidth = col.width || 80;
+        const isPinnedCol = !!col.pinned;
+        const last = groups[groups.length - 1];
+        if (last && last.key === groupKey && last.isPinned === isPinnedCol) {
+          last.cols.push(col);
+          last.width += colWidth;
+          left += colWidth;
+          return;
+        }
+        groups.push({
+          key: groupKey,
+          cols: [col],
+          isPinned: isPinnedCol,
+          width: colWidth,
+          left,
+          pinnedLeft: isPinnedCol ? (pinnedLeftMap[col.key] || 0) : null,
+        });
+        left += colWidth;
+      });
+      return groups;
+    }, [visibleCols, pinnedLeftMap]);
     const getSourceFieldName = (col) => {
       const sourceCollection = SRC_COLLECTION_NAME[col.src];
       return sourceCollection ? `${sourceCollection}.${col.field}` : col.field;
@@ -7377,11 +7540,53 @@
           ? React.createElement('div', { style: { padding: '40px', textAlign: 'center', color: '#999', fontSize: `${FONT_SIZE}px` } }, '暂无数据 请重新进入页面')
           : loading && data.length === 0
           ? React.createElement('div', { style: { padding: '40px', textAlign: 'center', color: '#999', fontSize: `${FONT_SIZE}px` } }, '正在加载数据...')
-          : data.length === 0
+            : data.length === 0
             ? React.createElement('div', { style: { padding: '40px', textAlign: 'center', color: '#999', fontSize: `${FONT_SIZE}px` } }, '暂无数据')
-            : React.createElement('table', { style: { borderCollapse: 'separate', borderSpacing: 0, tableLayout: 'fixed', background: '#fff', width: `${tableWidth}px` } },
+            : React.createElement(React.Fragment, null,
+              React.createElement('table', { style: { borderCollapse: 'separate', borderSpacing: 0, tableLayout: 'fixed', background: '#fff', width: `${tableWidth}px` } },
+              React.createElement('colgroup', null,
+                visibleCols.map((col) => React.createElement('col', {
+                  key: `col_${col.key}`,
+                  style: { width: `${col.width || 80}px` },
+                }))
+              ),
               React.createElement('thead', null,
-                // 第一行表头（主标题）：关键词列会 rowSpan=1，其它列 rowSpan=2
+                // 第一行表头：板块标题与字段列保持同一套表格布局和固定规则
+                React.createElement('tr', null,
+                  headerColumnGroups.map((group) => {
+                    const firstCol = group.cols[0];
+                    const isPinned = !!group.isPinned;
+                    const groupMeta = columnGroupMetaMap[group.key] || { label: group.key || '辅助字段', color: COLOR_GRAY };
+                    const groupColor = groupMeta.color || COLOR_GRAY;
+                    return React.createElement('th', {
+                      key: `section_${group.key}_${firstCol.key}`,
+                      colSpan: group.cols.length,
+                      style: {
+                        position: 'sticky',
+                        top: 0,
+                        left: isPinned ? `${group.pinnedLeft || 0}px` : undefined,
+                        zIndex: isPinned ? 8 : 7,
+                        width: `${group.width}px`,
+                        height: `${HEADER_GROUP_HEIGHT}px`,
+                        padding: '0 8px',
+                        background: groupColor,
+                        color: getTextColorForBg(groupColor),
+                        borderBottom: '1px solid rgba(0,0,0,0.16)',
+                        borderRight: isPinned ? '2px solid rgba(0,0,0,0.18)' : '1px solid rgba(0,0,0,0.16)',
+                        textAlign: 'center',
+                        fontWeight: 700,
+                        fontSize: `${FONT_SIZE_SM}px`,
+                        whiteSpace: 'nowrap',
+                        lineHeight: `${HEADER_GROUP_HEIGHT}px`,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        boxSizing: 'border-box',
+                        boxShadow: isPinned ? '1px 0 0 rgba(0,0,0,0.05)' : undefined,
+                      },
+                    }, groupMeta.label);
+                  })
+                ),
+                // 第二行表头（主标题）：关键词列会 rowSpan=1，其它列 rowSpan=2
                 React.createElement('tr', null,
                   visibleCols.map((col) => {
                     const isPinned = col.pinned;
@@ -7401,7 +7606,7 @@
                       onClick: () => handleSort(col.key),
                       style: {
                         position: 'sticky',
-                        top: 0,
+                        top: `${HEADER_GROUP_HEIGHT}px`,
                         left: isPinned ? `${leftOff}px` : undefined,
                         zIndex: isPinned ? 4 : 2,
                         width: `${col.width || 80}px`,
@@ -7469,7 +7674,7 @@
                     );
                   })
                 ),
-                // 第二行表头：只有关键词列需要显示子字段标签
+                // 第三行表头：只有关键词列需要显示子字段标签
                 hasKwColumns && React.createElement('tr', null,
                   visibleCols.map((col) => {
                     if (!col._isKwColumn) return null;
@@ -7482,7 +7687,7 @@
                       key: `${col.key}_sub`,
                       style: {
                         position: 'sticky',
-                        top: `${HEADER_MAIN_HEIGHT}px`,
+                        top: `${HEADER_GROUP_HEIGHT + HEADER_MAIN_HEIGHT}px`,
                         left: isPinned ? `${leftOff}px` : undefined,
                         zIndex: isPinned ? 4 : 2,
                         width: `${col.width}px`,
@@ -7713,7 +7918,7 @@
                   );
                 })
               )
-            )
+            ))
       ),
 
       React.createElement('div', { style: { marginTop: '6px', padding: '0 2px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center' } },
