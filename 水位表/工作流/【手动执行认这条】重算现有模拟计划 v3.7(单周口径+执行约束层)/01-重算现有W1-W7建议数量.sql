@@ -7,8 +7,8 @@
 -- 2. 任一周已关联真实发货或存在活动申请时，整组 ASIN/站点不参与重算。
 -- 3. 先排除现有 v2 模拟计划，按普通库存口径逐日重建基线。
 -- 4. 缺货期间未成交需求不结转；正补货到达时从补货量重新起算。
--- 5. 每周先从服务期目标倒推到货日应有库存，再扣除到货日前可用库存：
---    建议量 = MAX(0, 到货日应有库存 - 到货日前可用库存)。
+-- 5. 每周先从服务期目标倒推到货日应有库存，再扣除到货日前可用库存。
+-- 6. 执行约束按 W1-W7 顺序递推，前面因最小发货量/箱入数多发出的余量会抵扣后续周缺口。
 
 SET SESSION cte_max_recursion_depth = 1000;
 SET @v2_recalculated_at = NOW(3);
@@ -17,6 +17,8 @@ START TRANSACTION;
 
 DROP TEMPORARY TABLE IF EXISTS temp_v2_recalculation_guard;
 DROP TEMPORARY TABLE IF EXISTS temp_v2_recalculation_stage;
+DROP TEMPORARY TABLE IF EXISTS temp_v2_recalculation_constraint_input;
+DROP TEMPORARY TABLE IF EXISTS temp_v2_recalculation_adjusted;
 
 CREATE TEMPORARY TABLE temp_v2_recalculation_guard (
     stage_exists TINYINT,
@@ -256,7 +258,7 @@ plan_requirement AS (
         plan.week_no,
         plan.add_date,
         plan.service_start_date AS requirement_date,
-        CAST(plan.coverage_demand_7d * 2 AS SIGNED) AS required_inventory
+        CAST(plan.coverage_demand_7d AS SIGNED) AS required_inventory -- v3.6 单周口径：目标=服务期7天销量。
     FROM ready_plan AS plan
 
     UNION ALL
@@ -458,7 +460,7 @@ SELECT
     prior_recalculated_supply,
     effective_inventory_before_plan AS effective_start_inventory,
     coverage_demand_7d,
-    CAST(coverage_demand_7d * 2 AS SIGNED) AS target_inventory_14d,
+    CAST(coverage_demand_7d AS SIGNED) AS target_inventory_14d, -- v3.6 单周口径：保留旧字段名，值为7天目标。
     required_inventory_at_add_date,
     projected_inventory_at_service_start,
     CONCAT(
@@ -472,6 +474,201 @@ SELECT
     ) AS calculation_process
 FROM plan_calc
 ORDER BY country, asin, shop, week_no;
+
+-- ===== 发货执行约束层：按 W1-W7 递推最小发货量/箱入数余量 =====
+-- 先保留理论缺口，再把前面一周因最小发货量或箱入数多发出的余量，扣到后续周缺口里。
+ALTER TABLE temp_v2_recalculation_stage
+    ADD COLUMN raw_new_number_before_constraint INT NULL,
+    ADD COLUMN prior_constraint_surplus INT NOT NULL DEFAULT 0,
+    ADD COLUMN adjusted_gap_after_prior_surplus INT NULL,
+    ADD COLUMN constraint_min_ship_qty INT NULL,
+    ADD COLUMN constraint_units_per_box INT NULL,
+    ADD COLUMN constraint_status VARCHAR(64) NULL;
+
+CREATE TEMPORARY TABLE temp_v2_recalculation_constraint_input AS
+SELECT
+    stage.plan_id,
+    stage.asin,
+    stage.country,
+    stage.shop,
+    stage.week_code,
+    stage.ship_date,
+    CAST(stage.new_number AS SIGNED) AS raw_new_number_before_constraint,
+    CAST(cst.min_ship_qty AS SIGNED) AS constraint_min_ship_qty,
+    CAST(spec.units_per_box AS SIGNED) AS constraint_units_per_box,
+    CAST(
+        CASE
+            WHEN spec.units_per_box IS NULL
+              OR COALESCE(spec.units_per_box_variants, 0) <> 1 THEN NULL
+            ELSE spec.units_per_box
+        END AS SIGNED
+    ) AS effective_units_per_box,
+    CAST(
+        CASE
+            WHEN COALESCE(cst.constraint_match_count, 0) <> 1
+              OR COALESCE(cst.min_ship_qty, 0) <= 0 THEN 0
+            WHEN spec.units_per_box IS NULL
+              OR COALESCE(spec.units_per_box_variants, 0) <> 1 THEN cst.min_ship_qty
+            ELSE CEIL(cst.min_ship_qty / spec.units_per_box) * spec.units_per_box
+        END AS SIGNED
+    ) AS effective_min_ship_qty,
+    CAST(
+        CONCAT_WS(
+            CHAR(31),
+            stage.asin,
+            stage.country,
+            stage.shop
+        ) AS CHAR(255)
+    ) AS group_key,
+    ROW_NUMBER() OVER (
+        PARTITION BY stage.asin, stage.country, stage.shop
+        ORDER BY CAST(SUBSTRING(stage.week_code, 2) AS UNSIGNED), stage.ship_date, stage.plan_id
+    ) AS sequence_no
+FROM temp_v2_recalculation_stage AS stage
+LEFT JOIN asin AS a
+    ON a.`unique` = CONCAT(stage.asin, '_', stage.country)
+LEFT JOIN (
+    SELECT
+        sp.model,
+        sp.site,
+        MAX(sp.units_per_box) AS units_per_box,
+        COUNT(DISTINCT sp.units_per_box) AS units_per_box_variants
+    FROM v3_cfg_product_spec AS sp
+    WHERE sp.model IS NOT NULL AND TRIM(sp.model) <> ''
+      AND sp.site IS NOT NULL AND TRIM(sp.site) <> ''
+      AND sp.units_per_box IS NOT NULL AND sp.units_per_box > 0
+    GROUP BY sp.model, sp.site
+) AS spec
+    ON spec.model = a.model
+   AND spec.site = stage.country
+LEFT JOIN (
+    SELECT
+        COUNT(*) AS constraint_match_count,
+        MAX(c.min_ship_wave_qty) AS min_ship_qty
+    FROM v3_cfg_ship_constraint AS c
+    WHERE c.enabled = 1
+      AND c.level_scope LIKE '默认%'
+) AS cst
+    ON 1 = 1;
+
+ALTER TABLE temp_v2_recalculation_constraint_input
+    ADD INDEX idx_v2_constraint_input_order (group_key, sequence_no);
+
+SET @v2_constraint_group_key := '';
+SET @v2_constraint_surplus_after := 0;
+SET @v2_constraint_prior_surplus := 0;
+SET @v2_constraint_adjusted_gap := 0;
+SET @v2_constraint_boxed_number := 0;
+SET @v2_constraint_final_number := 0;
+
+CREATE TEMPORARY TABLE temp_v2_recalculation_adjusted AS
+SELECT
+    calculated.plan_id,
+    calculated.asin,
+    calculated.country,
+    calculated.shop,
+    calculated.sequence_no,
+    calculated.raw_new_number_before_constraint,
+    CAST(calculated.prior_constraint_surplus AS SIGNED) AS prior_constraint_surplus,
+    CAST(calculated.adjusted_gap_after_prior_surplus AS SIGNED)
+        AS adjusted_gap_after_prior_surplus,
+    calculated.constraint_min_ship_qty,
+    calculated.constraint_units_per_box,
+    CAST(calculated.constrained_new_number AS SIGNED) AS constrained_new_number,
+    CAST(calculated.constraint_surplus_after AS SIGNED) AS constraint_surplus_after,
+    calculated.constraint_status
+FROM (
+    SELECT
+        ordered.plan_id,
+        ordered.asin,
+        ordered.country,
+        ordered.shop,
+        ordered.sequence_no,
+        ordered.raw_new_number_before_constraint,
+        ordered.constraint_min_ship_qty,
+        ordered.constraint_units_per_box,
+        (@v2_constraint_prior_surplus := IF(
+            @v2_constraint_group_key = ordered.group_key,
+            @v2_constraint_surplus_after,
+            0
+        )) AS prior_constraint_surplus,
+        (@v2_constraint_adjusted_gap := CASE
+            WHEN ordered.raw_new_number_before_constraint IS NULL THEN NULL
+            ELSE GREATEST(
+                0,
+                ordered.raw_new_number_before_constraint - @v2_constraint_prior_surplus
+            )
+        END) AS adjusted_gap_after_prior_surplus,
+        (@v2_constraint_boxed_number := CASE
+            WHEN @v2_constraint_adjusted_gap IS NULL THEN NULL
+            WHEN @v2_constraint_adjusted_gap <= 0 THEN 0
+            WHEN ordered.effective_units_per_box IS NULL THEN @v2_constraint_adjusted_gap
+            ELSE CEIL(@v2_constraint_adjusted_gap / ordered.effective_units_per_box)
+                 * ordered.effective_units_per_box
+        END) AS boxed_new_number,
+        (@v2_constraint_final_number := CASE
+            WHEN @v2_constraint_adjusted_gap IS NULL THEN NULL
+            WHEN @v2_constraint_adjusted_gap <= 0 THEN 0
+            ELSE GREATEST(
+                @v2_constraint_boxed_number,
+                ordered.effective_min_ship_qty
+            )
+        END) AS constrained_new_number,
+        (@v2_constraint_surplus_after := CASE
+            WHEN ordered.raw_new_number_before_constraint IS NULL
+                THEN @v2_constraint_prior_surplus
+            ELSE GREATEST(
+                0,
+                @v2_constraint_prior_surplus
+                    - GREATEST(ordered.raw_new_number_before_constraint, 0)
+            ) + GREATEST(
+                0,
+                COALESCE(@v2_constraint_final_number, 0)
+                    - COALESCE(@v2_constraint_adjusted_gap, 0)
+            )
+        END) AS constraint_surplus_after,
+        CASE
+            WHEN ordered.raw_new_number_before_constraint IS NULL THEN 'NO_RAW_NUMBER'
+            WHEN COALESCE(@v2_constraint_adjusted_gap, 0) <= 0
+              AND @v2_constraint_prior_surplus > 0
+              AND ordered.raw_new_number_before_constraint > 0 THEN 'COVERED_BY_PRIOR_SURPLUS'
+            WHEN COALESCE(@v2_constraint_adjusted_gap, 0) <= 0 THEN 'NO_SHIPMENT'
+            WHEN @v2_constraint_boxed_number < ordered.effective_min_ship_qty
+                THEN 'MIN_QTY_TOPPED_UP'
+            WHEN @v2_constraint_boxed_number > @v2_constraint_adjusted_gap
+                THEN 'BOX_ROUNDED'
+            ELSE 'RAW'
+        END AS constraint_status,
+        (@v2_constraint_group_key := ordered.group_key) AS applied_group_key
+    FROM (
+        SELECT *
+        FROM temp_v2_recalculation_constraint_input
+        ORDER BY group_key, sequence_no
+    ) AS ordered
+) AS calculated;
+
+UPDATE temp_v2_recalculation_stage AS stage
+INNER JOIN temp_v2_recalculation_adjusted AS adjusted
+    ON adjusted.plan_id = stage.plan_id
+SET
+    stage.raw_new_number_before_constraint = adjusted.raw_new_number_before_constraint,
+    stage.prior_constraint_surplus = adjusted.prior_constraint_surplus,
+    stage.adjusted_gap_after_prior_surplus = adjusted.adjusted_gap_after_prior_surplus,
+    stage.constraint_min_ship_qty = adjusted.constraint_min_ship_qty,
+    stage.constraint_units_per_box = adjusted.constraint_units_per_box,
+    stage.constraint_status = adjusted.constraint_status,
+    stage.new_number = adjusted.constrained_new_number,
+    stage.change_number = adjusted.constrained_new_number - stage.old_number,
+    stage.prior_recalculated_supply =
+        stage.prior_recalculated_supply + adjusted.prior_constraint_surplus,
+    stage.effective_start_inventory =
+        stage.effective_start_inventory + adjusted.prior_constraint_surplus,
+    stage.calculation_process = CONCAT(
+        'raw_gap=', adjusted.raw_new_number_before_constraint,
+        '; prior_surplus=', adjusted.prior_constraint_surplus,
+        '; adjusted_gap=', adjusted.adjusted_gap_after_prior_surplus,
+        '; final=', adjusted.constrained_new_number
+    );
 
 ALTER TABLE temp_v2_recalculation_stage
     ADD UNIQUE INDEX idx_v2_recalculation_plan_id (plan_id),
@@ -491,7 +688,7 @@ FROM (
     HAVING COUNT(*) <> 7
 ) AS incomplete_group;
 
--- 重算后的到货曲线必须在每周服务期开始日达到两周目标库存。
+-- 重算后的到货曲线必须在每周服务期开始日达到单周目标库存。
 INSERT INTO temp_v2_recalculation_guard (service_target_reached)
 SELECT IF(COUNT(*) = 0, 1, 0)
 FROM temp_v2_recalculation_stage
@@ -535,7 +732,7 @@ SET
     target.v2_calculation_snapshot = JSON_MERGE_PATCH(
         COALESCE(target.v2_calculation_snapshot, JSON_OBJECT()),
         JSON_OBJECT(
-            'formula_version', 'v2_stockout_no_backlog_2026_07_23',
+            'formula_version', 'v2_stockout_no_backlog_v3_8_constraint_carry',
             'generated_at', DATE_FORMAT(@v2_recalculated_at, '%Y-%m-%d %H:%i:%s.%f'),
             'cycle_phase', 'RECALCULATION',
             'service_start_date', DATE_FORMAT(stage.service_start_date, '%Y-%m-%d'),
@@ -547,11 +744,23 @@ SET
             'gap_before_ceiling',
                 stage.required_inventory_at_add_date - stage.effective_start_inventory,
             'suggested_number', stage.new_number,
+            'raw_suggested_number_before_constraint', stage.raw_new_number_before_constraint,
+            'prior_constraint_surplus', stage.prior_constraint_surplus,
+            'adjusted_gap_after_prior_surplus', stage.adjusted_gap_after_prior_surplus,
+            'constraint_min_ship_qty', stage.constraint_min_ship_qty,
+            'constraint_units_per_box', stage.constraint_units_per_box,
+            'constraint_status', stage.constraint_status,
             'recalculation',
             JSON_OBJECT(
-                'formula_version', 'v2_stockout_no_backlog_2026_07_23',
+                'formula_version', 'v2_stockout_no_backlog_v3_8_constraint_carry',
                 'recalculated_at', DATE_FORMAT(@v2_recalculated_at, '%Y-%m-%d %H:%i:%s.%f'),
                 'new_number', stage.new_number,
+                'raw_new_number_before_constraint', stage.raw_new_number_before_constraint,
+                'prior_constraint_surplus', stage.prior_constraint_surplus,
+                'adjusted_gap_after_prior_surplus', stage.adjusted_gap_after_prior_surplus,
+                'constraint_min_ship_qty', stage.constraint_min_ship_qty,
+                'constraint_units_per_box', stage.constraint_units_per_box,
+                'constraint_status', stage.constraint_status,
                 'week_code', stage.week_code,
                 'service_start_date', DATE_FORMAT(stage.service_start_date, '%Y-%m-%d'),
                 'service_end_date', DATE_FORMAT(stage.service_end_date, '%Y-%m-%d'),
@@ -566,7 +775,7 @@ SET
                     stage.projected_inventory_at_service_start,
                 'stockout_demand_recovered', FALSE,
                 'formula',
-                    'MAX(0, required_inventory_at_add_date - effective_inventory_before_plan)'
+                    'MAX(0, raw_gap - prior_constraint_surplus), then apply box rounding and minimum shipment quantity'
             )
         )
     ),
@@ -602,6 +811,8 @@ COMMIT;
 
 DROP TEMPORARY TABLE IF EXISTS temp_v2_recalculation_stage;
 DROP TEMPORARY TABLE IF EXISTS temp_v2_recalculation_guard;
+DROP TEMPORARY TABLE IF EXISTS temp_v2_recalculation_constraint_input;
+DROP TEMPORARY TABLE IF EXISTS temp_v2_recalculation_adjusted;
 
 SELECT
     'OK' AS recalculation_status,

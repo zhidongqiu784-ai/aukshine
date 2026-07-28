@@ -34,6 +34,13 @@ CREATE TEMPORARY TABLE temp_shipment_plan_v2_weekly_candidates (
     INDEX idx_weekly_candidate_key (asin, country, shop, `date`, plan_source)
 );
 
+SET @weekly_constraint_group_key := '';
+SET @weekly_constraint_surplus_after := 0;
+SET @weekly_constraint_prior_surplus := 0;
+SET @weekly_constraint_adjusted_gap := 0;
+SET @weekly_constraint_boxed_number := 0;
+SET @weekly_constraint_final_number := 0;
+
 INSERT INTO temp_shipment_plan_v2_weekly_candidates (
     exact_candidate_plan_id, exact_candidate_active_change,
     channel, country, shop, shop_id, asin,
@@ -804,7 +811,26 @@ box_calc AS (
             WHEN spec.units_per_box IS NULL
               OR COALESCE(spec.units_per_box_variants, 0) <> 1 THEN cst.min_ship_qty
             ELSE CAST(CEIL(cst.min_ship_qty / spec.units_per_box) * spec.units_per_box AS SIGNED)
-        END AS min_qty_effective
+        END AS min_qty_effective,
+        CAST(
+            CASE
+                WHEN spec.units_per_box IS NULL
+                  OR COALESCE(spec.units_per_box_variants, 0) <> 1 THEN NULL
+                ELSE spec.units_per_box
+            END AS SIGNED
+        ) AS effective_units_per_box,
+        CAST(
+            CONCAT_WS(
+                CHAR(31),
+                cr.asin,
+                cr.country,
+                cr.shop
+            ) AS CHAR(255)
+        ) AS constraint_group_key,
+        ROW_NUMBER() OVER (
+            PARTITION BY cr.asin, cr.country, cr.shop
+            ORDER BY cr.candidate_ship_date, cr.candidate_add_date, COALESCE(cr.exact_candidate_plan_id, 0)
+        ) AS constraint_sequence_no
     FROM candidate_rows AS cr
     LEFT JOIN spec_lookup AS spec
         ON spec.model = cr.model
@@ -814,24 +840,76 @@ box_calc AS (
 ),
 constrained_rows AS (
     SELECT
-        bc.*,
-        CASE
-            WHEN bc.candidate_number IS NULL THEN NULL
-            WHEN bc.candidate_number <= 0 THEN bc.candidate_number
-            ELSE GREATEST(bc.qty_boxed, bc.min_qty_effective)
-        END AS qty_final,
-        CASE
-            WHEN bc.candidate_number IS NULL THEN 'NOT_READY'
-            WHEN bc.candidate_number <= 0 THEN 'NO_SHIPMENT'
-            WHEN COALESCE(bc.constraint_match_count, 0) <> 1
-              OR COALESCE(bc.min_ship_qty, 0) <= 0 THEN 'CONSTRAINT_CONFIG_INVALID'
-            WHEN bc.units_per_box IS NULL THEN 'BOX_SIZE_MISSING'
-            WHEN COALESCE(bc.units_per_box_variants, 0) <> 1 THEN 'BOX_SIZE_CONFLICT'
-            WHEN bc.min_qty_effective > bc.qty_boxed THEN 'MIN_QTY_TOPPED_UP'
-            WHEN bc.qty_boxed > bc.candidate_number THEN 'BOX_ROUNDED'
-            ELSE 'EXACT'
-        END AS constraint_status
-    FROM box_calc AS bc
+        calculated.*,
+        CAST(calculated.prior_constraint_surplus_raw AS SIGNED) AS prior_constraint_surplus,
+        CAST(calculated.adjusted_gap_after_prior_surplus_raw AS SIGNED) AS adjusted_gap_after_prior_surplus,
+        CAST(calculated.boxed_after_prior_surplus_raw AS SIGNED) AS qty_boxed_after_prior_surplus,
+        CAST(calculated.qty_final_calculated AS SIGNED) AS qty_final,
+        CAST(calculated.constraint_surplus_after_raw AS SIGNED) AS constraint_surplus_after
+    FROM (
+        SELECT
+            ordered.*,
+            (@weekly_constraint_prior_surplus := IF(
+                @weekly_constraint_group_key = ordered.constraint_group_key,
+                @weekly_constraint_surplus_after,
+                0
+            )) AS prior_constraint_surplus_raw,
+            (@weekly_constraint_adjusted_gap := CASE
+                WHEN ordered.candidate_number IS NULL THEN NULL
+                ELSE GREATEST(
+                    0,
+                    ordered.candidate_number - @weekly_constraint_prior_surplus
+                )
+            END) AS adjusted_gap_after_prior_surplus_raw,
+            (@weekly_constraint_boxed_number := CASE
+                WHEN @weekly_constraint_adjusted_gap IS NULL THEN NULL
+                WHEN @weekly_constraint_adjusted_gap <= 0 THEN 0
+                WHEN ordered.effective_units_per_box IS NULL THEN @weekly_constraint_adjusted_gap
+                ELSE CEIL(@weekly_constraint_adjusted_gap / ordered.effective_units_per_box)
+                     * ordered.effective_units_per_box
+            END) AS boxed_after_prior_surplus_raw,
+            (@weekly_constraint_final_number := CASE
+                WHEN @weekly_constraint_adjusted_gap IS NULL THEN NULL
+                WHEN @weekly_constraint_adjusted_gap <= 0 THEN 0
+                ELSE GREATEST(
+                    @weekly_constraint_boxed_number,
+                    ordered.min_qty_effective
+                )
+            END) AS qty_final_calculated,
+            (@weekly_constraint_surplus_after := CASE
+                WHEN ordered.candidate_number IS NULL
+                    THEN @weekly_constraint_prior_surplus
+                ELSE GREATEST(
+                    0,
+                    @weekly_constraint_prior_surplus
+                        - GREATEST(ordered.candidate_number, 0)
+                ) + GREATEST(
+                    0,
+                    COALESCE(@weekly_constraint_final_number, 0)
+                        - COALESCE(@weekly_constraint_adjusted_gap, 0)
+                )
+            END) AS constraint_surplus_after_raw,
+            CASE
+                WHEN ordered.candidate_number IS NULL THEN 'NOT_READY'
+                WHEN COALESCE(@weekly_constraint_adjusted_gap, 0) <= 0
+                  AND @weekly_constraint_prior_surplus > 0
+                  AND ordered.candidate_number > 0 THEN 'COVERED_BY_PRIOR_SURPLUS'
+                WHEN COALESCE(@weekly_constraint_adjusted_gap, 0) <= 0 THEN 'NO_SHIPMENT'
+                WHEN COALESCE(ordered.constraint_match_count, 0) <> 1
+                  OR COALESCE(ordered.min_ship_qty, 0) <= 0 THEN 'CONSTRAINT_CONFIG_INVALID'
+                WHEN ordered.units_per_box IS NULL THEN 'BOX_SIZE_MISSING'
+                WHEN COALESCE(ordered.units_per_box_variants, 0) <> 1 THEN 'BOX_SIZE_CONFLICT'
+                WHEN @weekly_constraint_boxed_number < ordered.min_qty_effective THEN 'MIN_QTY_TOPPED_UP'
+                WHEN @weekly_constraint_boxed_number > @weekly_constraint_adjusted_gap THEN 'BOX_ROUNDED'
+                ELSE 'EXACT'
+            END AS constraint_status,
+            (@weekly_constraint_group_key := ordered.constraint_group_key) AS applied_constraint_group_key
+        FROM (
+            SELECT *
+            FROM box_calc
+            ORDER BY constraint_group_key, constraint_sequence_no
+        ) AS ordered
+    ) AS calculated
 ),
 
 region_candidate_rollup AS (
@@ -1037,16 +1115,20 @@ SELECT
             END
         ),
         'constraint_layer', JSON_OBJECT(
-            'version', 'ship_constraint_v1_1_2026_07_25',
+            'version', 'ship_constraint_v1_2_2026_07_28_carry',
             'status', cr.constraint_status,
             'qty_before_constraint', cr.candidate_number,
+            'prior_constraint_surplus', cr.prior_constraint_surplus,
+            'adjusted_gap_after_prior_surplus', cr.adjusted_gap_after_prior_surplus,
             'units_per_box', cr.units_per_box,
             'units_per_box_variants', cr.units_per_box_variants,
             'qty_boxed', cr.qty_boxed,
+            'qty_boxed_after_prior_surplus', cr.qty_boxed_after_prior_surplus,
             'constraint_match_count', cr.constraint_match_count,
             'min_ship_qty', cr.min_ship_qty,
             'min_qty_effective', cr.min_qty_effective,
             'qty_final', cr.qty_final,
+            'constraint_surplus_after', cr.constraint_surplus_after,
             'boxes', CASE
                 WHEN cr.units_per_box IS NULL
                   OR COALESCE(cr.units_per_box_variants, 0) <> 1
