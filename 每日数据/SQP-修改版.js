@@ -20,6 +20,34 @@
   const TERM_FIELD_TEMPLATE_KEY = '__term_field_template';
   const TERM_FIELD_COLORS_KEY = '__term_field_colors';
   const IS_ADMIN         = currentUserLevel === 3;
+  const SQP_DIAGNOSTIC_PREFIX = '[SQP诊断]';
+  const getSqpDiagnosticError = (err) => ({
+    message: err?.message || '未知错误',
+    name: err?.name || null,
+    status: err?.response?.status ?? err?.status ?? null,
+    response: err?.response?.data?.errors
+      ?? err?.response?.data?.error
+      ?? err?.response?.data?.message
+      ?? err?.response?.data
+      ?? null,
+  });
+  const logSqpDiagnostic = (message, details = {}) => {
+    console.log(`${SQP_DIAGNOSTIC_PREFIX} ${message}`, details);
+  };
+  const logSqpDiagnosticError = (message, err, details = {}) => {
+    console.error(`${SQP_DIAGNOSTIC_PREFIX} ${message}`, {
+      ...details,
+      error: getSqpDiagnosticError(err),
+    });
+  };
+  const requestWithSqpDiagnostic = async (stage, url, requestOptions) => {
+    try {
+      return await ctx.request({ url, ...requestOptions });
+    } catch (err) {
+      logSqpDiagnosticError(`${stage}查询失败`, err, { resource: url });
+      throw err;
+    }
+  };
   const DEFAULT_TERM_COUNTRIES = ['US', 'CA', 'JP', 'DE', 'FR'];
   const DEFAULT_MARKET_BRAND = 'ONOAYO';
   const MARKET_BRAND_BY_COUNTRY = {
@@ -31,6 +59,21 @@
   };
   const PROJECTOR_BRANDS = new Set(['JIMVEO', 'LISOWOD', 'ONOAYO', 'SOVBOI']);
   const CAMERA_MARKET_BRAND = 'LIYTIFOR';
+  const SQP_FORMULA_FIELDS = [
+    'report_date',
+    'asin',
+    'brand',
+    'search_query',
+    'search_query_volume',
+    'impressions_count',
+    'clicks_count',
+    'cart_additions_count',
+    'purchases_count',
+    'impressions_asin_count',
+    'clicks_asin_count',
+    'cart_additions_asin_count',
+    'purchases_asin_count',
+  ];
 
   const FONT_SIZE    = 15;
   const FONT_SIZE_SM = FONT_SIZE - 1;
@@ -1570,6 +1613,12 @@
     if (normalizedBrand === CAMERA_MARKET_BRAND) return CAMERA_MARKET_BRAND;
     return null;
   };
+  const getMarketBrandForCurrentContext = (country, currentBrand, currentCategory) => {
+    const category = String(currentCategory || '').trim();
+    if (category === '投影仪') return getMarketBrandForCountry(country);
+    if (category === '数码相机') return CAMERA_MARKET_BRAND;
+    return getMarketBrandForCurrentAsin(country, currentBrand);
+  };
   const getMarketFieldValue = (rows, isMatchedTermRow, field) => {
     const byAsin = {};
     (rows || []).forEach((row) => {
@@ -2507,7 +2556,7 @@
     );
   };
 
-  const TermManagerModal = ({ visible, onClose, country, asin, onRefresh, recalculatingIds = {}, onRecalcStateChange, onRecalcProgress, onRecalcFinish }) => {
+  const TermManagerModal = ({ visible, onClose, country, asin, model, onRefresh, recalculatingIds = {}, onRecalcStateChange, onRecalcProgress, onRecalcFinish }) => {
     const [tab, setTab] = useState('keyword');
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -2571,30 +2620,14 @@
         .map((week) => week.report_date ? String(week.report_date).slice(0, 10) : '')
         .filter(Boolean)
         .sort();
-      const countryAsinRows = await fetchAll('asin:list', {
-        filter: JSON.stringify({ country: { $eq: country } }),
-      });
-      const currentAsinRow = countryAsinRows.find(
-        (item) => String(item?.asin || '').trim() === String(asin || '').trim()
-      ) || null;
-      const currentBrand = String(currentAsinRow?.brand || '').trim();
-      const marketBrand = getMarketBrandForCurrentAsin(country, currentBrand);
-      const marketSourceLabel = marketBrand || currentBrand || '当前 ASIN';
-      onProgress?.({ label: `正在读取${country}市场品牌 ${marketSourceLabel} ASIN`, percent: 5 });
-      const marketBrandAsins = marketBrand
-        ? new Set(
-          countryAsinRows
-            .filter((item) => normalizeBrand(item?.brand) === normalizeBrand(marketBrand))
-            .map((item) => String(item?.asin || '').trim())
-            .filter(Boolean)
-        )
-        : new Set([String(asin || '').trim()].filter(Boolean));
-      onProgress?.({ label: `正在批量读取${title} ${termName}市场品牌明细`, percent: 6 });
-      const [sqpRows, existingTermRows] = await Promise.all([
+      onProgress?.({ label: `正在读取${title} ${termName}当前 ASIN 明细`, percent: 5 });
+      const [currentAsinSqpRows, existingTermRows] = await Promise.all([
         reportDates.length ? fetchAll('sqp:list', {
+          fields: SQP_FORMULA_FIELDS,
           filter: JSON.stringify({
             $and: [
               { country: { $eq: country } },
+              { asin: { $eq: asin } },
               { report_date: { $gte: reportDates[0] } },
               { report_date: { $lte: reportDates[reportDates.length - 1] } },
             ],
@@ -2610,6 +2643,45 @@
           }),
         }),
       ]);
+      let modelName = String(model || '').trim();
+      let currentBrand = String(currentAsinSqpRows.find((row) => String(row?.brand || '').trim())?.brand || '').trim();
+      if (!currentBrand || !modelName) {
+        try {
+          const asinRows = await fetchAll('asin:list', {
+            filter: JSON.stringify({ unique: { $eq: getAsinUniqueKey(country, asin) } }),
+          });
+          if (!currentBrand) currentBrand = String(asinRows[0]?.brand || '').trim();
+          if (!modelName) modelName = String(asinRows[0]?.model || '').trim();
+        } catch (err) {
+          console.warn(`${SQP_DIAGNOSTIC_PREFIX} 单词重算 ASIN 兜底读取失败`, getSqpDiagnosticError(err));
+        }
+      }
+      const skuRows = modelName ? await fetchAll('sku:list', {
+        sort: 'sku',
+        filter: JSON.stringify({
+          $and: [
+            { country: { $eq: country } },
+            { model: { $eq: modelName } },
+          ],
+        }),
+      }) : [];
+      const currentCategory = String(skuRows[0]?.type || '').trim();
+      const marketBrand = getMarketBrandForCurrentContext(country, currentBrand, currentCategory);
+      const marketSourceLabel = marketBrand || currentBrand || '当前 ASIN';
+      onProgress?.({ label: `正在读取${country}市场品牌 ${marketSourceLabel} 明细`, percent: 6 });
+      const marketSqpRows = marketBrand && reportDates.length
+        ? await fetchAll('sqp:list', {
+          fields: SQP_FORMULA_FIELDS,
+          filter: JSON.stringify({
+            $and: [
+              { country: { $eq: country } },
+              { brand: { $eq: marketBrand } },
+              { report_date: { $gte: reportDates[0] } },
+              { report_date: { $lte: reportDates[reportDates.length - 1] } },
+            ],
+          }),
+        })
+        : currentAsinSqpRows;
       const existingTermMap = {};
       existingTermRows.forEach((row) => {
         if (row?.term_week_key) existingTermMap[row.term_week_key] = row;
@@ -2617,18 +2689,27 @@
       const marketRowsByReportDate = {};
       const currentAsinRowsByReportDate = {};
       const reportDateSet = new Set(reportDates);
-      sqpRows.forEach((row) => {
+      marketSqpRows.forEach((row) => {
         const reportDate = row?.report_date ? String(row.report_date).slice(0, 10) : '';
         if (!reportDate || !reportDateSet.has(reportDate)) return;
-        const rowAsin = String(row?.asin || '').trim();
-        if (marketBrandAsins.has(rowAsin)) {
-          if (!marketRowsByReportDate[reportDate]) marketRowsByReportDate[reportDate] = [];
-          marketRowsByReportDate[reportDate].push(row);
-        }
-        if (rowAsin === String(asin || '').trim()) {
-          if (!currentAsinRowsByReportDate[reportDate]) currentAsinRowsByReportDate[reportDate] = [];
-          currentAsinRowsByReportDate[reportDate].push(row);
-        }
+        if (!marketRowsByReportDate[reportDate]) marketRowsByReportDate[reportDate] = [];
+        marketRowsByReportDate[reportDate].push(row);
+      });
+      currentAsinSqpRows.forEach((row) => {
+        const reportDate = row?.report_date ? String(row.report_date).slice(0, 10) : '';
+        if (!reportDate || !reportDateSet.has(reportDate)) return;
+        if (!currentAsinRowsByReportDate[reportDate]) currentAsinRowsByReportDate[reportDate] = [];
+        currentAsinRowsByReportDate[reportDate].push(row);
+      });
+      logSqpDiagnostic('单词重算 SQP 数据源解析完成', {
+        country,
+        asin,
+        model: modelName || null,
+        currentBrand: currentBrand || null,
+        currentCategory: currentCategory || null,
+        marketBrand: marketBrand || null,
+        currentAsinRowCount: currentAsinSqpRows.length,
+        marketRowCount: marketSqpRows.length,
       });
       let count = 0;
       let prevPayload = null;
@@ -2773,11 +2854,13 @@
           filter: JSON.stringify({ country_asin: { $eq: countryAsin } }),
         });
         setItems(sortTermsByAddedOrder(rows));
-        let modelName = '';
-        const asinRows = await fetchAll('asin:list', {
-          filter: JSON.stringify({ unique: { $eq: getAsinUniqueKey(country, asin) } }),
-        });
-        modelName = String(asinRows[0]?.model || '').trim();
+        let modelName = String(model || '').trim();
+        if (!modelName) {
+          const asinRows = await fetchAll('asin:list', {
+            filter: JSON.stringify({ unique: { $eq: getAsinUniqueKey(country, asin) } }),
+          });
+          modelName = String(asinRows[0]?.model || '').trim();
+        }
         let categoryName = '';
         if (modelName) {
           const skuRows = await fetchAll('sku:list', {
@@ -2812,7 +2895,7 @@
       } finally {
         setLoading(false);
       }
-    }, [visible, countryAsin, collection, country, asin, tab, title]);
+    }, [visible, countryAsin, collection, country, asin, model, tab, title]);
 
     useEffect(() => { load(); }, [load]);
     useEffect(() => { if (!visible) { setName(''); setTab('keyword'); setEditingId(null); setEditingName(''); setUpdatingId(null); } }, [visible]);
@@ -4150,8 +4233,7 @@
         const pageSize = 500;
         const rows = [];
         for (let page = 1; page <= 10000; page += 1) {
-          const res = await ctx.request({
-            url,
+          const res = await requestWithSqpDiagnostic('默认词阶段', url, {
             method: 'get',
             params: { ...params, page, pageSize },
           });
@@ -4160,8 +4242,17 @@
           const totalPage = Number(res?.data?.meta?.totalPage);
           if (batch.length < pageSize || (Number.isFinite(totalPage) && page >= totalPage)) break;
         }
+        logSqpDiagnostic('默认词阶段查询成功', { resource: url, count: rows.length });
         return rows;
       };
+      logSqpDiagnostic('开始检查默认词', {
+        userId: currentUserId,
+        username: currentUserName,
+        userLevel: currentUserLevel,
+        country: filterCountry,
+        asin: filterAsin,
+        model: filterModel,
+      });
       const resolveCurrentCategory = async () => {
         let modelName = normalizeText(filterModel);
         if (!modelName) {
@@ -4185,6 +4276,7 @@
         return normalizeText(skuRows[0]?.type);
       };
       const currentCategory = await resolveCurrentCategory();
+      logSqpDiagnostic('SKU 类目解析完成', { model: filterModel, category: currentCategory || null });
       if (!currentCategory) {
         return { created: 0, skipped: true, message: '未找到当前型号对应的 SKU 产品类型，已跳过默认词自动生成' };
       }
@@ -4200,6 +4292,11 @@
         fetchAll('sqp_keywords:list', { sort: TERM_ADDED_ORDER_SORT, filter: countryAsinFilter }),
         fetchAll('sqp_roots:list', { sort: TERM_ADDED_ORDER_SORT, filter: countryAsinFilter }),
       ]);
+      logSqpDiagnostic('默认词依赖读取完成', {
+        defaultCount: defaults.length,
+        keywordCount: keywords.length,
+        rootCount: roots.length,
+      });
       if (!defaults.length) return { created: 0 };
       const keywordNames = new Set(keywords.map((item) => String(item?.keyword_name || '').trim().toLowerCase()).filter(Boolean));
       const rootNames = new Set(roots.map((item) => String(item?.root_name || '').trim().toLowerCase()).filter(Boolean));
@@ -4226,8 +4323,17 @@
         });
       });
       if (!createJobs.length) return { created: 0 };
+      logSqpDiagnostic('准备补齐默认词', {
+        createCount: createJobs.length,
+        resources: createJobs.map((job) => job.url),
+      });
       for (const job of createJobs) {
-        await ctx.request({ url: job.url, method: 'post', data: job.data });
+        try {
+          await ctx.request({ url: job.url, method: 'post', data: job.data });
+        } catch (err) {
+          logSqpDiagnosticError('默认词创建失败', err, { resource: job.url });
+          throw err;
+        }
       }
       return { created: createJobs.length, category: currentCategory };
     }, [filterCountry, filterAsin, filterModel]);
@@ -5441,36 +5547,23 @@
       }
 
       const countryAsin = `${filterCountry}_${filterAsin}`;
-      const SQP_CALC_FIELDS = [
-        'report_date',
-        'asin',
-        'search_query',
-        'search_query_volume',
-        'impressions_count',
-        'clicks_count',
-        'cart_additions_count',
-        'purchases_count',
-        'impressions_asin_count',
-        'clicks_asin_count',
-        'cart_additions_asin_count',
-        'purchases_asin_count',
-      ];
       const fetchAll = async (url, params = {}, options = {}) => {
         const pageSize = options.pageSize || 500;
-        const firstRes = await ctx.request({
-          url,
+        const firstRes = await requestWithSqpDiagnostic('公式阶段', url, {
           method: 'get',
           params: { ...params, page: 1, pageSize },
         });
         const firstBatch = Array.isArray(firstRes?.data?.data) ? firstRes.data.data : [];
-        if (firstBatch.length < pageSize) return firstBatch;
+        if (firstBatch.length < pageSize) {
+          logSqpDiagnostic('公式阶段查询成功', { resource: url, count: firstBatch.length });
+          return firstBatch;
+        }
 
         const totalPage = Number(firstRes?.data?.meta?.totalPage);
         if (!Number.isFinite(totalPage) || totalPage <= 1) {
           const rows = [...firstBatch];
           for (let page = 2; page <= 10000; page += 1) {
-            const res = await ctx.request({
-              url,
+            const res = await requestWithSqpDiagnostic('公式阶段', url, {
               method: 'get',
               params: { ...params, page, pageSize },
             });
@@ -5478,6 +5571,7 @@
             rows.push(...batch);
             if (batch.length < pageSize) break;
           }
+          logSqpDiagnostic('公式阶段查询成功', { resource: url, count: rows.length });
           return rows;
         }
 
@@ -5489,16 +5583,17 @@
             { length: Math.min(concurrency, totalPage - startPage + 1) },
             (_, index) => startPage + index
           );
-          const results = await Promise.all(pageNumbers.map((page) => ctx.request({
-            url,
-            method: 'get',
-            params: { ...params, page, pageSize },
+          const results = await Promise.all(pageNumbers.map((page) => requestWithSqpDiagnostic('公式阶段', url, {
+              method: 'get',
+              params: { ...params, page, pageSize },
           })));
           results.forEach((res, index) => {
             pageRows[pageNumbers[index] - 1] = Array.isArray(res?.data?.data) ? res.data.data : [];
           });
         }
-        return pageRows.flat();
+        const rows = pageRows.flat();
+        logSqpDiagnostic('公式阶段查询成功', { resource: url, count: rows.length, totalPage });
+        return rows;
       };
 
       const termPatchRows = [];
@@ -5620,6 +5715,14 @@
 
       try {
         setCalculatingFormulas(true);
+        logSqpDiagnostic('公式计算开始', {
+          userId: currentUserId,
+          username: currentUserName,
+          userLevel: currentUserLevel,
+          country: filterCountry,
+          asin: filterAsin,
+          allowNonAdmin,
+        });
         stageDefaultState = await loadAsinStageDefaultShare();
         onProgress?.({ label: '正在读取关键词/词根...', percent: 10 });
         const [keywords, roots, weeks] = await Promise.all([
@@ -5629,6 +5732,11 @@
         ]);
         const orderedKeywords = sortTermsByAddedOrder(keywords);
         const orderedRoots = sortTermsByAddedOrder(roots);
+        logSqpDiagnostic('公式基础数据读取完成', {
+          keywordCount: keywords.length,
+          rootCount: roots.length,
+          weekCount: weeks.length,
+        });
         const totalTerms = orderedKeywords.filter((item) => item.id && String(item.keyword_name || '').trim()).length
           + orderedRoots.filter((item) => item.id && String(item.root_name || '').trim()).length;
         if (!totalTerms || !weeks.length) {
@@ -5641,31 +5749,14 @@
           .map((week) => week.report_date ? String(week.report_date).slice(0, 10) : '')
           .filter(Boolean)
           .sort();
-        const countryAsinRows = await fetchAll('asin:list', {
-          filter: JSON.stringify({ country: { $eq: filterCountry } }),
-        });
-        const currentAsinRow = countryAsinRows.find(
-          (item) => String(item?.asin || '').trim() === String(filterAsin || '').trim()
-        ) || null;
-        const currentBrand = String(currentAsinRow?.brand || '').trim();
-        const marketBrand = getMarketBrandForCurrentAsin(filterCountry, currentBrand);
-        const marketSourceLabel = marketBrand || currentBrand || '当前 ASIN';
-        onProgress?.({ label: `正在读取${filterCountry}市场品牌 ${marketSourceLabel} ASIN...`, percent: 12 });
-        const marketBrandAsins = marketBrand
-          ? new Set(
-            countryAsinRows
-              .filter((item) => normalizeBrand(item?.brand) === normalizeBrand(marketBrand))
-              .map((item) => String(item?.asin || '').trim())
-              .filter(Boolean)
-          )
-          : new Set([String(filterAsin || '').trim()].filter(Boolean));
-        onProgress?.({ label: '正在批量读取市场品牌 SQP 明细...', percent: 12 });
-        const [sqpRows, existingTermRows] = await Promise.all([
+        onProgress?.({ label: '正在读取当前 ASIN SQP 明细...', percent: 12 });
+        const [currentAsinSqpRows, existingTermRows, skuRows] = await Promise.all([
           reportDates.length ? fetchAll('sqp:list', {
-            fields: SQP_CALC_FIELDS,
+            fields: SQP_FORMULA_FIELDS,
             filter: JSON.stringify({
               $and: [
                 { country: { $eq: filterCountry } },
+                { asin: { $eq: filterAsin } },
                 { report_date: { $gte: reportDates[0] } },
                 { report_date: { $lte: reportDates[reportDates.length - 1] } },
               ],
@@ -5674,7 +5765,44 @@
           fetchAll('sqp_term_weekly:list', {
             filter: JSON.stringify({ country_asin: { $eq: countryAsin } }),
           }),
+          filterModel ? fetchAll('sku:list', {
+            sort: 'sku',
+            filter: JSON.stringify({
+              $and: [
+                { country: { $eq: filterCountry } },
+                { model: { $eq: filterModel } },
+              ],
+            }),
+          }) : [],
         ]);
+        let currentBrand = String(currentAsinSqpRows.find((row) => String(row?.brand || '').trim())?.brand || '').trim();
+        if (!currentBrand) {
+          try {
+            const asinRows = await fetchAll('asin:list', {
+              filter: JSON.stringify({ unique: { $eq: getAsinUniqueKey(filterCountry, filterAsin) } }),
+            });
+            currentBrand = String(asinRows[0]?.brand || '').trim();
+          } catch (err) {
+            console.warn(`${SQP_DIAGNOSTIC_PREFIX} 全量计算 ASIN 品牌兜底读取失败`, getSqpDiagnosticError(err));
+          }
+        }
+        const currentCategory = String(skuRows[0]?.type || '').trim();
+        const marketBrand = getMarketBrandForCurrentContext(filterCountry, currentBrand, currentCategory);
+        const marketSourceLabel = marketBrand || currentBrand || '当前 ASIN';
+        onProgress?.({ label: `正在读取${filterCountry}市场品牌 ${marketSourceLabel} SQP 明细...`, percent: 14 });
+        const marketSqpRows = marketBrand && reportDates.length
+          ? await fetchAll('sqp:list', {
+            fields: SQP_FORMULA_FIELDS,
+            filter: JSON.stringify({
+              $and: [
+                { country: { $eq: filterCountry } },
+                { brand: { $eq: marketBrand } },
+                { report_date: { $gte: reportDates[0] } },
+                { report_date: { $lte: reportDates[reportDates.length - 1] } },
+              ],
+            }),
+          }, { pageSize: 2000 })
+          : currentAsinSqpRows;
         existingTermMap = {};
         existingTermRows.forEach((row) => {
           if (row?.term_week_key) existingTermMap[row.term_week_key] = row;
@@ -5682,18 +5810,31 @@
         marketRowsByReportDate = {};
         currentAsinRowsByReportDate = {};
         const reportDateSet = new Set(reportDates);
-        sqpRows.forEach((row) => {
+        marketSqpRows.forEach((row) => {
           const reportDate = row?.report_date ? String(row.report_date).slice(0, 10) : '';
           if (!reportDate || !reportDateSet.has(reportDate)) return;
-          const rowAsin = String(row?.asin || '').trim();
-          if (marketBrandAsins.has(rowAsin)) {
-            if (!marketRowsByReportDate[reportDate]) marketRowsByReportDate[reportDate] = [];
-            marketRowsByReportDate[reportDate].push(row);
-          }
-          if (rowAsin === String(filterAsin || '').trim()) {
-            if (!currentAsinRowsByReportDate[reportDate]) currentAsinRowsByReportDate[reportDate] = [];
-            currentAsinRowsByReportDate[reportDate].push(row);
-          }
+          if (!marketRowsByReportDate[reportDate]) marketRowsByReportDate[reportDate] = [];
+          marketRowsByReportDate[reportDate].push(row);
+        });
+        currentAsinSqpRows.forEach((row) => {
+          const reportDate = row?.report_date ? String(row.report_date).slice(0, 10) : '';
+          if (!reportDate || !reportDateSet.has(reportDate)) return;
+          if (!currentAsinRowsByReportDate[reportDate]) currentAsinRowsByReportDate[reportDate] = [];
+          currentAsinRowsByReportDate[reportDate].push(row);
+        });
+        logSqpDiagnostic('SQP 数据源解析完成', {
+          requestedDateFrom: reportDates[0] || null,
+          requestedDateTo: reportDates[reportDates.length - 1] || null,
+          model: filterModel || null,
+          currentBrand: currentBrand || null,
+          currentCategory: currentCategory || null,
+          marketBrand: marketBrand || null,
+          marketRowCount: marketSqpRows.length,
+          marketAsinCount: new Set(marketSqpRows.map((row) => String(row?.asin || '').trim()).filter(Boolean)).size,
+          marketDates: Object.keys(marketRowsByReportDate),
+          currentAsinRowCount: currentAsinSqpRows.length,
+          currentAsinDates: Object.keys(currentAsinRowsByReportDate),
+          existingTermWeeklyCount: existingTermRows.length,
         });
         let doneTerms = 0;
         let totalWeeks = 0;
@@ -5723,9 +5864,19 @@
               ...(job.type === 'update' ? { params: { filterByTk: job.key } } : {}),
               data: job.data,
             })));
-            writeFailCount += results.filter((result) => result.status === 'rejected').length;
+            const rejected = results.filter((result) => result.status === 'rejected');
+            writeFailCount += rejected.length;
+            if (rejected.length) {
+              console.error(`${SQP_DIAGNOSTIC_PREFIX} 周汇总写回失败`, rejected.map((result) => getSqpDiagnosticError(result.reason)));
+            }
           }
         }
+        logSqpDiagnostic('公式计算与写回完成', {
+          totalTerms,
+          totalWeeks,
+          writeJobCount: termWriteJobs.length,
+          writeFailCount,
+        });
         if (termPatchRows.length) {
           onProgress?.({ label: '正在合并公式结果...', percent: 96 });
           mergeTermColumns(termPatchRows);
@@ -5752,6 +5903,10 @@
         if (reload) load({ page: curPageRef.current, size: pageSizeRef.current, skipFormula: true });
         return writeFailCount === 0;
       } catch (err) {
+        logSqpDiagnosticError('公式计算失败', err, {
+          country: filterCountry,
+          asin: filterAsin,
+        });
         if (silent) {
           console.error('SQP 公式计算失败:', err);
         } else {
@@ -5778,10 +5933,21 @@
       setCurPage(1);
       (async () => {
         try {
+          logSqpDiagnostic('自动加载开始', {
+            runKey,
+            userId: currentUserId,
+            username: currentUserName,
+            userLevel: currentUserLevel,
+            country: filterCountry,
+            asin: filterAsin,
+            model: filterModel,
+          });
           await load({ page: 1, size: pageSizeRef.current, skipFormula: true });
+          logSqpDiagnostic('已保存周汇总加载完成', { countryAsin });
           if (!active) return;
           showFormulaProgress({ label: '正在检查类目默认词...', percent: 6 });
           const result = await ensureDefaultTermsForCurrentAsin();
+          logSqpDiagnostic('默认词检查完成', result);
           if (!active) return;
           let calculationOk = false;
           if (result.created > 0) {
@@ -5808,9 +5974,16 @@
             finishFormulaProgress('最新数据加载完成');
           }
           if (!calculationOk) {
+            logSqpDiagnostic('公式计算未成功，回退读取已保存周汇总', { countryAsin });
             await load({ page: 1, size: pageSizeRef.current, skipFormula: true });
           }
         } catch (err) {
+          logSqpDiagnosticError('自动加载流程失败', err, {
+            runKey,
+            country: filterCountry,
+            asin: filterAsin,
+            model: filterModel,
+          });
           resetFormulaProgress();
           ctx.message.warning(`默认词自动生成失败：${err?.message || '未知错误'}`);
           await load({ page: 1, size: pageSizeRef.current, skipFormula: true });
@@ -6236,6 +6409,7 @@
       onClose: () => setShowTermManager(false),
       country: filterCountry,
       asin: filterAsin,
+      model: filterModel,
       onRefresh: handleTermManagerRefresh,
       recalculatingIds: termRecalculatingIds,
       onRecalcStateChange: setTermRecalculating,
