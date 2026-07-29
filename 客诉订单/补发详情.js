@@ -416,7 +416,8 @@ function normalizeRecord(record) {
     id: pick(source, ['id', 'ID', 'filterByTk', '__primaryKey']),
     unique: pick(source, ['unique']),
     order_number: pick(source, ['order_number', 'order_info.order_number']),
-    customer_name: pick(source, ['customer_name', 'customer.name', 'name']),
+    customer_name: pick(source, ['customer.name']),
+    consignee: pick(source, ['consignee']),
     email: pick(source, ['email', 'customer.email']),
     reason: normalizeReason(pick(source, ['reason'])),
     status: pick(source, ['status']),
@@ -568,7 +569,16 @@ async function enrichCustomerName(values) {
   if (!isEmpty(values.customer_name)) return values;
 
   const customer = await fetchCustomerRecord(values.email);
-  const name = pick(customer || {}, ['name', 'nickname', 'customer_name']);
+  const customerName = pick(customer || {}, ['name']);
+  if (!isEmpty(customerName)) {
+    return {
+      ...values,
+      customer_name: customerName,
+    };
+  }
+
+  const order = await fetchOrderRecord(values.order_number);
+  const name = pick(order || {}, ['buyer_name']) || values.consignee;
 
   return isEmpty(name)
     ? values
@@ -673,6 +683,7 @@ function buildUpdatePayload(values, accessoriesOptions) {
 
   return {
     order_number: values.order_number,
+    consignee: values.customer_name,
     country: values.country,
     state: values.state,
     city: values.city,
@@ -706,6 +717,9 @@ function findMissingRequiredField(values) {
 async function updateCustomerName(values) {
   if (isEmpty(values.email) || isEmpty(values.customer_name)) return;
 
+  const customer = await fetchCustomerRecord(values.email);
+  if (!customer) return;
+
   await apiRequest({
     method: 'post',
     url: `/customer:update?filterByTk=${encodeURIComponent(values.email)}`,
@@ -738,7 +752,7 @@ async function refreshTargetBlock() {
   return false;
 }
 
-function closeCurrentPopup(rootElement) {
+function closeCurrentPopup() {
   if (typeof ctx.view?.close === 'function') {
     ctx.view.close();
     return true;
@@ -751,17 +765,6 @@ function closeCurrentPopup(rootElement) {
 
   if (typeof ctx.popup?.destroy === 'function') {
     ctx.popup.destroy();
-    return true;
-  }
-
-  const currentPopup = rootElement?.closest?.(
-    '.ant-modal-content, .ant-modal, .ant-modal-wrap, .ant-drawer-content, .ant-drawer',
-  );
-  const closeButton = currentPopup?.querySelector?.(
-    '.ant-modal-close, .ant-drawer-close, button[aria-label="Close"]',
-  );
-  if (closeButton) {
-    closeButton.click();
     return true;
   }
 
@@ -1067,7 +1070,6 @@ function ReissueDetail() {
   const [values, setValues] = React.useState({});
   const [initialValues, setInitialValues] = React.useState({});
   const [accessoriesOptions, setAccessoriesOptions] = React.useState([]);
-  const detailRootRef = React.useRef(null);
   const uiText = getText(language);
   const formEditable = values.status === EDITABLE_STATUS;
   const changed = JSON.stringify(buildUpdatePayload(values, accessoriesOptions)) !==
@@ -1214,6 +1216,7 @@ function ReissueDetail() {
       await updateCustomerName(values);
       setInitialValues({
         ...values,
+        consignee: values.customer_name,
         unique: targetUnique,
       });
       setValues((current) => ({
@@ -1222,7 +1225,7 @@ function ReissueDetail() {
       }));
       await refreshTargetBlock();
       message.success(uiText.saveSuccess);
-      setTimeout(() => closeCurrentPopup(detailRootRef.current), 200);
+      setTimeout(() => closeCurrentPopup(), 200);
     } catch (error) {
       message.error(error?.message || uiText.saveFailed);
     } finally {
@@ -1232,7 +1235,7 @@ function ReissueDetail() {
 
   if (loading) {
     return (
-      <div ref={detailRootRef} style={{ padding: 16 }}>
+      <div style={{ padding: 16 }}>
         <Spin size="small" /> <Typography.Text>{uiText.loading}</Typography.Text>
       </div>
     );
@@ -1266,7 +1269,7 @@ function ReissueDetail() {
   }
 
   return (
-    <div ref={detailRootRef} style={{ padding: 10, background: '#f8fafc' }}>
+    <div style={{ padding: 10, background: '#f8fafc' }}>
       <Space direction="vertical" size={8} style={{ width: '100%' }}>
         <Form layout="vertical">
           <Space direction="vertical" size={8} style={{ width: '100%' }}>

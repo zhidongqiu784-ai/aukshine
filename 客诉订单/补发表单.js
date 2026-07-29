@@ -423,18 +423,12 @@ const FIELD_TEXT_KEYS = {
     ],
     '{{$nPopupRecord.customer.name}}': [
       '$nPopupRecord.customer.name',
-      '$nPopupRecord.customer.nickname',
-      '$nPopupRecord.customer.customer_name',
       'ctx.popup.record.customer.name',
-      'ctx.popup.record.customer.nickname',
-    'ctx.popup.record.customer.customer_name',
-  ],
-  '{{$nPopupRecord.customer.email}}': [
-    '$nPopupRecord.customer.email',
-    '$nPopupRecord.email',
-    'ctx.popup.record.customer.email',
-    'ctx.popup.record.email',
-  ],
+    ],
+    '{{$nPopupRecord.customer.email}}': [
+      '$nPopupRecord.customer.email',
+      'ctx.popup.record.customer.email',
+    ],
   '{{$nPopupRecord.email}}': [
     '$nPopupRecord.email',
     'ctx.popup.record.email',
@@ -813,92 +807,46 @@ function pickOrderAsin(record, countryCode) {
     || parseAsinFromJoinedKey(record?.unique, country);
 }
 
-function pickOwnerText(value) {
-  if (Array.isArray(value)) return pickOwnerText(value[0]);
-  if (value && typeof value === 'object') {
-    return pickFirstText(value.username, value.nickname, value.name, value.email, value.id);
-  }
-
-  return pickFirstText(value);
-}
-
-function pickSaleOwner(row) {
-  return pickOwnerText(row?.sale_owner)
-    || pickOwnerText(row?.saleOwner)
-    || pickOwnerText(row?.sales)
-    || pickOwnerText(row?.owner);
-}
-
-function buildCountryAsinKey(countryCode, asin) {
-  const country = normalizeLookupValue(countryCode);
+function buildAsinCountryKey(asin, countryCode) {
   const asinCode = normalizeLookupValue(asin);
+  const country = normalizeLookupValue(countryCode);
   if (!country || !asinCode) return '';
-  return `${country}_${asinCode}`;
+  return `${asinCode}_${country}`;
 }
 
-async function fetchSaleOwnerByFilter(filter) {
+async function fetchSaleOwnerByAsinCountry(asin, countryCode) {
+  const unique = buildAsinCountryKey(asin, countryCode);
+  if (!unique) return undefined;
+
   const response = await apiRequest({
     method: 'get',
     url: '/asin:list',
     params: {
-      filter,
+      filter: {
+        unique: {
+          $eq: unique,
+        },
+      },
       pageSize: 5,
     },
   });
 
   const rows = getResponseRows(response);
-  const matched = rows.find((row) => !isEmpty(pickSaleOwner(row)));
-  return pickSaleOwner(matched);
-}
-
-async function fetchSaleOwnerByCountryAsin(countryCode, asin) {
-  const country = normalizeLookupValue(countryCode);
-  const asinCode = normalizeLookupValue(asin);
-  const countryAsinKey = buildCountryAsinKey(country, asinCode);
-  if (!countryAsinKey) return undefined;
-
-  const filters = [
-    { unique: { $eq: countryAsinKey } },
-    {
-      $and: [
-        { country: { $eq: country } },
-        { asin: { $eq: asinCode } },
-      ],
-    },
-  ];
-
-  for (const filter of filters) {
-    try {
-      const saleOwner = await fetchSaleOwnerByFilter(filter);
-      if (!isEmpty(saleOwner)) return saleOwner;
-    } catch (error) {
-      // Continue with the next filter shape when a collection index/key is unavailable.
-    }
-  }
-
-  return undefined;
+  const matched = rows.find((row) => !isEmpty(row?.sale_owner));
+  return normalizeLookupValue(matched?.sale_owner) || undefined;
 }
 
 async function enrichSalesValue(values, orderRecord) {
-  const countryCode = orderRecord?.country_code
-    || orderRecord?.country
-    || values.country
-    || await readExpression('{{$nPopupRecord.order_info.country_code}}');
-  const asin = values.order_asin
-    || pickOrderAsin(orderRecord, countryCode)
-    || await readExpression('{{$nPopupRecord.order_info.asin}}');
-  if (!isEmpty(values.sales)) {
-    return {
-      ...values,
-      order_asin: asin || values.order_asin,
-    };
-  }
+  if (!isEmpty(values.sales)) return values;
 
-  const saleOwner = await fetchSaleOwnerByCountryAsin(countryCode, asin);
+  const order = orderRecord || await fetchOrderRecord(values.order_number);
+  const asin = normalizeLookupValue(order?.asin);
+  const countryCode = normalizeLookupValue(order?.country_code);
+  const saleOwner = await fetchSaleOwnerByAsinCountry(asin, countryCode);
 
   return {
     ...values,
-    order_asin: asin || values.order_asin,
+    order_asin: asin || undefined,
     sales: saleOwner || undefined,
   };
 }
@@ -923,16 +871,16 @@ async function loadSalesOptions() {
   const options = users
     .map((user) => {
       const username = pickFirstText(user?.username);
-      const displayName = pickFirstText(user?.nickname, user?.name);
+      if (!username) return undefined;
+
+      const displayName = pickFirstText(user?.nickname);
       const email = pickFirstText(user?.email);
-      const value = username || displayName || email || pickFirstText(user?.id);
-      if (!value) return undefined;
 
       return {
         label: displayName && username && displayName !== username
           ? `${displayName} (${username})`
-          : displayName || username || email || value,
-        value,
+          : displayName || username || email,
+        value: username,
       };
     })
     .filter(Boolean);
@@ -940,8 +888,7 @@ async function loadSalesOptions() {
   return Array.from(new Map(options.map((option) => [option.value, option])).values());
 }
 
-async function readCustomerEmail(values) {
-  if (!isEmpty(values.email)) return values.email;
+async function readExistingCustomerEmail() {
   return readExpression('{{$nPopupRecord.customer.email}}');
 }
 
@@ -949,7 +896,7 @@ async function updateCustomerName(values) {
   const name = values.customer_name;
   if (isEmpty(name)) return;
 
-  const email = await readCustomerEmail(values);
+  const email = await readExistingCustomerEmail();
   if (isEmpty(email)) return;
 
   await apiRequest({
@@ -994,6 +941,7 @@ async function enrichOrderValues(values) {
 
   return {
     ...values,
+    customer_name: values.customer_name || orderRecord.buyer_name,
     country: values.country || orderRecord.country_code || orderRecord.country,
     sku: values.sku || pickOrderSku(orderRecord),
     order_asin: values.order_asin || pickOrderAsin(orderRecord, values.country || orderRecord.country_code || orderRecord.country),
@@ -1016,7 +964,7 @@ async function updatePopupOrderNumber(values, initialValues) {
   });
 }
 
-function closeCurrentPopup(rootElement) {
+function closeCurrentPopup() {
   if (typeof ctx.view?.close === 'function') {
     ctx.view.close();
     return true;
@@ -1029,17 +977,6 @@ function closeCurrentPopup(rootElement) {
 
   if (typeof ctx.popup?.destroy === 'function') {
     ctx.popup.destroy();
-    return true;
-  }
-
-  const currentPopup = rootElement?.closest?.(
-    '.ant-modal-content, .ant-modal, .ant-modal-wrap, .ant-drawer-content, .ant-drawer',
-  );
-  const closeButton = currentPopup?.querySelector?.(
-    '.ant-modal-close, .ant-drawer-close, button[aria-label="Close"]',
-  );
-  if (closeButton) {
-    closeButton.click();
     return true;
   }
 
@@ -1183,7 +1120,6 @@ function FieldControl({ field, accessoriesOptions, salesOptions, value, onChange
   const [accessoriesOptions, setAccessoriesOptions] = React.useState([]);
   const [salesOptions, setSalesOptions] = React.useState([]);
   const [salesAutoMatched, setSalesAutoMatched] = React.useState(false);
-  const formRootRef = React.useRef(null);
   const orderEnrichKeyRef = React.useRef('');
   const salesLookupKeyRef = React.useRef('');
   const uiText = getText(language);
@@ -1240,13 +1176,18 @@ function FieldControl({ field, accessoriesOptions, salesOptions, value, onChange
       if (exists) {
         const nextValues = {
           ...formValues,
+          customer_name: formValues.customer_name || orderRecord.buyer_name,
           country: orderRecord.country_code || orderRecord.country || formValues.country,
           sku: pickOrderSku(orderRecord) || formValues.sku,
           order_asin: pickOrderAsin(orderRecord, orderRecord.country_code || orderRecord.country || formValues.country) || formValues.order_asin,
         };
         setSalesAutoMatched(false);
+        setInitialFormValues((current) => fillEmptyValues(current, {
+          customer_name: nextValues.customer_name,
+        }));
         setFormValues((current) => ({
           ...current,
+          customer_name: nextValues.customer_name || current.customer_name,
           country: nextValues.country || current.country,
           sku: nextValues.sku || current.sku,
           order_asin: nextValues.order_asin || current.order_asin,
@@ -1287,7 +1228,12 @@ function FieldControl({ field, accessoriesOptions, salesOptions, value, onChange
 
       async function refreshOrderValues() {
         if (loadingValues || isEmpty(formValues.order_number)) return;
-        if (!isEmpty(formValues.country) && !isEmpty(formValues.sku) && !isEmpty(formValues.order_asin)) return;
+        if (
+          !isEmpty(formValues.customer_name)
+          && !isEmpty(formValues.country)
+          && !isEmpty(formValues.sku)
+          && !isEmpty(formValues.order_asin)
+        ) return;
         if (orderEnrichKeyRef.current === formValues.order_number) return;
         orderEnrichKeyRef.current = formValues.order_number;
 
@@ -1296,6 +1242,7 @@ function FieldControl({ field, accessoriesOptions, salesOptions, value, onChange
           if (!mounted || isEmpty(orderRecord)) return;
 
           const nextValues = {
+            customer_name: orderRecord.buyer_name,
             country: orderRecord.country_code || orderRecord.country,
             sku: pickOrderSku(orderRecord),
             order_asin: pickOrderAsin(orderRecord, orderRecord.country_code || orderRecord.country || formValues.country),
@@ -1315,6 +1262,7 @@ function FieldControl({ field, accessoriesOptions, salesOptions, value, onChange
       };
     }, [
       loadingValues,
+      formValues.customer_name,
       formValues.country,
       formValues.order_asin,
       formValues.order_number,
@@ -1434,6 +1382,7 @@ function FieldControl({ field, accessoriesOptions, salesOptions, value, onChange
             const needsOrderRecord = !isEmpty(hydratedValues.order_number)
               && (
                 isEmpty(hydratedValues.country)
+                || isEmpty(hydratedValues.customer_name)
                 || isEmpty(hydratedValues.sku)
                 || (isEmpty(hydratedValues.sales) && isEmpty(hydratedValues.order_asin))
               );
@@ -1443,6 +1392,7 @@ function FieldControl({ field, accessoriesOptions, salesOptions, value, onChange
 
               if (!isEmpty(orderRecord)) {
                 const orderValues = {
+                  customer_name: orderRecord.buyer_name,
                   country: orderRecord.country_code || orderRecord.country,
                   sku: pickOrderSku(orderRecord),
                   order_asin: pickOrderAsin(
@@ -1540,6 +1490,7 @@ function FieldControl({ field, accessoriesOptions, salesOptions, value, onChange
         ...mergeDefinedValues(DEFAULT_FORM_VALUES, schemaValues),
         ...toSubmitValues(formValues),
       }, accessoriesOptions);
+      submitValues.consignee = formValues.customer_name;
       submitValues.accessories_date = buildAccessoriesDateValue(submitValues, language);
       submitValues.unique = buildUniqueValue(submitValues);
 
@@ -1555,7 +1506,7 @@ function FieldControl({ field, accessoriesOptions, salesOptions, value, onChange
       await updateCustomerName(formValues);
       await refreshTargetBlock();
       message.success(uiText.submitSuccess);
-      setTimeout(() => closeCurrentPopup(formRootRef.current), 200);
+      setTimeout(() => closeCurrentPopup(), 200);
     } catch (error) {
         message.error(error?.message || uiText.submitFailed);
       } finally {
@@ -1564,7 +1515,7 @@ function FieldControl({ field, accessoriesOptions, salesOptions, value, onChange
     }
 
     return (
-      <div ref={formRootRef} style={{ padding: 16 }}>
+      <div style={{ padding: 16 }}>
         {loadingValues ? (
           <div
             style={{
