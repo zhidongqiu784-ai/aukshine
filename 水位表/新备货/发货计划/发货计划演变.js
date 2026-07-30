@@ -269,6 +269,16 @@ function addDays(value, days) {
   date.setDate(date.getDate() + Number(days || 0));
   return date;
 }
+function addCalendarMonths(value, months) {
+  const date = value instanceof Date ? new Date(value.getTime()) : parseDate(value);
+  if (!date) return null;
+  const day = date.getDate();
+  date.setDate(1);
+  date.setMonth(date.getMonth() + Number(months || 0));
+  const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  date.setDate(Math.min(day, monthEnd));
+  return date;
+}
 function todayText() { return formatDate(new Date()); }
 function mondayOf(value) {
   const date = value instanceof Date ? new Date(value.getTime()) : parseDate(value);
@@ -950,19 +960,13 @@ function V19TrendChart({ row, changes, role, poApproved, orderWeek, channelOptio
   const hoverLockRef = useRef(false);
   const changeSignature = row.weeks.map((week, index) => `${index}:${changes[v19ChangeKey(row.key, index)]?.at || ''}`).join('|');
   useEffect(() => { dragRef.current = null; setMods({}); setDraft(null); setSimOn(false); setDragging(null); setNodeIndex(null); setHoverIndex(null); setHoverNode(null); }, [row.key, changeSignature]);
-  const W = 1600; const H = 320; const L = 54; const R = 22; const T = 28; const B = 42;
+  const W = 1600; const H = 360; const L = 54; const R = 22; const T = 28; const B = 42;
   const plotW = W - L - R; const plotH = H - T - B;
-  const todayIndex = 5; const compress = 0.16;
+  const todayIndex = 0;
   const fallbackDaily = Math.max(0.1, numberValue(row.summaryRow?.weighted_sales, numberValue(row.summaryRow?.maybe_sales, 0.1)));
-  const startDate = addDays(parseDate(todayText()), -todayIndex);
-  const latestDailyDate = row.dailyRows.reduce((latest, item) => {
-    const value = parseDate(item.date);
-    return value && (!latest || value > latest) ? value : latest;
-  }, null);
-  const fallbackEndDate = addDays(startDate, 97);
-  const endDate = latestDailyDate && latestDailyDate >= startDate ? latestDailyDate : fallbackEndDate;
-  const N = Math.max(todayIndex + 1, Math.round((endDate - startDate) / 86400000) + 1);
-  const breakIndex = Math.min(42, Math.max(0, N - 2));
+  const startDate = parseDate(todayText());
+  const endDate = addCalendarMonths(startDate, 4);
+  const N = Math.max(1, Math.round((endDate - startDate) / 86400000) + 1);
   const dates = Array.from({ length: N }, (_, index) => formatDate(addDays(startDate, index)));
   const dailyMap = new Map(row.dailyRows.map((item) => [dateText(item.date), item]));
   const existingValues = dates.map((date, index) => {
@@ -987,19 +991,12 @@ function V19TrendChart({ row, changes, role, poApproved, orderWeek, channelOptio
     }
     return fallback;
   }
-  const frac = (index) => index <= breakIndex ? (index / breakIndex) * compress : compress + ((index - breakIndex) / (N - 1 - breakIndex)) * (1 - compress);
+  const frac = (index) => N <= 1 ? 0 : index / (N - 1);
   const px = (index) => L + frac(Math.max(0, Math.min(N - 1, index))) * plotW;
   const indexOfDate = (value) => {
     const parsed = value instanceof Date && !Number.isNaN(value.getTime()) ? value : parseDate(value);
     return parsed ? Math.max(0, Math.min(N - 1, Math.round((parsed - startDate) / 86400000))) : todayIndex;
   };
-  function planStorageDate(plan, week, channel, shiftWeeks) {
-    const originalStorage = parseDate(plan?.add_date);
-    const originalChannel = v19ChannelValue(plan?.channel);
-    if (originalStorage && channel === originalChannel) return addDays(originalStorage, shiftWeeks * 7);
-    const shipDate = parseDate(plan?.date) || week.start;
-    return addDays(shipDate, shiftWeeks * 7 + v19ChannelDays(channel) + Math.max(0, numberValue(plan?.warehouse_days)));
-  }
   function allocateQuantity(total, plans) {
     if (!plans.length) return [];
     const target = Math.max(0, Math.round(numberValue(total)));
@@ -1029,14 +1026,11 @@ function V19TrendChart({ row, changes, role, poApproved, orderWeek, channelOptio
     const shift = Math.max(-2, Math.min(2, mod.shift == null ? base.baseShift : numberValue(mod.shift)));
     const channel = mod.channel || base.channel;
     const datesValue = v19BatchDates(row, base.week, mod.channel || base.baseChannelOverride, shift);
-    const storageDate = base.week.rows.length
-      ? planStorageDate(base.week.rows[0], base.week, channel, shift)
-      : datesValue.sellable;
-    const pointIndex = indexOfDate(storageDate);
+    const pointIndex = indexOfDate(datesValue.arrival);
     return {
       ...base, mod, qty,
       shippedQty: numberValue(base.week.shippedQty), actualPlanQty: numberValue(base.week.actualPlanQty),
-      shift, channel, ...datesValue, storageDate, pointIndex,
+      shift, channel, ...datesValue, pointIndex,
     };
   });
   const buildPreview = (activeMods) => {
@@ -1053,7 +1047,7 @@ function V19TrendChart({ row, changes, role, poApproved, orderWeek, channelOptio
       const allocations = allocateQuantity(node.qty, node.week.rows);
       node.week.rows.forEach((plan, planIndex) => {
         adjustAdd(plan.add_date, -numberValue(plan.number));
-        adjustAdd(planStorageDate(plan, node.week, node.channel, node.shift), allocations[planIndex]);
+        adjustAdd(node.arrival, allocations[planIndex]);
       });
     });
     const values = sysValues.slice();
@@ -1105,32 +1099,66 @@ function V19TrendChart({ row, changes, role, poApproved, orderWeek, channelOptio
     const lineDayValue = Math.max(0, nearestValue(nodeAnchorValues, node.pointIndex));
     return { ...node, dayValue: lineDayValue, x: px(node.pointIndex), y: py(lineDayValue) };
   });
-  const nodeGroups = new Map();
+  const labelWidth = 78;
+  const labelHeight = 34;
+  const labelGap = 8;
+  const anchorCounts = new Map();
   visibleNodes.forEach((node) => {
     const key = `${node.pointIndex}:${Math.round(node.y)}`;
-    if (!nodeGroups.has(key)) nodeGroups.set(key, []);
-    nodeGroups.get(key).push(node);
+    anchorCounts.set(key, (anchorCounts.get(key) || 0) + 1);
   });
+  const clampLabelX = (value) => Math.max(L + labelWidth / 2, Math.min(W - R - labelWidth / 2, value));
+  const clampLabelY = (value) => Math.max(T + labelHeight / 2, Math.min(H - B - labelHeight / 2, value));
+  const overlapArea = (first, second) => {
+    const overlapX = labelWidth + labelGap - Math.abs(first.x - second.x);
+    const overlapY = labelHeight + labelGap - Math.abs(first.y - second.y);
+    return overlapX > 0 && overlapY > 0 ? overlapX * overlapY : 0;
+  };
+  const occupiedLabels = [];
   const nodeLayoutByIndex = new Map();
-  nodeGroups.forEach((group) => {
-    const sorted = group.slice().sort((a, b) => a.index - b.index);
-    const stacked = sorted.length > 1;
-    const side = sorted[0]?.x > W - R - 92 ? -1 : 1;
-    const mid = (sorted.length - 1) / 2;
-    sorted.forEach((node, groupIndex) => {
-      const defaultLabelY = Math.max(T + 16, node.y - (26 + (node.index % 3) * 14));
-      const labelX = stacked ? Math.max(L + 34, Math.min(W - R - 34, node.x + side * 58)) : node.x;
-      const labelY = stacked ? Math.max(T + 18, Math.min(H - B - 18, node.y + (groupIndex - mid) * 38)) : defaultLabelY;
-      nodeLayoutByIndex.set(node.index, {
-        ...node,
-        stacked,
-        labelX,
-        labelY,
-        handleX: stacked ? labelX : node.x,
-        handleY: stacked ? labelY : node.y,
-        handleWidth: stacked ? 68 : 40,
-        handleHeight: stacked ? 32 : 40,
-      });
+  const labelLanes = [
+    T + labelHeight / 2 + 5,
+    T + labelHeight * 1.5 + labelGap + 5,
+    H - B - labelHeight * 1.5 - labelGap - 5,
+    H - B - labelHeight / 2 - 5,
+  ];
+  visibleNodes.slice().sort((a, b) => a.x - b.x || a.index - b.index).forEach((node) => {
+    const preferredLane = node.index % labelLanes.length;
+    const laneOrder = Array.from({ length: labelLanes.length }, (_, offset) => (
+      (preferredLane + offset) % labelLanes.length
+    ));
+    const candidates = [
+      ...laneOrder.map((lane) => ({ x: node.x, y: labelLanes[lane] })),
+      ...laneOrder.flatMap((lane) => [-(labelWidth + 12), labelWidth + 12].map((offset) => ({
+        x: node.x + offset,
+        y: labelLanes[lane],
+      }))),
+    ].map((candidate) => ({ x: clampLabelX(candidate.x), y: clampLabelY(candidate.y) }));
+    const uniqueCandidates = candidates.filter((candidate, index, list) => (
+      list.findIndex((item) => Math.abs(item.x - candidate.x) < 0.5 && Math.abs(item.y - candidate.y) < 0.5) === index
+    ));
+    const selectedCandidate = uniqueCandidates.find((candidate) => (
+      occupiedLabels.every((placed) => overlapArea(candidate, placed) === 0)
+    )) || uniqueCandidates.reduce((best, candidate) => {
+      const score = occupiedLabels.reduce((sum, placed) => sum + overlapArea(candidate, placed), 0);
+      return !best || score < best.score ? { ...candidate, score } : best;
+    }, null);
+    const labelX = selectedCandidate?.x ?? clampLabelX(node.x);
+    const labelY = selectedCandidate?.y ?? clampLabelY(labelLanes[preferredLane]);
+    const displaced = Math.abs(labelX - node.x) > 1 || Math.abs(labelY - node.y) > 20;
+    const anchorKey = `${node.pointIndex}:${Math.round(node.y)}`;
+    const stacked = (anchorCounts.get(anchorKey) || 0) > 1;
+    occupiedLabels.push({ x: labelX, y: labelY });
+    nodeLayoutByIndex.set(node.index, {
+      ...node,
+      stacked,
+      displaced,
+      labelX,
+      labelY,
+      handleX: stacked ? labelX : node.x,
+      handleY: stacked ? labelY : node.y,
+      handleWidth: stacked ? labelWidth : 40,
+      handleHeight: stacked ? labelHeight : 40,
     });
   });
   const laidOutNodes = visibleNodes.map((node) => nodeLayoutByIndex.get(node.index) || node);
@@ -1214,14 +1242,9 @@ function V19TrendChart({ row, changes, role, poApproved, orderWeek, channelOptio
   const hover = dragging || hoveredBatch || hoverIndex == null ? null : {
     x: px(hoverIndex), date: dates[hoverIndex], sys: sysValues[hoverIndex], existing: existingValues[hoverIndex], daily: hoverDaily,
   };
-  const tickSegments = 6;
-  const ticks = Array.from(new Set([
-    0,
-    breakIndex,
-    ...Array.from({ length: tickSegments }, (_, index) => (
-      Math.round(breakIndex + ((N - 1 - breakIndex) * (index + 1)) / tickSegments)
-    )),
-  ])).filter((index) => index >= 0 && index < N).sort((a, b) => a - b);
+  const ticks = Array.from(new Set(
+    Array.from({ length: 5 }, (_, index) => indexOfDate(addCalendarMonths(startDate, index))),
+  )).filter((index) => index >= 0 && index < N).sort((a, b) => a - b);
 
   function editDraft(index, patchValue) {
     const current = draft?.index === index ? draft.mod : (mods[index] || {});
@@ -1348,7 +1371,7 @@ function V19TrendChart({ row, changes, role, poApproved, orderWeek, channelOptio
     style: { position: 'relative', width: '100%', maxWidth: 2200, minWidth: 0, margin: '0 auto', padding: '12px 12px 16px', background: '#fbfcfe', boxSizing: 'border-box', whiteSpace: 'normal' },
   },
     h('div', { style: { display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', fontSize: 13.5, fontWeight: 700, marginBottom: 8 } },
-      '📈 到货 & 安全库存天数趋势（≈3 个月） · ', h('span', { style: { color: '#3370ff' } }, `${row.product.model || '-'} · ${row.product.country || '-'}`),
+      '📈 到货 & 安全库存天数趋势（未来 4 个月） · ', h('span', { style: { color: '#3370ff' } }, `${row.product.model || '-'} · ${row.product.country || '-'}`),
       h(Button, { size: 'small', onClick: toggleSimulation, style: { borderColor: '#8b6cf0', background: simOn ? '#8b6cf0' : '#f6f3ff', color: simOn ? '#fff' : '#5b3fc4', borderRadius: 6, fontSize: 12, fontWeight: 700 } }, '🧪 模拟演算'),
       h('span', { style: { fontWeight: 400, fontSize: 11.5, color: '#8a9099' } }, '节点 = 未来批次（W1–W7）· 点看详情 / 改渠道 · 拖改量与时间 · 拖后确认才保留')),
     h('div', { style: { margin: '2px 0 6px', fontSize: 13, color: '#5a6169', background: '#f7f9fc', border: '1px solid #e6ebf2', borderRadius: 7, padding: '6px 12px' } },
@@ -1386,21 +1409,20 @@ function V19TrendChart({ row, changes, role, poApproved, orderWeek, channelOptio
           return h('text', { key: `activity-${period.name}`, x: px(Math.max(0, start)) + 3, y: T + 13, fontSize: 11, fill: '#b06a00', pointerEvents: 'none' }, period.name);
         }).filter(Boolean),
         ...ticks.map((index) => h('text', { key: `x-${index}`, x: px(index), y: H - 10, textAnchor: 'middle', fontSize: 11, fill: '#98a1ad', pointerEvents: 'none' }, shortDate(dates[index]))),
-        h('text', { x: px(breakIndex), y: 13, textAnchor: 'middle', fontSize: 11, fill: '#98a1ad', pointerEvents: 'none' }, '↤ 空档压缩 ｜ 可调整区 ↦'),
-        h('text', { x: px(breakIndex), y: H - 28, textAnchor: 'middle', fontSize: 15, fill: '#98a1ad', pointerEvents: 'none' }, '≈'),
         ...laidOutNodes.flatMap((node) => {
           const locked = node.index === 0; const modified = changedKeys.includes(String(node.index)) || (draft?.pending && draft.index === node.index); const hasQty = numberValue(node.qty) > 0;
           const labelX = node.labelX == null ? node.x : node.labelX;
           const labelY = node.labelY == null ? Math.max(T + 16, node.y - (26 + (node.index % 3) * 14)) : node.labelY;
           const textStyle = { textAnchor: 'middle', paintOrder: 'stroke', stroke: '#fff', strokeWidth: 3.8, strokeLinejoin: 'round', pointerEvents: 'none' };
           return [
-            node.stacked ? h('line', { key: `node-link-${node.index}`, x1: node.x, y1: node.y, x2: labelX, y2: labelY - 4, stroke: modified ? '#8b6cf0' : '#9aa6b2', strokeWidth: 1, strokeDasharray: '2 3', opacity: 0.72, pointerEvents: 'none' }) : null,
-            node.stacked ? h('rect', { key: `node-label-bg-${node.index}`, x: labelX - 31, y: labelY - 15, width: 62, height: 33, rx: 5, fill: modified ? '#f6f3ff' : '#fff', stroke: modified ? '#8b6cf0' : '#d9dee7', strokeWidth: 1, opacity: 0.96, pointerEvents: 'none' }) : null,
-            h('circle', { key: `node-dot-${node.index}`, cx: node.x, cy: node.y, r: hasQty ? 6.5 : 4.2, fill: modified ? '#f6f3ff' : hasQty ? '#fff' : '#f8fafc', stroke: locked ? '#b06a00' : '#5b7cfa', strokeWidth: hasQty ? 2.3 : 1.4, strokeDasharray: locked ? undefined : '3 2', opacity: hasQty ? 1 : 0.45, pointerEvents: 'none' }),
+            node.displaced ? h('line', { key: `node-link-${node.index}`, x1: node.x, y1: node.y, x2: labelX, y2: labelY - 4, stroke: modified ? '#8b6cf0' : '#9aa6b2', strokeWidth: 1, strokeDasharray: '2 3', opacity: 0.72, pointerEvents: 'none' }) : null,
+            node.displaced ? h('rect', { key: `node-label-bg-${node.index}`, x: labelX - labelWidth / 2, y: labelY - 16, width: labelWidth, height: labelHeight, rx: 5, fill: modified ? '#f6f3ff' : '#fff', stroke: modified ? '#8b6cf0' : '#d9dee7', strokeWidth: 1, opacity: 0.96, pointerEvents: 'none' }) : null,
+            h('circle', { key: `node-dot-${node.index}`, cx: node.x, cy: node.y, r: hasQty ? 6.5 : 4.2, fill: modified ? '#f6f3ff' : hasQty ? '#fff' : '#f8fafc', stroke: modified ? '#8b6cf0' : locked ? '#b06a00' : '#5b7cfa', strokeWidth: hasQty ? 2.3 : 1.4, strokeDasharray: locked || modified ? undefined : '3 2', opacity: hasQty ? 1 : 0.45, pointerEvents: 'none' }),
             h('text', { key: `node-qty-${node.index}`, x: labelX, y: labelY, fill: modified ? '#5b3fc4' : locked ? '#8a5a00' : '#1f2329', fontSize: modified ? 12.6 : 12, fontWeight: 800, ...textStyle }, `W${node.index + 1} · ${fmt(node.qty)}${modified ? '*' : ''}`),
             h('text', { key: `node-date-${node.index}`, x: labelX, y: labelY + 14, fill: modified ? '#6b4fd0' : '#667085', fontSize: 10.5, fontWeight: 700, ...textStyle }, `到货 ${shortDate(node.arrival)}`),
           ].filter(Boolean);
-        })),
+        }),
+        ),
       ...laidOutNodes.map((node) => {
         const info = batchInfo(node);
         const stateText = info?.stateKind === 'actual' ? ` · 实际 ${fmt(info.stateQty)} 台` : '';
@@ -1425,7 +1447,7 @@ function V19TrendChart({ row, changes, role, poApproved, orderWeek, channelOptio
       h('span', null, h('i', { style: { display: 'inline-block', width: 18, borderTop: '2px solid #e0a53a', marginRight: 5, verticalAlign: 'middle' } }), hasSaleForecastLine ? '销售预估销量·安全库存天数' : '销售预估销量·安全库存天数(未填,黄线不显示)'),
       h('span', null, h('i', { style: { display: 'inline-block', width: 18, borderTop: '2px dashed #c0392b', marginRight: 5, verticalAlign: 'middle' } }), '7/14 天安全线'),
       h('span', null, h('b', { style: { color: '#1a5fb4' } }, '✈'), '=活动前置建议(悬停看详情)'),
-        h('span', null, '◌ W节点=系统建议 · 第二行=到货日期'),
+        h('span', null, '◌ W节点=到货日期 · 模拟货量从到货日影响曲线'),
       h('span', { style: { color: '#b06a00' } }, '▨ 活动日区间'),
       simOn && (changedKeys.length || draft?.pending) ? h('span', null, h('i', { style: { display: 'inline-block', width: 18, borderTop: '2px dashed #8b5cf0', marginRight: 5, verticalAlign: 'middle' } }), '模拟线') : null),
     selected ? h('div', { style: {
@@ -1601,74 +1623,72 @@ function v19ParseCalculationSnapshot(value) {
   try { return JSON.parse(value); } catch (error) { return null; }
 }
 
-function v19CurrentSuggestionRecalculation(row) {
-  const dailyMap = new Map((row?.dailyRows || []).map((item) => [dateText(item.date), item]));
-  let previousCandidate = 0;
-  const result = new Map();
-  (row?.weeks || []).forEach((week) => {
-    (week?.rows || []).slice().sort((a, b) => dateText(a.date).localeCompare(dateText(b.date))).forEach((plan, index) => {
-      const serviceStart = addDays(plan.add_date, 7);
-      const serviceEnd = addDays(plan.add_date, 13);
-      const serviceDates = Array.from({ length: 7 }, (_, dayIndex) => dateText(addDays(serviceStart, dayIndex)));
-      const serviceRows = serviceDates.map((date) => dailyMap.get(date)).filter(Boolean);
-      const weeklyDemand = serviceRows.reduce((sum, item) => sum + numberValue(item.maybe_sales, numberValue(item.weighted_sales)), 0);
-      const rawInventoryValues = serviceRows
-        .filter((item) => dateText(item.date) === dateText(serviceStart))
-        .map((item) => numberValue(item.v2_inventory, NaN)).filter(Number.isFinite);
-      const rawInventory = rawInventoryValues.length ? Math.max(...rawInventoryValues) : null;
-      const effectiveInventory = rawInventory == null ? null : rawInventory + previousCandidate;
-      const targetDemand = weeklyDemand * 2;
-      const suggestedNumber = serviceRows.length === 7 && effectiveInventory != null
-        ? Math.ceil(Math.max(0, targetDemand - effectiveInventory)) : null;
-      result.set(String(plan.id || `${plan.date}-${index}`), {
-        serviceStart, serviceEnd, demandDays: serviceRows.length, weeklyDemand, targetDemand,
-        rawInventory, previousCandidate, effectiveInventory, suggestedNumber,
-      });
-      previousCandidate += suggestedNumber || 0;
-    });
-  });
-  return result;
-}
-
 function v19SuggestionCalculation(row, week) {
   const plans = week?.rows || [];
   if (!plans.length) return h('div', { style: { padding: '9px 11px', background: '#f7f9fc', color: '#8a9099', fontSize: 12, borderRadius: 6 } }, '该周没有建议计划。');
-  const recalculations = v19CurrentSuggestionRecalculation(row);
   const hasHistoricalPlan = plans.some((plan) => !v19ParseCalculationSnapshot(plan.v2_calculation_snapshot));
   return h('div', { style: { fontSize: 12, color: '#3a4763', lineHeight: 1.7 } },
-    hasHistoricalPlan ? h('div', { style: { marginBottom: 8, padding: '7px 10px', background: '#fff8e6', border: '1px solid #f0c36d', borderRadius: 6, color: '#7a4d00' } }, '历史计划未保存生成时快照；以下按当前 daily_sales.v2 数据复算，仅用于说明当前口径，不代表当时生成输入。') : null,
+    hasHistoricalPlan ? h('div', { style: { marginBottom: 8, padding: '7px 10px', background: '#fff8e6', border: '1px solid #f0c36d', borderRadius: 6, color: '#7a4d00' } }, '历史计划未保存完整计算明细，无法准确还原当时的到货日倒推和执行约束过程。') : null,
     ...plans.map((plan, index) => {
       const snapshot = v19ParseCalculationSnapshot(plan.v2_calculation_snapshot);
-      const current = recalculations.get(String(plan.id || `${plan.date}-${index}`));
       const title = plans.length > 1 ? `计划 ${index + 1} · ${fmt(plan.number)} 台` : `建议 ${fmt(plan.number)} 台`;
       if (snapshot) {
-        const orderWeek = snapshot.cycle_phase === 'ORDER_WEEK';
-        const demandText = orderWeek
-          ? `${fmt(snapshot.first_week_demand, 2)} + ${fmt(snapshot.second_week_demand, 2)} = ${fmt(snapshot.target_demand, 2)}`
-          : `${fmt(snapshot.first_week_demand, 2)} × 2 = ${fmt(snapshot.target_demand, 2)}`;
-        const gapText = orderWeek
-          ? `${fmt(snapshot.target_demand, 2)} − ${fmt(snapshot.inventory_excluding_a1, 2)} − ${fmt(snapshot.a1_committed_number, 2)} = ${fmt(snapshot.gap_before_ceiling, 2)}`
-          : `${fmt(snapshot.target_demand, 2)} − ${fmt(snapshot.raw_inventory_at_service_start, 2)} = ${fmt(snapshot.gap_before_ceiling, 2)}`;
+        const detail = snapshot.recalculation || null;
+        const constraint = snapshot.constraint_layer || {};
+        const orderWeek = !detail && snapshot.cycle_phase === 'ORDER_WEEK';
+        const serviceDemand = numberValue(detail?.coverage_demand_7d ?? (orderWeek ? snapshot.second_week_demand : snapshot.first_week_demand), NaN);
+        const rawGap = numberValue(detail?.raw_new_number_before_constraint ?? snapshot.raw_suggested_number_before_constraint ?? constraint.qty_before_constraint ?? snapshot.gap_before_ceiling, NaN);
+        const priorSurplus = numberValue(detail?.prior_constraint_surplus ?? snapshot.prior_constraint_surplus ?? constraint.prior_constraint_surplus, 0);
+        const adjustedGapSnapshot = numberValue(detail?.adjusted_gap_after_prior_surplus ?? snapshot.adjusted_gap_after_prior_surplus ?? constraint.adjusted_gap_after_prior_surplus, NaN);
+        const theoreticalGap = Number.isFinite(rawGap) ? Math.max(0, rawGap) : NaN;
+        const adjustedGap = Number.isFinite(adjustedGapSnapshot)
+          ? Math.max(0, adjustedGapSnapshot)
+          : Number.isFinite(theoreticalGap) ? Math.max(0, theoreticalGap - priorSurplus) : NaN;
+        const unitsPerBox = numberValue(detail?.constraint_units_per_box ?? snapshot.constraint_units_per_box ?? constraint.units_per_box, NaN);
+        const minShipQty = numberValue(detail?.constraint_min_ship_qty ?? snapshot.constraint_min_ship_qty ?? constraint.min_ship_qty, 0);
+        const storedBoxedQty = numberValue(constraint.qty_boxed_after_prior_surplus ?? constraint.qty_boxed, NaN);
+        const boxedQty = Number.isFinite(storedBoxedQty) ? storedBoxedQty
+          : Number.isFinite(adjustedGap)
+            ? (adjustedGap <= 0 ? 0 : Number.isFinite(unitsPerBox) && unitsPerBox > 0 ? Math.ceil(adjustedGap / unitsPerBox) * unitsPerBox : adjustedGap)
+            : NaN;
+        const effectiveMinQty = numberValue(constraint.min_qty_effective, Number.isFinite(unitsPerBox) && unitsPerBox > 0 && minShipQty > 0
+          ? Math.ceil(minShipQty / unitsPerBox) * unitsPerBox : minShipQty);
+        const finalQty = numberValue(detail?.new_number ?? snapshot.suggested_number ?? constraint.qty_final ?? plan.number);
+        const serviceStart = detail?.service_start_date || (orderWeek ? snapshot.second_service_start_date : snapshot.service_start_date) || '-';
+        const serviceEnd = detail?.service_end_date || (orderWeek ? snapshot.second_service_end_date : snapshot.service_end_date) || '-';
+        const demandDays = detail ? 7 : numberValue(orderWeek ? snapshot.second_week_demand_days : snapshot.first_week_demand_days, 7);
+        const requiredAtAdd = numberValue(detail?.required_inventory_at_add_date, NaN);
+        const inventoryBeforeAdd = Number.isFinite(requiredAtAdd) && Number.isFinite(theoreticalGap)
+          ? Math.max(0, requiredAtAdd - theoreticalGap)
+          : NaN;
+        const inventoryWithConstraintSurplus = numberValue(
+          orderWeek ? snapshot.raw_inventory_at_second_service_start : snapshot.raw_inventory_at_service_start,
+          NaN,
+        );
+        const serviceStartInventory = inventoryWithConstraintSurplus;
         return h('div', { key: plan.id || index, style: { background: '#f7f9fc', border: '1px solid #e1e7ef', borderRadius: 6, padding: '8px 11px', marginTop: index ? 8 : 0 } },
           h('div', { style: { fontWeight: 700 } }, title),
-          h('div', null, `服务期：${snapshot.service_start_date || '-'}～${snapshot.service_end_date || '-'} · 完整数据 ${fmt(snapshot.first_week_demand_days)} 天`),
-          h('div', null, `${orderWeek ? '两周需求' : '目标14天需求'}：${demandText}`),
-          h('div', null, `服务期原始库存：${fmt(snapshot.raw_inventory_at_service_start, 2)}`),
-          orderWeek ? h('div', null, `扣除已承诺 A1 后库存：${fmt(snapshot.raw_inventory_at_service_start, 2)} − ${fmt(snapshot.a1_committed_number, 2)} = ${fmt(snapshot.inventory_excluding_a1, 2)}`) : null,
-          h('div', null, `需求缺口：${gapText}`),
-          h('div', { style: { fontWeight: 700, color: '#1d5fc4' } }, `建议数量：向上取整 max(0, ${fmt(snapshot.gap_before_ceiling, 2)}) = ${fmt(snapshot.suggested_number)} 台`));
+          Number.isFinite(serviceDemand) ? h('div', null, `服务期：${serviceStart}～${serviceEnd}，完整数据 ${fmt(demandDays)} 天，需要 ${fmt(serviceDemand, 2)} 台`) : null,
+          detail && Number.isFinite(requiredAtAdd) ? h('div', null, `从服务期倒推，到货日需要 ${fmt(requiredAtAdd, 2)} 台`) : null,
+          detail && Number.isFinite(inventoryBeforeAdd) ? h('div', null, `不发本批时，到货日前预计可用库存：${fmt(inventoryBeforeAdd, 2)} 台`) : null,
+          detail && Number.isFinite(theoreticalGap) && Number.isFinite(requiredAtAdd) && Number.isFinite(inventoryBeforeAdd)
+            ? h('div', null, `原始缺口：max(0, ${fmt(requiredAtAdd, 2)} − ${fmt(inventoryBeforeAdd, 2)}) = ${fmt(theoreticalGap, 2)} 台`) : null,
+          !detail && Number.isFinite(serviceStartInventory) ? h('div', null, `服务期开始前预计可用库存：${fmt(serviceStartInventory, 2)} 台`) : null,
+          !detail && Number.isFinite(theoreticalGap) && Number.isFinite(serviceDemand) && Number.isFinite(serviceStartInventory)
+            ? h('div', null, `理论缺口：max(0, ${fmt(serviceDemand, 2)} − ${fmt(serviceStartInventory, 2)}) = ${fmt(theoreticalGap, 2)} 台`) : null,
+          Number.isFinite(adjustedGap) ? h('div', null, `前周多发余量抵扣：${fmt(priorSurplus, 2)} 台，抵扣后仍需 ${fmt(adjustedGap, 2)} 台`) : null,
+          Number.isFinite(boxedQty) && adjustedGap > 0 && Number.isFinite(unitsPerBox) && unitsPerBox > 0
+            ? h('div', null, `整箱：每箱 ${fmt(unitsPerBox)} 台，ceil(${fmt(adjustedGap, 2)} ÷ ${fmt(unitsPerBox)}) = ${fmt(boxedQty / unitsPerBox)} 箱，共 ${fmt(boxedQty)} 台`) : null,
+          Number.isFinite(boxedQty) && adjustedGap > 0 && (!Number.isFinite(unitsPerBox) || unitsPerBox <= 0)
+            ? h('div', null, `箱入数未配置，按 ${fmt(boxedQty)} 台计算`) : null,
+          minShipQty > 0 && adjustedGap > 0 ? h('div', null, boxedQty < effectiveMinQty
+            ? `最低发货量 ${fmt(minShipQty)} 台，补量后按 ${fmt(effectiveMinQty)} 台执行`
+            : `最低发货量 ${fmt(minShipQty)} 台，当前已满足`) : null,
+          h('div', { style: { fontWeight: 700, color: '#1d5fc4' } }, `最终建议数量：${fmt(finalQty)} 台`));
       }
       return h('div', { key: plan.id || index, style: { background: '#f7f9fc', border: '1px solid #e1e7ef', borderRadius: 6, padding: '8px 11px', marginTop: index ? 8 : 0 } },
-        h('div', { style: { fontWeight: 700 } }, `${title}（当前复算）`),
-        h('div', null, `服务期：${dateText(current?.serviceStart) || '-'}～${dateText(current?.serviceEnd) || '-'} · 当前完整数据 ${fmt(current?.demandDays)} 天`),
-        h('div', null, `当前服务周需求：${fmt(current?.weeklyDemand, 2)}；目标14天需求：${fmt(current?.weeklyDemand, 2)} × 2 = ${fmt(current?.targetDemand, 2)}`),
-        h('div', null, `当前服务期原始库存：${current?.rawInventory == null ? '-' : fmt(current.rawInventory, 2)}`),
-        h('div', null, `前序当前复算候选量：${fmt(current?.previousCandidate, 2)}`),
-        h('div', null, `当前有效库存：${current?.rawInventory == null ? '-' : `${fmt(current.rawInventory, 2)} + ${fmt(current.previousCandidate, 2)} = ${fmt(current.effectiveInventory, 2)}`}`),
-        h('div', { style: { fontWeight: 700, color: '#1d5fc4' } }, current?.suggestedNumber == null
-          ? '当前复算：数据不足，无法计算'
-          : `当前复算建议：向上取整 max(0, ${fmt(current.targetDemand, 2)} − ${fmt(current.effectiveInventory, 2)}) = ${fmt(current.suggestedNumber)} 台`),
-        h('div', { style: { color: '#8a9099' } }, `表内历史建议仍为 ${fmt(plan.number)} 台；两者不一致时，以“缺少当时快照、当前基础数据已变化”解释，不改写历史数量。`));
+        h('div', { style: { fontWeight: 700 } }, title),
+        h('div', { style: { color: '#8a9099' } }, `表内建议为 ${fmt(plan.number)} 台；该历史记录缺少生成时计算明细，无法准确拆解服务期需求、预计库存及执行约束。`));
     }));
 }
 
@@ -1782,7 +1802,7 @@ function V19Table({ rows, allScopeRows, changes, confirmedRows, role, orderWeek,
 function ShipmentEvolutionBlockV19() {
   const [params, setParams] = useState(readParamsSync); const [products, setProducts] = useState([]); const [catalogReady, setCatalogReady] = useState(false); const [catalogLoading, setCatalogLoading] = useState(true); const [catalogError, setCatalogError] = useState('');
   const [selectedSale, setSelectedSale] = useState(CAN_SELECT_SALE ? ALL_SALES : CURRENT_USERNAME); const [shops, setShops] = useState([]); const [dailyRows, setDailyRows] = useState([]); const [totalRows, setTotalRows] = useState([]); const [shipments, setShipments] = useState([]); const [actualPlans, setActualPlans] = useState([]); const [weeklySnapshots, setWeeklySnapshots] = useState([]); const [realSupplies, setRealSupplies] = useState([]); const [waterRows, setWaterRows] = useState([]); const [modelLevels, setModelLevels] = useState([]); const [logisticsLeads, setLogisticsLeads] = useState([]); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [refreshSeed, setRefreshSeed] = useState(0); const requestSequence = useRef(0);
-  const [role, setRole] = useState(DEFAULT_ROLE); const [mine, setMine] = useState(false); const orderWeek = isCurrentOrderWeek(); const [labelFilter, setLabelFilter] = useState([]); const [onlyWarning, setOnlyWarning] = useState(false); const [onlyChanged, setOnlyChanged] = useState(false); const [changes, setChanges] = useState({}); const [confirmedRows, setConfirmedRows] = useState({}); const [detail, setDetail] = useState(null); const [editTarget, setEditTarget] = useState(null); const [auditNote, setAuditNote] = useState(''); const [actionLoading, setActionLoading] = useState(false); const [batchOpen, setBatchOpen] = useState(false); const [batchSigned, setBatchSigned] = useState(null); const [poGenerated, setPoGenerated] = useState(false); const [poApproved, setPoApproved] = useState(false);
+  const [role, setRole] = useState(DEFAULT_ROLE); const [mine, setMine] = useState(false); const orderWeek = isCurrentOrderWeek(); const [siteFilter, setSiteFilter] = useState(''); const [modelFilter, setModelFilter] = useState(''); const [labelFilter, setLabelFilter] = useState([]); const [onlyWarning, setOnlyWarning] = useState(false); const [onlyChanged, setOnlyChanged] = useState(false); const [changes, setChanges] = useState({}); const [confirmedRows, setConfirmedRows] = useState({}); const [detail, setDetail] = useState(null); const [editTarget, setEditTarget] = useState(null); const [auditNote, setAuditNote] = useState(''); const [actionLoading, setActionLoading] = useState(false); const [batchOpen, setBatchOpen] = useState(false); const [batchSigned, setBatchSigned] = useState(null); const [poGenerated, setPoGenerated] = useState(false); const [poApproved, setPoApproved] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   useEffect(() => { let active = true; Promise.all([resolveParams(), requestEligibleProducts()]).then(([initial, rows]) => { if (!active) return; setProducts(rows); const names = new Set(rows.map((item) => item.sale_owner).filter(Boolean)); const requested = rows.find((item) => item.asin === initial.asin && item.country === initial.country); const sale = CAN_SELECT_SALE ? (initial.sale === ALL_SALES || names.has(initial.sale) ? initial.sale : requested?.sale_owner || ALL_SALES) : CURRENT_USERNAME; setSelectedSale(sale); setParams({ ...initial, sale, shop: TOTAL_SHOP }); if (!initial.asin && !initial.country && (initial.sale !== sale || initial.shop !== TOTAL_SHOP)) replaceSaleParams(sale, TOTAL_SHOP); if (!rows.length) setCatalogError(!AVAILABLE_ROLE_KEYS.length ? '当前用户不属于管理员、销售主管、物流仓储部或销售部门，本页面按只读无数据处理。' : '当前查看范围内没有状态为普通、新品或重点的非变体 ASIN。'); }).catch((requestError) => setCatalogError(requestError?.message || String(requestError))).finally(() => { if (active) { setCatalogLoading(false); setCatalogReady(true); } }); return () => { active = false; }; }, []);
   useEffect(() => {
@@ -1792,12 +1812,14 @@ function ShipmentEvolutionBlockV19() {
       const next = readParamsSync(); const names = new Set(products.map((item) => item.sale_owner).filter(Boolean));
       const requested = products.find((item) => item.asin === next.asin && item.country === next.country);
       const sale = CAN_SELECT_SALE ? (next.sale === ALL_SALES || names.has(next.sale) ? next.sale : requested?.sale_owner || ALL_SALES) : CURRENT_USERNAME;
-      setSelectedSale(sale); setParams({ ...next, sale, shop: TOTAL_SHOP }); setChanges({}); setConfirmedRows({});
+      setSelectedSale(sale); setSiteFilter(''); setModelFilter(''); setParams({ ...next, sale, shop: TOTAL_SHOP }); setChanges({}); setConfirmedRows({});
     }));
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe?.());
   }, [catalogReady, products]);
   const saleOptions = useMemo(() => [{ value: ALL_SALES, label: '全部销售' }, ...Array.from(new Set(products.map((item) => item.sale_owner).filter(Boolean))).sort((a, b) => String(a).localeCompare(String(b), 'zh-CN')).map((name) => ({ value: name, label: name }))], [products]);
   const scopedProducts = useMemo(() => CAN_SELECT_SALE && selectedSale !== ALL_SALES ? products.filter((item) => item.sale_owner === selectedSale) : products, [products, selectedSale]); const scopeSignature = useMemo(() => scopedProducts.map(productKey).join('|'), [scopedProducts]);
+  const siteOptions = useMemo(() => Array.from(new Set(scopedProducts.map((item) => item.country).filter(Boolean))).sort((a, b) => String(a).localeCompare(String(b), 'zh-CN')).map((value) => ({ value, label: value })), [scopedProducts]);
+  const modelOptions = useMemo(() => Array.from(new Set(scopedProducts.map((item) => item.model).filter(Boolean))).sort((a, b) => String(a).localeCompare(String(b), 'zh-CN', { numeric: true })).map((value) => ({ value, label: value })), [scopedProducts]);
   const shopScopeProducts = useMemo(() => {
     if (!params.asin) return scopedProducts;
     const matched = scopedProducts.filter((item) => item.asin === params.asin && (!params.country || item.country === params.country));
@@ -1838,9 +1860,9 @@ function ShipmentEvolutionBlockV19() {
   useEffect(() => { loadData(); }, [loadData]);
   const productViews = useMemo(() => scopedProducts.map((product) => { const key = productKey(product); const dataKey = rowProductKey(product); const matches = (item) => rowProductKey(item) === dataKey; const productDaily = dailyRows.filter(matches); const productTotal = totalRows.filter(matches); const productPlans = shipments.filter(matches); const productActualPlans = actualPlans.filter(matches); const productWeeklySnapshots = weeklySnapshots.filter(matches); const productRealSupplies = realSupplies.filter(matches); const waterRow = waterRows.find(matches) || null; const current = productDaily.find((item) => dateText(item.date) === todayText()) || latestOnOrBefore(productDaily, todayText()); const total = productTotal.find((item) => dateText(item.date) === todayText()) || latestOnOrBefore(productTotal, todayText()); return { key, dataKey, product, dailyRows: productDaily, totalRow: total, waterRow, summaryRow: current, ratio: ratioInfo(waterRow), levelName: modelLevels.find((item) => item.country === product.country && item.model === product.model)?.level_name || '', realSupplyRows: productRealSupplies, weeks: buildWeeks(productPlans, productRealSupplies, productActualPlans, productWeeklySnapshots), netWeeks: buildWeeks(productPlans, productRealSupplies, productActualPlans, productWeeklySnapshots), noShopData: !current }; }), [scopedProducts, dailyRows, totalRows, shipments, actualPlans, weeklySnapshots, realSupplies, waterRows, modelLevels]);
   const counts = useMemo(() => { const result = { sale: orderWeek ? productViews.filter((row) => !confirmedRows[row.key]).length : 0, lead: 0, ops: 0, final: 0 }; Object.values(changes).forEach((change) => { const owner = V19_STATUS_OWNER[change.status]; if (owner) result[owner] += 1; }); if (!batchSigned) result.lead += 1; if (orderWeek && !poGenerated && !poApproved) result.ops += 1; if (orderWeek && !poApproved) result.final += 1; return result; }, [productViews, confirmedRows, changes, batchSigned, orderWeek, poGenerated, poApproved]);
-  const visibleRows = useMemo(() => productViews.filter((row) => !labelFilter.length || labelFilter.includes(v19LifeName(row))).filter((row) => !onlyWarning || v19Warning(row)).filter((row) => !onlyChanged || v19Changed(row, changes)).filter((row) => { if (!mine) return true; if (role === 'sale' && orderWeek && !confirmedRows[row.key]) return true; return row.weeks.some((week, index) => V19_STATUS_OWNER[changes[v19ChangeKey(row.key, index)]?.status] === role); }), [productViews, labelFilter, onlyWarning, onlyChanged, mine, role, orderWeek, confirmedRows, changes]);
+  const visibleRows = useMemo(() => productViews.filter((row) => !siteFilter || row.product.country === siteFilter).filter((row) => !modelFilter || row.product.model === modelFilter).filter((row) => !labelFilter.length || labelFilter.includes(v19LifeName(row))).filter((row) => !onlyWarning || v19Warning(row)).filter((row) => !onlyChanged || v19Changed(row, changes)).filter((row) => { if (!mine) return true; if (role === 'sale' && orderWeek && !confirmedRows[row.key]) return true; return row.weeks.some((week, index) => V19_STATUS_OWNER[changes[v19ChangeKey(row.key, index)]?.status] === role); }), [productViews, siteFilter, modelFilter, labelFilter, onlyWarning, onlyChanged, mine, role, orderWeek, confirmedRows, changes]);
   const inflight = Object.values(changes).filter((change) => !['ok', 'yel'].includes(change.status)).length;
-  function changeSale(sale) { setSelectedSale(sale); setParams({ sale, shop: TOTAL_SHOP }); setChanges({}); setConfirmedRows({}); replaceSaleParams(sale, TOTAL_SHOP); }
+  function changeSale(sale) { setSelectedSale(sale); setSiteFilter(''); setModelFilter(''); setParams({ sale, shop: TOTAL_SHOP }); setChanges({}); setConfirmedRows({}); replaceSaleParams(sale, TOTAL_SHOP); }
   function openEdit(row, weekIndexOrBundle, modOrEvidence = {}) {
     if (Array.isArray(weekIndexOrBundle)) {
       setEditTarget({ row, bundle: weekIndexOrBundle, evidence: String(modOrEvidence || ''), changes, role });
@@ -1972,6 +1994,8 @@ function ShipmentEvolutionBlockV19() {
           h(V19ScopeControls, { selectedSale, saleOptions, productCount: scopedProducts.length, loading: catalogLoading || loading, onSaleChange: changeSale })),
         h('div', { style: { display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', paddingLeft: 12, borderLeft: '1px solid #dfe4eb' } },
           h('span', { style: { fontSize: 12.5, fontWeight: 700, color: '#3a4763' } }, '筛选'),
+          h(Select, { allowClear: true, showSearch: true, optionFilterProp: 'label', size: 'small', value: siteFilter || undefined, placeholder: '全部站点', onChange: (value) => setSiteFilter(value || ''), options: siteOptions, style: { width: 140 } }),
+          h(Select, { allowClear: true, showSearch: true, optionFilterProp: 'label', size: 'small', value: modelFilter || undefined, placeholder: '全部型号', onChange: (value) => setModelFilter(value || ''), options: modelOptions, style: { width: 180 } }),
           h(Select, { mode: 'multiple', allowClear: true, maxTagCount: 'responsive', size: 'small', value: labelFilter, placeholder: '全部产品标签', onChange: setLabelFilter, options: ['新品期', '成长期', '成熟期', '淘汰期'].map((value) => ({ value, label: value })), style: { width: 260 } }),
           h(Checkbox, { checked: onlyWarning, onChange: (event) => setOnlyWarning(event.target.checked) }, '仅看预警'),
           h(Checkbox, { checked: onlyChanged, onChange: (event) => setOnlyChanged(event.target.checked) }, '仅看本周动过的'),
