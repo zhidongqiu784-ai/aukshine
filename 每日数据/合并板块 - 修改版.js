@@ -352,7 +352,7 @@
     { key:'order_link_ad_optimization_logs',             src:'order_link', field:'ad_optimization_logs',               label:'广告优化操作动作记录 (大方向记录)',         hidden:false, pinned:false, width:160, editable:true, richEdit:true, columnGroup:'link_notes' },
     { key:'weekly_adv_rate',                    src:'weekly', field:'adv_rate',                     label:'广告订单量占比',  hidden:false, pinned:false, width:110, editable:false, columnGroup:'ad_data' },
     { key:'weekly_natural_single_ratio',        src:'order_link', field:'onsite_organic_orders_ratio', label:'纯站内自然单占比',      hidden:false, pinned:false, width:120, editable:false, columnGroup:'ad_data' },
-    { key:'weekly_impressions',                 src:'weekly', field:'impressions',                  label:'曝光量',          hidden:false, pinned:false, width:80,  editable:false, columnGroup:'ad_data' },
+    { key:'weekly_impressions',                 src:'weekly', field:'impressions',                  label:'广告曝光量',          hidden:false, pinned:false, width:80,  editable:false, columnGroup:'ad_data' },
     { key:'weekly_weekly_ad_total_budget',      src:'weekly', field:'weekly_ad_total_budget',       label:'本周广告总预算',  hidden:false, pinned:false, width:130, editable:false, columnGroup:'ad_data' },
     { key:'weekly_guanggaohuafei',              src:'weekly', field:'guanggaohuafei',               label:'广告花费',        hidden:false, pinned:false, width:90,  editable:false, columnGroup:'ad_data' },
     { key:'weekly_guanggaodan',                 src:'weekly', field:'guanggaodan',                  label:'广告总单量',      hidden:false, pinned:false, width:90,  editable:false, columnGroup:'ad_data' },
@@ -453,7 +453,7 @@
     { key:'order_link_onsite_organic_orders', src:'order_link', field:'onsite_organic_orders', label:'③站内纯自然单',          group:'order_structure',    axis:'left',  valueType:'integer' },
     { key:'order_link_onsite_ad_orders',    src:'order_link', field:'onsite_ad_orders',     label:'④站内总广告单',            group:'order_structure',    axis:'left',  valueType:'integer' },
     { key:'weekly_adv_rate',                src:'weekly', field:'adv_rate',                label:'广告订单量占比',            group:'ad_data',            axis:'right', valueType:'percent' },
-    { key:'weekly_impressions',             src:'weekly', field:'impressions',             label:'曝光量',                    group:'ad_data',            axis:'left',  valueType:'integer' },
+    { key:'weekly_impressions',             src:'weekly', field:'impressions',             label:'广告曝光量',                    group:'ad_data',            axis:'left',  valueType:'integer' },
     { key:'weekly_guanggaodianji',          src:'weekly', field:'guanggaodianji',          label:'广告点击量',                group:'ad_data',            axis:'left',  valueType:'integer' },
     { key:'weekly_guanggaohuafei',          src:'weekly', field:'guanggaohuafei',          label:'广告花费',                  group:'ad_data',            axis:'left',  valueType:'decimal' },
     { key:'weekly_ad_sales_amount',         src:'weekly', field:'ad_sales_amount',         label:'广告销售额',                group:'ad_data',            axis:'left',  valueType:'decimal' },
@@ -939,6 +939,8 @@
   };
 
   const WEEKLY_PERFORMANCE_UPDATE_TOOLTIP_TEXT = '每天更新2次（早上8点、16点），每次更新过去60天的数据；';
+  const WEEKLY_PERFORMANCE_SALES_DIRECT_TOOLTIP_TEXT = '该数据由系统定时同步，无需手工填写。';
+  const WEEKLY_PERFORMANCE_SALES_CALCULATED_TOOLTIP_TEXT = '该指标由系统定时计算并同步，无需手工填写。';
   const WEEKLY_PERFORMANCE_DIRECT_VALUE_FIELDS = new Set([
     'sales', 'guanggaodan', 'zongliuliang', 'guanggaodianji', 'guanggaohuafei',
     'ranking', 'reviews_count', 'avg_star', 'prev_star', 'prev_rank',
@@ -1012,17 +1014,25 @@
     weekly_ad_total_budget: {
       title: '本周广告总预算',
       formula: [
-        '日合并行：目标 CPU × 本周目标拆解单量合计。',
-        '周汇总行：本周广告花费合计 ÷ 日合并行本周广告总预算。',
+        '日明细：直接显示数据表中的本周广告总预算，无需手工填写。',
+        '周汇总：系统计算本周预算，并显示本周广告花费占预算的比例。',
       ],
-      emptyRules: ['日合并行：目标 CPU 为空或本周目标拆解单量合计为空', '周汇总行：本周广告花费为空或日合并行本周广告总预算为空/为 0'],
+      emptyRules: [
+        '日明细：weekly_performance.weekly_ad_total_budget 为空',
+        '周汇总预算：目标 CPU 或本周目标拆解单量合计为空',
+        '周汇总显示比例：本周广告花费为空，或周汇总预算为空/为 0',
+      ],
       fields: [
+        { label: '日明细读取字段', field: 'weekly_performance.weekly_ad_total_budget' },
+        { label: '日明细页面 JS 处理', field: '仅读取，不计算、不回写' },
         { label: '目标 CPU', field: 'target_default.ideal_cpu_by_margin' },
         { label: '本周目标拆解单量合计', field: 'target_management.target_order_qty（同一自然周汇总）' },
         { label: '本周广告花费合计', field: 'weekly_performance.guanggaohuafei（同一自然周汇总）' },
-        { label: '日合并行本周广告总预算', field: 'daily_weekly_summary.merge_summary_data.weekly_ad_total_budget' },
+        { label: '周汇总预算公式', field: '目标 CPU × 本周目标拆解单量合计' },
+        { label: '周汇总显示公式', field: '本周广告花费合计 ÷ 周汇总预算' },
       ],
-      writeBackField: 'daily_weekly_summary.merge_summary_data.weekly_ad_total_budget',
+      writeBackField: 'daily_weekly_summary.merge_summary_data.weekly_ad_total_budget（仅周汇总）',
+      salesSectionTitle: '销售说明',
     },
     weekly_target_completion_rate: {
       title: '本周目标完成率',
@@ -1308,13 +1318,19 @@
     },
     session_conversion_rate: {
       title: '会话转化率',
-      formula: '实际总单量 ÷ 汇总流量-会话量，并保留 4 位小数。',
+      formula: [
+        '该指标由页面自动计算。',
+        '计算口径：实际总单量 ÷ 汇总流量-会话量。',
+      ],
       emptyRules: ['实际总单量为空', '汇总流量-会话量为空或为 0'],
       fields: [
+        { label: '生成方式', field: '页面 JS 计算并保留 4 位小数' },
+        { label: '计算公式', field: 'round(sales ÷ zongliuliang, 4)' },
         { label: '实际总单量', field: 'weekly_performance.sales' },
         { label: '汇总流量-会话量', field: 'weekly_performance.zongliuliang' },
       ],
       writeBackField: 'weekly_performance.session_conversion_rate',
+      salesSectionTitle: '销售说明',
     },
     order_link_real_session_conversion_rate: {
       title: '真实会话转化率（剔除测评单）',
@@ -3022,7 +3038,7 @@
     const uploadFile = async (file) => {
       setUploading(true);
       try {
-        const formData = new window.FormData();
+        const formData = new FormData();
         formData.append('file', file);
         const res = await ctx.request({ url: 'attachments:upload', method: 'post', data: formData, headers: { 'Content-Type': 'multipart/form-data' } });
         const url = res?.data?.data?.url || res?.data?.url;
@@ -3914,7 +3930,7 @@
 
     const showFormulaProgress = useCallback((progress) => {
       if (formulaProgressFinishTimerRef.current) {
-        window.clearTimeout(formulaProgressFinishTimerRef.current);
+        clearTimeout(formulaProgressFinishTimerRef.current);
         formulaProgressFinishTimerRef.current = null;
       }
       const label = typeof progress === 'string' ? progress : (progress?.label || '正在同步公式...');
@@ -3926,11 +3942,11 @@
 
     const finishFormulaProgress = useCallback((label = '公式同步完成') => {
       if (formulaProgressFinishTimerRef.current) {
-        window.clearTimeout(formulaProgressFinishTimerRef.current);
+        clearTimeout(formulaProgressFinishTimerRef.current);
         formulaProgressFinishTimerRef.current = null;
       }
       setFormulaProgress({ active: true, label, percent: 100 });
-      formulaProgressFinishTimerRef.current = window.setTimeout(() => {
+      formulaProgressFinishTimerRef.current = setTimeout(() => {
         formulaProgressFinishTimerRef.current = null;
         setFormulaProgress({ active: false, label: '', percent: 0 });
       }, 900);
@@ -3938,7 +3954,7 @@
 
     const resetFormulaProgress = useCallback(() => {
       if (formulaProgressFinishTimerRef.current) {
-        window.clearTimeout(formulaProgressFinishTimerRef.current);
+        clearTimeout(formulaProgressFinishTimerRef.current);
         formulaProgressFinishTimerRef.current = null;
       }
       setFormulaProgress({ active: false, label: '', percent: 0 });
@@ -4082,7 +4098,6 @@
         const asinCountry = row?.asin_country || (row?.asin && row?.country ? `${row.asin}_${row.country}` : '');
         const dateKey = toDateKey(row?.date);
         if (!rowKey || !asinCountry || !dateKey) return;
-        result[rowKey] = 0;
         dailyRowMeta[rowKey] = { asinCountry, dateKey };
         if (!asinCountryToDailyKeys[asinCountry]) asinCountryToDailyKeys[asinCountry] = new Set();
         asinCountryToDailyKeys[asinCountry].add(rowKey);
@@ -4104,6 +4119,7 @@
         [...asinCountryToDailyKeys[asinCountry]].forEach((dailyKey) => {
           const dateKey = dailyRowMeta[dailyKey]?.dateKey;
           if (!dateKey) return;
+          if (!Object.prototype.hasOwnProperty.call(result, dailyKey)) result[dailyKey] = 0;
           if (!rsgKeyToDailyKeysByDate[code][dateKey]) rsgKeyToDailyKeysByDate[code][dateKey] = new Set();
           rsgKeyToDailyKeysByDate[code][dateKey].add(dailyKey);
         });
@@ -4237,7 +4253,7 @@
         if (row?.country_asin_week_range) existingMap[row.country_asin_week_range] = row;
       });
 
-      await Promise.allSettled(summaries.map((summary) => {
+      const persistResults = await Promise.allSettled(summaries.map((summary) => {
         const payload = {
           country_asin_week_range: summary.country_asin_week_range,
           country: summary.country || null,
@@ -4268,6 +4284,11 @@
           data: payload,
         });
       }));
+      const persistFailures = persistResults.filter((result) => result.status === 'rejected');
+      if (persistFailures.length) {
+        const firstReason = persistFailures[0]?.reason?.message || '未知错误';
+        throw new Error(`${persistFailures.length}/${summaries.length} 条周汇总写入失败：${firstReason}`);
+      }
 
       const refreshedRows = await fetchAllByIn(`${WEEKLY_SUMMARY_COLLECTION}:list`, 'country_asin_week_range', keys, {
         chunkSize: 80,
@@ -4277,9 +4298,6 @@
       refreshedRows.forEach((row) => {
         const normalized = normalizeWeeklySummaryRecord(row);
         if (normalized) nextMap[normalized.country_asin_week_range] = normalized;
-      });
-      summaries.forEach((summary) => {
-        if (!nextMap[summary.country_asin_week_range]) nextMap[summary.country_asin_week_range] = summary;
       });
       if (options.mergeMap === true) {
         setWeeklySummaryMap((prev) => ({ ...prev, ...nextMap }));
@@ -4312,8 +4330,8 @@
         const key = row?.country_asin_date || row?.id || `${row?.country || ''}_${row?.asin || ''}_${toDateKey(row?.date)}`;
         if (key) queue.rowsByKey[key] = row;
       });
-      if (queue.timer) window.clearTimeout(queue.timer);
-      queue.timer = window.setTimeout(async () => {
+      if (queue.timer) clearTimeout(queue.timer);
+      queue.timer = setTimeout(async () => {
         const queuedRows = Object.values(queue.rowsByKey).filter(Boolean);
         const queuedCols = queue.cols || INITIAL_COLUMNS;
         queue.rowsByKey = {};
@@ -4329,7 +4347,7 @@
 
     useEffect(() => () => {
       const queue = weeklySummaryPersistQueueRef.current;
-      if (queue?.timer) window.clearTimeout(queue.timer);
+      if (queue?.timer) clearTimeout(queue.timer);
     }, []);
 
     const refreshWeeklySummariesFromRows = useCallback(async (rows, cols = INITIAL_COLUMNS, options = {}) => {
@@ -4399,8 +4417,8 @@
       const state = currentPageMergeSummaryRef.current;
       keys.forEach((key) => state.pendingKeys.add(key));
       if (!keys.length && !state.pendingKeys.size) return;
-      if (state.timer) window.clearTimeout(state.timer);
-      state.timer = window.setTimeout(async () => {
+      if (state.timer) clearTimeout(state.timer);
+      state.timer = setTimeout(async () => {
         state.timer = null;
         if (state.running) {
           scheduleCurrentPageMergeSummaryRefresh([], { delay: 300 });
@@ -4443,7 +4461,7 @@
       }
       dataRef.current = safeNextRows;
       setData(safeNextRows);
-      window.setTimeout(() => {
+      setTimeout(() => {
         if (!affectedKeys.size) return;
         refreshFullWeeklySummariesForKeys([...affectedKeys])
           .catch((err) => ctx.message.warning(`周汇总刷新失败：${err?.message || ''}`));
@@ -5435,22 +5453,40 @@
           reportProgress(`正在写回周表现 ${done}/${weeklyUpdateJobs.length}...`, percent);
         }
 
+        const persistFormulaRecord = async (collection, job) => {
+          const updateRecord = () => ctx.request({
+            url: `${collection}:update`,
+            method: 'post',
+            params: { filterByTk: job.key },
+            data: stripWriteMeta(job.updates),
+          });
+          if (job.exists) return updateRecord();
+          try {
+            return await ctx.request({
+              url: `${collection}:create`,
+              method: 'post',
+              data: withCreateTimestamps(job.updates),
+            });
+          } catch (createErr) {
+            const latestRes = await ctx.request({
+              url: `${collection}:list`,
+              method: 'get',
+              params: {
+                pageSize: 1,
+                fields: ['country_asin_date'],
+                filter: JSON.stringify({ country_asin_date: { $eq: job.key } }),
+              },
+            }).catch(() => null);
+            const latestRows = Array.isArray(latestRes?.data?.data) ? latestRes.data.data : [];
+            if (!latestRows.length) throw createErr;
+            return updateRecord();
+          }
+        };
+
         for (let i = 0; i < targetFormulaUpdateJobs.length; i += 100) {
           const batch = targetFormulaUpdateJobs.slice(i, i + 100);
           const results = await Promise.allSettled(
-            batch.map((job) => job.exists
-              ? ctx.request({
-                  url: 'target_management:update',
-                  method: 'post',
-                  params: { filterByTk: job.key },
-                  data: stripWriteMeta(job.updates),
-                })
-              : ctx.request({
-                  url: 'target_management:create',
-                  method: 'post',
-                  data: withCreateTimestamps(job.updates),
-                })
-            )
+            batch.map((job) => persistFormulaRecord('target_management', job))
           );
           successCount += results.filter((r) => r.status === 'fulfilled').length;
           failCount += results.filter((r) => r.status === 'rejected').length;
@@ -5462,19 +5498,7 @@
         for (let i = 0; i < orderLinkUpdateJobs.length; i += 100) {
           const batch = orderLinkUpdateJobs.slice(i, i + 100);
           const results = await Promise.allSettled(
-            batch.map((job) => job.exists
-              ? ctx.request({
-                  url: 'daily_order_link_tracking:update',
-                  method: 'post',
-                  params: { filterByTk: job.key },
-                  data: stripWriteMeta(job.updates),
-                })
-              : ctx.request({
-                  url: 'daily_order_link_tracking:create',
-                  method: 'post',
-                  data: withCreateTimestamps(job.updates),
-                })
-            )
+            batch.map((job) => persistFormulaRecord('daily_order_link_tracking', job))
           );
           successCount += results.filter((r) => r.status === 'fulfilled').length;
           failCount += results.filter((r) => r.status === 'rejected').length;
@@ -5486,19 +5510,7 @@
         for (let i = 0; i < profitUpdateJobs.length; i += 100) {
           const batch = profitUpdateJobs.slice(i, i + 100);
           const results = await Promise.allSettled(
-            batch.map((job) => job.exists
-              ? ctx.request({
-                  url: 'daily_profit:update',
-                  method: 'post',
-                  params: { filterByTk: job.key },
-                  data: stripWriteMeta(job.updates),
-                })
-              : ctx.request({
-                  url: 'daily_profit:create',
-                  method: 'post',
-                  data: withCreateTimestamps(job.updates),
-                })
-            )
+            batch.map((job) => persistFormulaRecord('daily_profit', job))
           );
           successCount += results.filter((r) => r.status === 'fulfilled').length;
           failCount += results.filter((r) => r.status === 'rejected').length;
@@ -5621,11 +5633,11 @@
       if (!filterCountry || !filterAsin) return;
       const state = backgroundMergeSummaryRef.current;
       state.pendingForce = state.pendingForce || options.force === true;
-      if (state.timer) window.clearTimeout(state.timer);
+      if (state.timer) clearTimeout(state.timer);
       if (options.showQueuedProgress) {
         showFormulaProgress({ label: '全量排队...', percent: 35 });
       }
-      state.timer = window.setTimeout(async () => {
+      state.timer = setTimeout(async () => {
         state.timer = null;
         if (state.running) return;
         state.running = true;
@@ -5928,11 +5940,11 @@
 
     useEffect(() => {
       const backgroundState = backgroundMergeSummaryRef.current;
-      if (backgroundState?.timer) window.clearTimeout(backgroundState.timer);
+      if (backgroundState?.timer) clearTimeout(backgroundState.timer);
       backgroundState.timer = null;
       backgroundState.pendingForce = false;
       const currentPageState = currentPageMergeSummaryRef.current;
-      if (currentPageState?.timer) window.clearTimeout(currentPageState.timer);
+      if (currentPageState?.timer) clearTimeout(currentPageState.timer);
       currentPageState.timer = null;
       currentPageState.pendingKeys.clear();
     }, [filterCountry, filterAsin]);
@@ -5971,13 +5983,13 @@
 
     useEffect(() => {
       autoRefreshRef.current.wasVisible = isRootVisible();
-      const timer = window.setInterval(() => {
+      const timer = setInterval(() => {
         const visible = isRootVisible();
         const wasVisible = autoRefreshRef.current.wasVisible;
         autoRefreshRef.current.wasVisible = visible;
         if (visible && wasVisible === false) autoRefreshCurrentPage();
       }, 1000);
-      return () => window.clearInterval(timer);
+      return () => clearInterval(timer);
     }, [autoRefreshCurrentPage, isRootVisible]);
 
     const loadFormulaRowsForCurrentCountryAsin = useCallback(async () => {
@@ -6005,8 +6017,8 @@
       ];
       if (!asinCountries.length) return;
       asinCountries.forEach((asinCountry) => pendingFormulaAsinCountriesRef.current.add(asinCountry));
-      if (backgroundFormulaTimerRef.current) window.clearTimeout(backgroundFormulaTimerRef.current);
-      backgroundFormulaTimerRef.current = window.setTimeout(async () => {
+      if (backgroundFormulaTimerRef.current) clearTimeout(backgroundFormulaTimerRef.current);
+      backgroundFormulaTimerRef.current = setTimeout(async () => {
         const pending = [...pendingFormulaAsinCountriesRef.current].filter(Boolean);
         pendingFormulaAsinCountriesRef.current.clear();
         backgroundFormulaTimerRef.current = null;
@@ -6027,10 +6039,10 @@
     }, [fetchAllByIn, recalcAllCoreFormulas]);
 
     useEffect(() => () => {
-      if (formulaProgressFinishTimerRef.current) window.clearTimeout(formulaProgressFinishTimerRef.current);
-      if (backgroundFormulaTimerRef.current) window.clearTimeout(backgroundFormulaTimerRef.current);
-      if (backgroundMergeSummaryRef.current?.timer) window.clearTimeout(backgroundMergeSummaryRef.current.timer);
-      if (currentPageMergeSummaryRef.current?.timer) window.clearTimeout(currentPageMergeSummaryRef.current.timer);
+      if (formulaProgressFinishTimerRef.current) clearTimeout(formulaProgressFinishTimerRef.current);
+      if (backgroundFormulaTimerRef.current) clearTimeout(backgroundFormulaTimerRef.current);
+      if (backgroundMergeSummaryRef.current?.timer) clearTimeout(backgroundMergeSummaryRef.current.timer);
+      if (currentPageMergeSummaryRef.current?.timer) clearTimeout(currentPageMergeSummaryRef.current.timer);
     }, []);
 
     const syncCoreFormulasForRows = useCallback(async (changedRows = [], options = {}) => {
@@ -6204,11 +6216,30 @@
             data: payload,
           });
         } else {
-          await ctx.request({
-            url: 'target_default:create',
-            method: 'post',
-            data: withCreateTimestamps({ ...payload, country_asin: currentCountryAsin, country: filterCountry, asin: filterAsin }),
-          });
+          try {
+            await ctx.request({
+              url: 'target_default:create',
+              method: 'post',
+              data: { ...payload, country_asin: currentCountryAsin },
+            });
+          } catch (createErr) {
+            const latestRes = await ctx.request({
+              url: 'target_default:list',
+              method: 'get',
+              params: {
+                pageSize: 1,
+                filter: JSON.stringify({ country_asin: { $eq: currentCountryAsin } }),
+              },
+            }).catch(() => null);
+            const latestRecord = Array.isArray(latestRes?.data?.data) ? latestRes.data.data[0] : null;
+            if (!latestRecord?.id) throw createErr;
+            await ctx.request({
+              url: 'target_default:update',
+              method: 'post',
+              params: { filterByTk: latestRecord.id },
+              data: payload,
+            });
+          }
         }
         await loadTargetDefault();
         await loadData({ page: curPageRef.current, size: pageSizeRef.current });
@@ -6334,10 +6365,25 @@
       return lockedSqpDefaultNames.has(normalizeSearchText(item?.[meta.nameField]));
     }, [getSqpManagerMeta, lockedSqpDefaultNames]);
 
+    const findSqpManagerItem = useCallback(async (meta, value) => {
+      if (!currentCountryAsin || !value) return null;
+      const normalizedValue = normalizeSearchText(value);
+      const rows = await fetchAllList(`${meta.collection}:list`, {
+        sort: 'id',
+        filter: JSON.stringify({ country_asin: { $eq: currentCountryAsin } }),
+      }, 500);
+      return rows.find((row) => normalizeSearchText(row?.[meta.nameField]) === normalizedValue) || null;
+    }, [currentCountryAsin, fetchAllList]);
+
     const addKeyword = useCallback(async () => {
       const keyword = String(keywordDraft || '').trim();
       if (!currentCountryAsin || !keyword) return;
       const meta = getSqpManagerMeta();
+      const existingLocal = managerItems.find((item) => normalizeSearchText(item?.[meta.nameField]) === normalizeSearchText(keyword));
+      if (existingLocal) {
+        ctx.message.warning(`该${meta.title}已存在`);
+        return;
+      }
       try {
         setManagerSaving(true);
         const res = await ctx.request({ url: `${meta.collection}:create`, method: 'post', data: withCreateTimestamps({ country_asin: currentCountryAsin, country: filterCountry, asin: filterAsin, [meta.nameField]: keyword }) });
@@ -6346,10 +6392,19 @@
         setKeywordDraft('');
         await refreshAfterManagerChange(keywordTab);
         ctx.message.success('新增成功');
+      } catch (err) {
+        const racedExisting = await findSqpManagerItem(meta, keyword).catch(() => null);
+        if (racedExisting) {
+          setKeywordDraft('');
+          await refreshAfterManagerChange(keywordTab);
+          ctx.message.warning(`该${meta.title}已存在，列表已刷新`);
+          return;
+        }
+        ctx.message.error(`新增失败：${err?.message || '未知错误'}`);
       } finally {
         setManagerSaving(false);
       }
-    }, [currentCountryAsin, filterAsin, filterCountry, getSqpManagerMeta, keywordDraft, keywordTab, markDynamicColumnsVisible, refreshAfterManagerChange]);
+    }, [currentCountryAsin, filterAsin, filterCountry, findSqpManagerItem, getSqpManagerMeta, keywordDraft, keywordTab, managerItems, markDynamicColumnsVisible, refreshAfterManagerChange]);
 
     const updateKeyword = useCallback(async (item, keywordName) => {
       const meta = getSqpManagerMeta();
@@ -6357,15 +6412,29 @@
         ctx.message.warning(`默认${meta.title}不能编辑`);
         return;
       }
+      const normalizedValue = normalizeSearchText(keywordName);
+      const existingLocal = managerItems.find((row) => row.id !== item.id && normalizeSearchText(row?.[meta.nameField]) === normalizedValue);
+      if (existingLocal) {
+        ctx.message.warning(`该${meta.title}已存在`);
+        return;
+      }
       try {
         setManagerSaving(true);
         await ctx.request({ url: `${meta.collection}:update`, method: 'post', params: { filterByTk: item.id }, data: { [meta.nameField]: keywordName || null } });
         await refreshAfterManagerChange(keywordTab);
         ctx.message.success('已保存');
+      } catch (err) {
+        const racedExisting = await findSqpManagerItem(meta, keywordName).catch(() => null);
+        if (racedExisting?.id && racedExisting.id !== item.id) {
+          await refreshAfterManagerChange(keywordTab);
+          ctx.message.warning(`该${meta.title}已存在，列表已刷新`);
+          return;
+        }
+        ctx.message.error(`保存失败：${err?.message || '未知错误'}`);
       } finally {
         setManagerSaving(false);
       }
-    }, [getSqpManagerMeta, isLockedSqpDefaultTerm, keywordTab, refreshAfterManagerChange]);
+    }, [findSqpManagerItem, getSqpManagerMeta, isLockedSqpDefaultTerm, keywordTab, managerItems, refreshAfterManagerChange]);
 
     const deleteKeyword = useCallback(async (item) => {
       const meta = getSqpManagerMeta();
@@ -6375,6 +6444,13 @@
       }
       try {
         setManagerSaving(true);
+        if (meta.collection === 'sqp_keywords') {
+          await ctx.request({
+            url: 'sqp_keyword_daily_positions:destroy',
+            method: 'post',
+            params: { filter: JSON.stringify({ sqp_keyword_id: { $eq: item.id } }) },
+          });
+        }
         await ctx.request({ url: `${meta.collection}:destroy`, method: 'post', params: { filterByTk: item.id } });
         await refreshAfterManagerChange(keywordTab);
         ctx.message.success(`已删除${meta.title}`);
@@ -6383,42 +6459,113 @@
       }
     }, [getSqpManagerMeta, isLockedSqpDefaultTerm, keywordTab, refreshAfterManagerChange]);
 
+    const findCompetitorManagerItem = useCallback(async (competitorAsin) => {
+      const normalizedAsin = normalizeSearchText(competitorAsin);
+      if (!currentCountryAsin || !normalizedAsin) return null;
+      const rows = await fetchAllList('order_link_competitor_asins:list', {
+        sort: ['role', 'competitor_asin'],
+        filter: JSON.stringify({ country_asin: { $eq: currentCountryAsin } }),
+      }, 500);
+      return rows.find((row) => normalizeSearchText(row.competitor_asin) === normalizedAsin) || null;
+    }, [currentCountryAsin, fetchAllList]);
+
     const addCompetitor = useCallback(async () => {
-      const sorted = [...managerItems].sort((a, b) => getCompetitorRoleIndex(a.role) - getCompetitorRoleIndex(b.role));
-      const maxIdx = sorted.reduce((max, rec) => {
+      const getNextRole = (items) => `竞对${items.reduce((max, rec) => {
         const idx = getCompetitorRoleIndex(rec.role);
         return Number.isFinite(idx) && idx !== 9999 ? Math.max(max, idx) : max;
-      }, 0);
-      const role = `竞对${maxIdx + 1}`;
+      }, 0) + 1}`;
+      let role = getNextRole(managerItems);
       const competitorAsin = String(competitorDraft || '').trim();
       const competitorNote = String(competitorNoteDraft || '').trim();
       if (!currentCountryAsin || !competitorAsin) return;
+      const localExisting = managerItems.find((row) => normalizeSearchText(row.competitor_asin) === normalizeSearchText(competitorAsin));
+      if (localExisting) {
+        ctx.message.warning('该竞对 ASIN 已存在');
+        return;
+      }
       try {
         setManagerSaving(true);
-        const res = await ctx.request({ url: 'order_link_competitor_asins:create', method: 'post', data: withCreateTimestamps({ country_asin: currentCountryAsin, country: filterCountry, asin: filterAsin, role, competitor_asin: competitorAsin, notes: competitorNote || null }) });
+        const serverExisting = await findCompetitorManagerItem(competitorAsin);
+        if (serverExisting) {
+          setCompetitorDraft('');
+          setCompetitorNoteDraft('');
+          await refreshAfterManagerChange('competitor');
+          ctx.message.warning('该竞对 ASIN 已存在，列表已刷新');
+          return;
+        }
+        const createRecord = (nextRole) => ctx.request({
+          url: 'order_link_competitor_asins:create',
+          method: 'post',
+          data: { country_asin: currentCountryAsin, role: nextRole, competitor_asin: competitorAsin, notes: competitorNote || null },
+        });
+        let res;
+        try {
+          res = await createRecord(role);
+        } catch (createErr) {
+          const latestRows = await fetchAllList('order_link_competitor_asins:list', {
+            sort: ['role', 'competitor_asin'],
+            filter: JSON.stringify({ country_asin: { $eq: currentCountryAsin } }),
+          }, 500).catch(() => null);
+          if (!Array.isArray(latestRows)) throw createErr;
+          const existingSameAsin = latestRows.find((row) => normalizeSearchText(row.competitor_asin) === normalizeSearchText(competitorAsin));
+          if (existingSameAsin) {
+            setCompetitorDraft('');
+            setCompetitorNoteDraft('');
+            await refreshAfterManagerChange('competitor');
+            ctx.message.warning('该竞对 ASIN 已存在，列表已刷新');
+            return;
+          }
+          const retryRole = getNextRole(latestRows);
+          if (retryRole === role || !latestRows.some((row) => row.role === role)) throw createErr;
+          role = retryRole;
+          res = await createRecord(role);
+        }
         const createdId = res?.data?.data?.id;
         if (createdId) markDynamicColumnsVisible(`competitor_dynamic_${createdId}`);
         setCompetitorDraft('');
         setCompetitorNoteDraft('');
         await refreshAfterManagerChange('competitor');
         ctx.message.success(`${role} 已添加`);
+      } catch (err) {
+        ctx.message.error(`添加竞对失败：${err?.message || '未知错误'}`);
       } finally {
         setManagerSaving(false);
       }
-    }, [competitorDraft, competitorNoteDraft, currentCountryAsin, filterAsin, filterCountry, managerItems, markDynamicColumnsVisible, refreshAfterManagerChange]);
+    }, [competitorDraft, competitorNoteDraft, currentCountryAsin, fetchAllList, filterAsin, filterCountry, findCompetitorManagerItem, managerItems, markDynamicColumnsVisible, refreshAfterManagerChange]);
 
     const updateCompetitor = useCallback(async (item, value) => {
       const trimmed = String(value || '').trim();
       if (!trimmed) return;
+      if (normalizeSearchText(trimmed) === normalizeSearchText(item.competitor_asin)) return;
+      const localExisting = managerItems.find((row) => row.id !== item.id && normalizeSearchText(row.competitor_asin) === normalizeSearchText(trimmed));
+      if (localExisting) {
+        ctx.message.warning('该竞对 ASIN 已存在');
+        await refreshAfterManagerChange('competitor');
+        return;
+      }
       try {
         setManagerSaving(true);
+        const serverExisting = await findCompetitorManagerItem(trimmed);
+        if (serverExisting?.id && serverExisting.id !== item.id) {
+          await refreshAfterManagerChange('competitor');
+          ctx.message.warning('该竞对 ASIN 已存在，列表已刷新');
+          return;
+        }
         await ctx.request({ url: 'order_link_competitor_asins:update', method: 'post', params: { filterByTk: item.id }, data: { competitor_asin: trimmed } });
         await refreshAfterManagerChange('competitor');
         ctx.message.success('已保存');
+      } catch (err) {
+        const racedExisting = await findCompetitorManagerItem(trimmed).catch(() => null);
+        if (racedExisting?.id && racedExisting.id !== item.id) {
+          await refreshAfterManagerChange('competitor');
+          ctx.message.warning('该竞对 ASIN 已存在，列表已刷新');
+          return;
+        }
+        ctx.message.error(`保存失败：${err?.message || '未知错误'}`);
       } finally {
         setManagerSaving(false);
       }
-    }, [refreshAfterManagerChange]);
+    }, [findCompetitorManagerItem, managerItems, refreshAfterManagerChange]);
 
     const updateCompetitorNote = useCallback(async (item, value) => {
       const trimmed = String(value || '').trim();
@@ -6679,8 +6826,8 @@
       const activeViewIdNow = normalizeColumnViewId(activeColumnViewIdRef.current || activeColumnViewId);
       if (!pendingViewId || pendingViewId !== activeViewIdNow || isDefaultColumnViewId(activeViewIdNow)) return;
       if (!currentUserId || columnViewCreating || columnViewSaving || columnViewSwitching) return;
-      if (columnLayoutSaveTimerRef.current) window.clearTimeout(columnLayoutSaveTimerRef.current);
-      columnLayoutSaveTimerRef.current = window.setTimeout(async () => {
+      if (columnLayoutSaveTimerRef.current) clearTimeout(columnLayoutSaveTimerRef.current);
+      columnLayoutSaveTimerRef.current = setTimeout(async () => {
         const timerViewId = pendingColumnLayoutViewIdRef.current;
         columnLayoutSaveTimerRef.current = null;
         if (!timerViewId || timerViewId !== normalizeColumnViewId(activeColumnViewIdRef.current || activeColumnViewId)) return;
@@ -6695,7 +6842,7 @@
       }, 700);
       return () => {
         if (columnLayoutSaveTimerRef.current) {
-          window.clearTimeout(columnLayoutSaveTimerRef.current);
+          clearTimeout(columnLayoutSaveTimerRef.current);
           columnLayoutSaveTimerRef.current = null;
         }
       };
@@ -6783,7 +6930,7 @@
         const currentViewId = normalizeColumnViewId(activeColumnViewIdRef.current || activeColumnViewId);
         if (pendingViewId && pendingViewId === currentViewId && !isDefaultColumnViewId(currentViewId)) {
           if (columnLayoutSaveTimerRef.current) {
-            window.clearTimeout(columnLayoutSaveTimerRef.current);
+            clearTimeout(columnLayoutSaveTimerRef.current);
             columnLayoutSaveTimerRef.current = null;
           }
           pendingColumnLayoutViewIdRef.current = null;
@@ -7273,8 +7420,8 @@
       if (left == null) return;
       scrollToIndexLeft(left);
       setHighlightColumnKey(col.key);
-      if (columnHighlightTimerRef.current) window.clearTimeout(columnHighlightTimerRef.current);
-      columnHighlightTimerRef.current = window.setTimeout(() => setHighlightColumnKey(null), 2200);
+      if (columnHighlightTimerRef.current) clearTimeout(columnHighlightTimerRef.current);
+      columnHighlightTimerRef.current = setTimeout(() => setHighlightColumnKey(null), 2200);
       if (options.fromPanel) {
         setCollapsedGroups((prev) => ({ ...prev, [groupKey]: false }));
       }
@@ -7378,6 +7525,66 @@
       })
     ), [pagedData, visibleCols]);
 
+    async function findKeywordDailyRecord(rowId, keywordId) {
+      if (!rowId || !keywordId) return null;
+      const res = await ctx.request({
+        url: 'sqp_keyword_daily_positions:list',
+        method: 'get',
+        params: {
+          pageSize: 1,
+          filter: JSON.stringify({
+            $and: [
+              { country_asin_date: { $eq: rowId } },
+              { sqp_keyword_id: { $eq: keywordId } },
+            ],
+          }),
+        },
+      });
+      return Array.isArray(res?.data?.data) ? (res.data.data[0] || null) : null;
+    }
+
+    async function saveKeywordDailyRecord({ rowId, keywordId, countryAsin, country, asin, date, value, daily }) {
+      let existing = daily?.id ? daily : null;
+      if (!existing) existing = await findKeywordDailyRecord(rowId, keywordId);
+
+      if (existing?.id) {
+        await ctx.request({
+          url: 'sqp_keyword_daily_positions:update',
+          method: 'post',
+          params: { filterByTk: existing.id },
+          data: { actual_rank: value },
+        });
+        return { ...existing, actual_rank: value };
+      }
+
+      try {
+        const res = await ctx.request({
+          url: 'sqp_keyword_daily_positions:create',
+          method: 'post',
+          data: withCreateTimestamps({
+            country_asin_date: rowId,
+            country_asin: countryAsin,
+            country,
+            asin,
+            sqp_keyword_id: keywordId,
+            date,
+            actual_rank: value,
+          }),
+        });
+        return { ...(daily || {}), ...(res?.data?.data || {}), actual_rank: value };
+      } catch (err) {
+        const racedExisting = await findKeywordDailyRecord(rowId, keywordId);
+        if (!racedExisting?.id) throw err;
+        await ctx.request({
+          url: 'sqp_keyword_daily_positions:update',
+          method: 'post',
+          params: { filterByTk: racedExisting.id },
+          data: { actual_rank: value },
+        });
+        return { ...racedExisting, actual_rank: value };
+      }
+    }
+
     async function findCompetitorDailyRecord(rowId, competitorId) {
       if (!rowId || !competitorId) return null;
       const res = await ctx.request({
@@ -7414,12 +7621,12 @@
         const res = await ctx.request({
           url: 'order_link_competitor_asins_daily:create',
           method: 'post',
-          data: withCreateTimestamps({
+          data: {
             country_asin_date: rowId,
             competitor_id: competitorId,
             date,
             [field]: value,
-          }),
+          },
         });
         return { ...(daily || {}), ...(res?.data?.data || {}), [field]: value };
       } catch (err) {
@@ -7716,31 +7923,16 @@
         })));
         const richResults = await Promise.allSettled(richOps.map(async (op) => {
           if (op.type === 'keyword') {
-            let nextDaily = { ...op.daily, actual_rank: op.valueToSave };
-            if (op.dailyId) {
-              await ctx.request({
-                url: 'sqp_keyword_daily_positions:update',
-                method: 'post',
-                params: { filterByTk: op.dailyId },
-                data: { actual_rank: op.valueToSave },
-              });
-            } else {
-              const countryAsin = op.country && op.asin ? `${op.country}_${op.asin}` : null;
-              const res = await ctx.request({
-                url: 'sqp_keyword_daily_positions:create',
-                method: 'post',
-                data: withCreateTimestamps({
-                  country_asin_date: op.rowId,
-                  country_asin: countryAsin,
-                  country: op.country,
-                  asin: op.asin,
-                  sqp_keyword_id: op.kwId,
-                  date: op.date,
-                  actual_rank: op.valueToSave,
-                }),
-              });
-              nextDaily = { ...nextDaily, ...(res?.data?.data || {}) };
-            }
+            const nextDaily = await saveKeywordDailyRecord({
+              rowId: op.rowId,
+              keywordId: op.kwId,
+              countryAsin: op.country && op.asin ? `${op.country}_${op.asin}` : null,
+              country: op.country,
+              asin: op.asin,
+              date: op.date,
+              value: op.valueToSave,
+              daily: { ...op.daily, id: op.dailyId || op.daily?.id },
+            });
             return { type: 'keyword', rowId: op.rowId, colField: op.colField, field: 'actual_rank', daily: nextDaily, dailyId: nextDaily.id || op.dailyId, oldValue: op.oldValue, newValue: op.valueToSave };
           }
 
@@ -7913,26 +8105,16 @@
         const results = await Promise.allSettled(requests);
         const richResults = await Promise.allSettled(richOps.map(async (op) => {
           if (op.type === 'keyword') {
-            let nextDaily = { ...op.daily, actual_rank: op.valueToSave };
-            if (op.dailyId) {
-              await ctx.request({ url: 'sqp_keyword_daily_positions:update', method: 'post', params: { filterByTk: op.dailyId }, data: { actual_rank: op.valueToSave } });
-            } else {
-              const countryAsin = op.country && op.asin ? `${op.country}_${op.asin}` : null;
-              const res = await ctx.request({
-                url: 'sqp_keyword_daily_positions:create',
-                method: 'post',
-                data: withCreateTimestamps({
-                  country_asin_date: op.rowId,
-                  country_asin: countryAsin,
-                  country: op.country,
-                  asin: op.asin,
-                  sqp_keyword_id: op.kwId,
-                  date: op.date,
-                  actual_rank: op.valueToSave,
-                }),
-              });
-              nextDaily = { ...nextDaily, ...(res?.data?.data || {}) };
-            }
+            const nextDaily = await saveKeywordDailyRecord({
+              rowId: op.rowId,
+              keywordId: op.kwId,
+              countryAsin: op.country && op.asin ? `${op.country}_${op.asin}` : null,
+              country: op.country,
+              asin: op.asin,
+              date: op.date,
+              value: op.valueToSave,
+              daily: { ...op.daily, id: op.dailyId || op.daily?.id },
+            });
             return { type: 'keyword', rowId: op.rowId, colField: op.colField, field: 'actual_rank', daily: nextDaily, dailyId: nextDaily.id || op.dailyId, oldValue: op.oldValue, newValue: op.valueToSave };
           }
 
@@ -8310,31 +8492,16 @@
         let savedCell = false;
         try {
           setSaving(true);
-          let nextDaily = { ...daily, actual_rank: valueToSave };
-          if (daily.id) {
-            await ctx.request({
-              url: 'sqp_keyword_daily_positions:update',
-              method: 'post',
-              params: { filterByTk: daily.id },
-              data: { actual_rank: valueToSave },
-            });
-          } else {
-            const countryAsin = row.country && row.asin ? `${row.country}_${row.asin}` : null;
-            const res = await ctx.request({
-              url: 'sqp_keyword_daily_positions:create',
-              method: 'post',
-              data: withCreateTimestamps({
-                country_asin_date: rowId,
-                country_asin: countryAsin,
-                country: row.country || null,
-                asin: row.asin || null,
-                sqp_keyword_id: kw.id,
-                date: row.date ? String(row.date).slice(0, 10) : null,
-                actual_rank: valueToSave,
-              }),
-            });
-            nextDaily = { ...nextDaily, ...(res?.data?.data || {}) };
-          }
+          const nextDaily = await saveKeywordDailyRecord({
+            rowId,
+            keywordId: kw.id,
+            countryAsin: row.country && row.asin ? `${row.country}_${row.asin}` : null,
+            country: row.country || null,
+            asin: row.asin || null,
+            date: row.date ? String(row.date).slice(0, 10) : null,
+            value: valueToSave,
+            daily,
+          });
           updateDataAndRefreshWeekly((prev) => prev.map((r) => {
             if ((r.country_asin_date || r.id) !== rowId) return r;
             const currentPayload = r[dynamicKeywordCol.field] || payload || {};
@@ -8425,7 +8592,7 @@
         if (isFormulaSensitiveField(field)) {
           showFormulaProgress({ label: '保存成功，正在同步公式...', percent: 8 });
 
-          window.setTimeout(async () => {
+          setTimeout(async () => {
             try {
               await syncFormulasForChangedRows([nextRow], { onProgress: showFormulaProgress });
               finishFormulaProgress('公式同步完成');
@@ -8502,8 +8669,8 @@
         wrap.scrollLeft = pos.left;
       };
       apply();
-      window.setTimeout(apply, 0);
-      window.setTimeout(apply, 80);
+      setTimeout(apply, 0);
+      setTimeout(apply, 80);
     }, []);
 
     const saveKeywordRichCell = useCallback(async (row, col, newContent) => {
@@ -8514,26 +8681,16 @@
       if (!rowId || !kw?.id) { ctx.message.error('无法找到 SQP 关键词记录'); return false; }
       const scrollPos = captureTableScroll();
       try {
-        let nextDaily = { ...daily, actual_rank: newContent || null };
-        if (daily.id) {
-          await ctx.request({ url: 'sqp_keyword_daily_positions:update', method: 'post', params: { filterByTk: daily.id }, data: { actual_rank: newContent || null } });
-        } else {
-          const countryAsin = row.country && row.asin ? `${row.country}_${row.asin}` : null;
-          const res = await ctx.request({
-            url: 'sqp_keyword_daily_positions:create',
-            method: 'post',
-            data: withCreateTimestamps({
-              country_asin_date: rowId,
-              country_asin: countryAsin,
-              country: row.country || null,
-              asin: row.asin || null,
-              sqp_keyword_id: kw.id,
-              date: row.date ? String(row.date).slice(0, 10) : null,
-              actual_rank: newContent || null,
-            }),
-          });
-          nextDaily = { ...nextDaily, ...(res?.data?.data || {}) };
-        }
+        const nextDaily = await saveKeywordDailyRecord({
+          rowId,
+          keywordId: kw.id,
+          countryAsin: row.country && row.asin ? `${row.country}_${row.asin}` : null,
+          country: row.country || null,
+          asin: row.asin || null,
+          date: row.date ? String(row.date).slice(0, 10) : null,
+          value: newContent || null,
+          daily,
+        });
         updateDataAndRefreshWeekly((prev) => prev.map((r) => (r.country_asin_date || r.id) === rowId ? { ...r, [col.field]: { ...payload, daily: nextDaily } } : r));
         pushUndoEntry({ label: '编辑单元格', items: [{ kind: 'keyword', rowId, colField: col.field, dailyId: nextDaily.id, oldValue: daily.actual_rank ?? null, newValue: newContent || null }] });
         restoreTableScroll(scrollPos);
@@ -8697,7 +8854,7 @@
       wordBreak: 'break-all',
     };
 
-    const renderTooltip = ({ title, formula, emptyRules = [], fields = [], writeBackField, hideEmptyRules = false, hideFieldMapping = false, sourceInfos = [], emptyRuleMode = '任意' }) => {
+    const renderTooltip = ({ title, formula, emptyRules = [], fields = [], writeBackField, hideEmptyRules = false, hideFieldMapping = false, sourceInfos = [], emptyRuleMode = '任意', salesSectionTitle = '取值与计算规则' }) => {
       const formulaLines = splitTooltipText(formula || '直接展示该指标值');
       const resolvedEmptyRules = emptyRules.length ? emptyRules : ['无特殊为空条件'];
       return React.createElement('div', {
@@ -8720,7 +8877,7 @@
           },
         }, title),
         React.createElement('div', { style: { paddingTop: '10px' } },
-          React.createElement('div', { style: tooltipSectionTitleStyle }, '取值与计算规则'),
+          React.createElement('div', { style: tooltipSectionTitleStyle }, salesSectionTitle),
           React.createElement('div', { style: { display: 'grid', gap: '4px' } },
             formulaLines.map((line, idx) => React.createElement('div', {
               key: `formula_${idx}`,
@@ -8818,10 +8975,12 @@
       if (FIELD_TOOLTIP_DATA[col.field]) return renderTooltip(FIELD_TOOLTIP_DATA[col.field]);
       if (col.src === 'weekly' && WEEKLY_PERFORMANCE_FIELD_TOOLTIP_TEXT[col.field]) {
         const weeklyTooltipLines = WEEKLY_PERFORMANCE_FIELD_TOOLTIP_TEXT[col.field].split('\n');
-        const weeklyFormulaLines = [weeklyTooltipLines[0] || '直接展示该指标值'];
-        if (WEEKLY_PERFORMANCE_DIRECT_VALUE_FIELDS.has(col.field)) {
-          weeklyFormulaLines.push(WEEKLY_PERFORMANCE_UPDATE_TOOLTIP_TEXT);
-        }
+        const isDirectValue = WEEKLY_PERFORMANCE_DIRECT_VALUE_FIELDS.has(col.field);
+        const weeklyFormulaLines = [
+          isDirectValue ? WEEKLY_PERFORMANCE_SALES_DIRECT_TOOLTIP_TEXT : WEEKLY_PERFORMANCE_SALES_CALCULATED_TOOLTIP_TEXT,
+          ...(!isDirectValue && weeklyTooltipLines[0] ? [`计算口径：${weeklyTooltipLines[0]}`] : []),
+          WEEKLY_PERFORMANCE_UPDATE_TOOLTIP_TEXT,
+        ];
         if (col.field === 'reviews_count') {
           weeklyFormulaLines.push(CURRENT_DAY_DATA_TOOLTIP_TEXT);
         }
@@ -8829,11 +8988,14 @@
           title: col.label,
           formula: weeklyFormulaLines,
           fields: [
-            { label: '字段标识公式', field: weeklyTooltipLines[1] || `${col.field} = 直接展示该指标值` },
-            { label: `字段来源（${col.label}）`, field: `weekly_performance.${col.field}` },
+            { label: '生成方式', field: isDirectValue ? '定时 RPA 写入数据表' : '定时 RPA 计算后写入数据表' },
+            { label: '计算/取值规则', field: weeklyTooltipLines.join('；') || '直接展示该指标值' },
+            { label: `数据表字段（${col.label}）`, field: `weekly_performance.${col.field}` },
+            { label: '页面 JS 处理', field: '仅读取，不计算、不回写' },
           ],
-          writeBackField: `weekly_performance.${col.field}`,
+          writeBackField: `weekly_performance.${col.field}（由定时 RPA 写入）`,
           hideEmptyRules: true,
+          salesSectionTitle: '销售说明',
         });
       }
       const sqlSourceKey = `${col.src}.${col.field}`;
@@ -8901,11 +9063,7 @@
               href: currentAsinUrl,
               target: '_blank',
               rel: 'noreferrer',
-              onClick: (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                window.open(currentAsinUrl, '_blank', 'noopener,noreferrer');
-              },
+              onClick: (e) => e.stopPropagation(),
               style: {
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -9015,12 +9173,7 @@
             href: buildAmazonAsinUrl(col._competitorAsin, col._competitorCountry || filterCountry),
             target: '_blank',
             rel: 'noreferrer',
-            onClick: (e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              const url = buildAmazonAsinUrl(col._competitorAsin, col._competitorCountry || filterCountry);
-              if (url) window.open(url, '_blank', 'noopener,noreferrer');
-            },
+            onClick: (e) => e.stopPropagation(),
             style: { display: 'inline-flex', alignItems: 'center', gap: '2px', minWidth: 0, color: 'inherit', textDecoration: 'underline', textUnderlineOffset: '2px', fontWeight: 800, cursor: 'pointer' },
           },
             React.createElement('span', {
