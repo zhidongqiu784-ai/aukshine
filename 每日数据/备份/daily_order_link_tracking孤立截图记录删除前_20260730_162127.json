@@ -1,0 +1,52 @@
+{
+  "backup_at": "2026-07-30T16:21:27+08:00",
+  "data_source": "main",
+  "collection": "daily_order_link_tracking",
+  "record_count": 11,
+  "records": [
+    {
+      "country_asin_date": "CA_B0H392ZTKX_2026-06-28",
+      "page_screenshot": "![Stella_B0H392ZTKX_CA_新品_20260628_122953](https://erp.aukshine.com/storage/uploads/Stella_B0H392ZTKX_CA_%E6%96%B0%E5%93%81_20260628_122953-h5ds61.jpg)"
+    },
+    {
+      "country_asin_date": "CA_B0H392ZTKX_2026-06-29",
+      "page_screenshot": "![Stella_B0H392ZTKX_CA_新品_20260629](https://erp.aukshine.com/storage/uploads/Stella_B0H392ZTKX_CA_%E6%96%B0%E5%93%81_20260629-hwn496.png)"
+    },
+    {
+      "country_asin_date": "CA_B0H39593JH_2026-06-28",
+      "page_screenshot": "![Stella_B0H39593JH_CA_新品_20260628_123003](https://erp.aukshine.com/storage/uploads/Stella_B0H39593JH_CA_%E6%96%B0%E5%93%81_20260628_123003-xrwvlf.jpg)"
+    },
+    {
+      "country_asin_date": "CA_B0H39593JH_2026-06-29",
+      "page_screenshot": "![Stella_B0H39593JH_CA_新品_20260629](https://erp.aukshine.com/storage/uploads/Stella_B0H39593JH_CA_%E6%96%B0%E5%93%81_20260629-gpeotv.png)"
+    },
+    {
+      "country_asin_date": "CA_B0H5PLDBBG_2026-06-28",
+      "page_screenshot": "![Moon_B0H5PLDBBG_CA_新品_20260628_122844](https://erp.aukshine.com/storage/uploads/Moon_B0H5PLDBBG_CA_%E6%96%B0%E5%93%81_20260628_122844-rj7obn.jpg)"
+    },
+    {
+      "country_asin_date": "CA_B0H5PLDBBG_2026-06-29",
+      "page_screenshot": "![Moon_B0H5PLDBBG_CA_新品_20260629](https://erp.aukshine.com/storage/uploads/Moon_B0H5PLDBBG_CA_%E6%96%B0%E5%93%81_20260629-su0lr0.png)"
+    },
+    {
+      "country_asin_date": "US_B0H36Q25JL_2026-06-28",
+      "page_screenshot": "![Eva_B0H36Q25JL_US_新品_20260628_121733](https://erp.aukshine.com/storage/uploads/Eva_B0H36Q25JL_US_%E6%96%B0%E5%93%81_20260628_121733-rd0ryt.jpg)"
+    },
+    {
+      "country_asin_date": "US_B0H36Q25JL_2026-06-29",
+      "page_screenshot": "![Eva_B0H36Q25JL_US_新品_20260629](https://erp.aukshine.com/storage/uploads/Eva_B0H36Q25JL_US_%E6%96%B0%E5%93%81_20260629-7syriv.png)"
+    },
+    {
+      "country_asin_date": "US_B0H3741G9Y_2026-06-29",
+      "page_screenshot": "![Eva_B0H3741G9Y_US_新品_20260629](https://erp.aukshine.com/storage/uploads/Eva_B0H3741G9Y_US_%E6%96%B0%E5%93%81_20260629-gqzjyz.png)"
+    },
+    {
+      "country_asin_date": "US_B0H3V3L6ZJ_2026-06-28",
+      "page_screenshot": "![Mario_B0H3V3L6ZJ_US_新品_20260628_122537](https://erp.aukshine.com/storage/uploads/Mario_B0H3V3L6ZJ_US_%E6%96%B0%E5%93%81_20260628_122537-5gsl8k.jpg)"
+    },
+    {
+      "country_asin_date": "US_B0H3V3L6ZJ_2026-06-29",
+      "page_screenshot": "![Mario_B0H3V3L6ZJ_US_新品_20260629](https://erp.aukshine.com/storage/uploads/Mario_B0H3V3L6ZJ_US_%E6%96%B0%E5%93%81_20260629-wj5nzr.png)"
+    }
+  ]
+}
