@@ -187,6 +187,8 @@
   const COLOR_TEAL   = '#82A0A8';
   const COLOR_GRAY   = '#A0A8B0';
   const COLOR_ROSE   = '#C48B8B';
+  const KEYWORD_DEFAULT_HEADER_COLOR = '#9DF29F';
+  const LEGACY_KEYWORD_HEADER_COLORS = new Set(['#FCC102', '#EB6793']);
   const GROUP_COLOR_ORDER_STRUCTURE = '#F6CCAC';
   const GROUP_COLOR_TRAFFIC         = '#E4EDDB';
   const GROUP_COLOR_LINK_TRACKING   = '#D8C8E8';
@@ -209,7 +211,7 @@
   };
 
   const PRESET_COLORS = [
-    { label:'默认自动抓取，也可手动复核',      value:'#9DF29F' },
+    { label:'默认自动抓取，也可手动复核',      value:KEYWORD_DEFAULT_HEADER_COLOR },
     { label:'必填',      value:'#EB6793' },
     { label:'选填',      value:'#F2BABA' },
     { label:'重要指标',  value:'#C5DFB4' },
@@ -248,7 +250,7 @@
     profit: COLOR_TEAL,
     product_config: COLOR_GRAY,
     order_link: COLOR_ROSE,
-    keyword_position: COLOR_YELLOW,
+    keyword_position: KEYWORD_DEFAULT_HEADER_COLOR,
     competitor: COLOR_BLUE,
   };
 
@@ -939,6 +941,7 @@
   };
 
   const WEEKLY_PERFORMANCE_UPDATE_TOOLTIP_TEXT = '每天更新2次（早上8点、16点），每次更新过去60天的数据；';
+  const WEEKLY_PERFORMANCE_AD_UPDATE_TOOLTIP_TEXT = '每天更新2次（早上8点、16点），每次更新过去7天的数据；';
   const WEEKLY_PERFORMANCE_SALES_DIRECT_TOOLTIP_TEXT = '该数据由系统定时同步，无需手工填写。';
   const WEEKLY_PERFORMANCE_SALES_CALCULATED_TOOLTIP_TEXT = '该指标由系统定时计算并同步，无需手工填写。';
   const WEEKLY_PERFORMANCE_DIRECT_VALUE_FIELDS = new Set([
@@ -4612,6 +4615,9 @@
       const exactPref = dynamicColumnPrefs[col.key] || {};
       const groupPref = col._competitorGroupKey ? (dynamicColumnPrefs[col._competitorGroupKey] || {}) : {};
       const pref = { ...groupPref, ...exactPref };
+      const prefHeaderColor = Object.prototype.hasOwnProperty.call(pref, 'headerColor') ? pref.headerColor : undefined;
+      const isLegacyKeywordHeaderColor = col._dynamicKind === 'keyword'
+        && LEGACY_KEYWORD_HEADER_COLORS.has(String(prefHeaderColor || '').toUpperCase());
       const autoWidth = col.key.startsWith('kw_actual_') ? calcKeywordColWidth(col.label) : col.width;
       const activeViewIsCore = isCoreColumnViewId(activeColumnViewIdRef.current || activeColumnViewId);
       const coreHidden = col._dynamicKind === 'keyword'
@@ -4630,7 +4636,7 @@
         richEdit: Object.prototype.hasOwnProperty.call(pref, 'richEdit') ? pref.richEdit === true : col.richEdit,
         headerColor: col._dynamicKind === 'competitor'
           ? col.headerColor
-          : (Object.prototype.hasOwnProperty.call(pref, 'headerColor') ? pref.headerColor : col.headerColor),
+          : (isLegacyKeywordHeaderColor ? col.headerColor : (prefHeaderColor !== undefined ? prefHeaderColor : col.headerColor)),
         bodyColor: Object.prototype.hasOwnProperty.call(pref, 'bodyColor') ? (pref.bodyColor || null) : getColBodyColor(col),
       };
     }, [activeColumnViewId, dynamicColumnPrefs]);
@@ -4651,7 +4657,7 @@
             width: calcKeywordColWidth(label),
             editable: true,
             richEdit: false,
-            headerColor: idx < 4 ? '#FCC102' : '#EB6793',
+            headerColor: KEYWORD_DEFAULT_HEADER_COLOR,
             _dynamicKind: 'keyword',
             _kwId: kw.id,
             _kwName: kw.keyword_name || '未命名',
@@ -8954,13 +8960,19 @@
     const getHeaderTooltipText = (col) => {
       if (col._dynamicKind === 'keyword') return renderTooltip({
         title: col.label,
-        formula: `引用 SQP 关键词「${col._kwName || '未命名'}」，展示当条 date 的自然位。`,
+        formula: [
+          '数据来源：SIF 最近一次从亚马逊前台抓取的自然排名。',
+          '更新时间：每天北京时间 08:00 自动同步；按 SIF 抓取时间的美西日期写入对应数据行。',
+          '写入规则：对应日期没有记录时自动创建；自然位为空时自动回填；已有非空值不会被自动覆盖。',
+          '提醒：SIF 可能存在抓取延迟或遗漏。如果销售通过其他插件确认有自然位，可直接手动修改本列。',
+        ],
         fields: [
           { label: '关键词', field: 'sqp_keywords.keyword_name' },
           { label: '每日自然位', field: 'sqp_keyword_daily_positions.actual_rank' },
         ],
         writeBackField: 'sqp_keyword_daily_positions.actual_rank',
         hideEmptyRules: true,
+        salesSectionTitle: '自然位说明',
       });
       if (col._dynamicKind === 'competitor') return renderTooltip({
         title: col._competitorGroupLabel || col.label,
@@ -8979,7 +8991,9 @@
         const weeklyFormulaLines = [
           isDirectValue ? WEEKLY_PERFORMANCE_SALES_DIRECT_TOOLTIP_TEXT : WEEKLY_PERFORMANCE_SALES_CALCULATED_TOOLTIP_TEXT,
           ...(!isDirectValue && weeklyTooltipLines[0] ? [`计算口径：${weeklyTooltipLines[0]}`] : []),
-          WEEKLY_PERFORMANCE_UPDATE_TOOLTIP_TEXT,
+          col.columnGroup === 'ad_data'
+            ? WEEKLY_PERFORMANCE_AD_UPDATE_TOOLTIP_TEXT
+            : WEEKLY_PERFORMANCE_UPDATE_TOOLTIP_TEXT,
         ];
         if (col.field === 'reviews_count') {
           weeklyFormulaLines.push(CURRENT_DAY_DATA_TOOLTIP_TEXT);
