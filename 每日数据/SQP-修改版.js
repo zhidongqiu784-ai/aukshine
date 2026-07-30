@@ -1,8 +1,9 @@
-﻿async function run() {
+async function run() {
 
   const React = ctx.libs.React;
   const { useState, useRef, useMemo, useCallback, useEffect } = React;
   const { Pagination, Input, InputNumber, Select, DatePicker, Table, Button, Popconfirm, ConfigProvider, Tooltip, Modal, Form } = ctx.libs.antd;
+  const { DeleteOutlined, SaveOutlined } = ctx.libs.antdIcons || {};
 
   const currentUserId    = await ctx.getVar('ctx.user.id') || null;
   const currentUserName  = await ctx.getVar('ctx.user.username') || 'guest';
@@ -12,6 +13,7 @@
   const COLUMN_VIEW_SETTING_KEY = `${BLOCK_UID}__column_view_setting`;
   const DEFAULT_COLUMN_VIEWS_KEY = `${BLOCK_UID}__default_column_views`;
   const TERM_FIELD_COLOR_SETTING_KEY = `${BLOCK_UID}_termFieldColors`;
+  const CHART_QUICK_SETTING_KEY = `${BLOCK_UID}__chart_quick_groups`;
   const BLOCK_NAME       = 'SQP';
   const BLOCK_NAME_SETTING_KEY = `${BLOCK_UID}__block_name`;
   const DEFAULT_COLUMN_VIEW_ID = 'default';
@@ -658,6 +660,53 @@
     { label: '加购率对比', fields: ['market_cart_rate', 'asin_cart_rate'] },
     { label: 'CVR 对比', fields: ['market_cvr', 'asin_cvr'] },
   ];
+  const CHART_METRIC_KEY_SET = new Set(CHART_METRIC_FIELDS.map((field) => field.key));
+  const normalizeChartQuickGroups = (groups) => {
+    if (!Array.isArray(groups)) return [];
+    const seenIds = new Set();
+    const seenNames = new Set();
+    return groups.reduce((result, group) => {
+      const id = String(group?.id || '').trim();
+      const name = String(group?.name || '').trim();
+      const fields = Array.from(new Set(Array.isArray(group?.fields) ? group.fields : []))
+        .filter((field) => CHART_METRIC_KEY_SET.has(field));
+      const normalizedName = name.toLocaleLowerCase();
+      if (!id || !name || !fields.length || seenIds.has(id) || seenNames.has(normalizedName)) return result;
+      seenIds.add(id);
+      seenNames.add(normalizedName);
+      result.push({ id, name, fields });
+      return result;
+    }, []);
+  };
+  const isChartQuickNameTaken = (name, customGroups = []) => {
+    const normalizedName = String(name || '').trim().toLocaleLowerCase();
+    if (!normalizedName) return false;
+    return CHART_QUICK_GROUPS.some((group) => group.label.toLocaleLowerCase() === normalizedName)
+      || customGroups.some((group) => group.name.toLocaleLowerCase() === normalizedName);
+  };
+  const loadChartQuickGroupsFromUser = async () => {
+    if (!currentUserId) return [];
+    const userRes = await ctx.request({ url: 'users:get', method: 'get', params: { filterByTk: currentUserId } });
+    return normalizeChartQuickGroups(userRes?.data?.data?.setting?.[CHART_QUICK_SETTING_KEY]);
+  };
+  const saveChartQuickGroupsToUser = async (groups) => {
+    if (!currentUserId) return false;
+    const userRes = await ctx.request({ url: 'users:get', method: 'get', params: { filterByTk: currentUserId } });
+    const existingSetting = userRes?.data?.data?.setting || {};
+    await ctx.request({
+      url: 'users:update',
+      method: 'post',
+      params: { filterByTk: currentUserId },
+      data: {
+        setting: {
+          ...existingSetting,
+          [CHART_QUICK_SETTING_KEY]: normalizeChartQuickGroups(groups),
+          [BLOCK_NAME_SETTING_KEY]: BLOCK_NAME,
+        },
+      },
+    });
+    return true;
+  };
   const CHART_LINE_COLORS = [
     '#F59E0B', '#3B82F6', '#EF4444', '#10B981', '#A855F7', '#14B8A6',
     '#F97316', '#60A5FA', '#F43F5E', '#22C55E', '#C084FC', '#06B6D4',
@@ -2287,6 +2336,13 @@
     const [selectedWeekKeys, setSelectedWeekKeys] = useState([]);
     const [selectedTermKeys, setSelectedTermKeys] = useState([]);
     const [selectedMetricKeys, setSelectedMetricKeys] = useState(CHART_DEFAULT_FIELD_KEYS);
+    const [customQuickGroups, setCustomQuickGroups] = useState([]);
+    const [customQuickLoading, setCustomQuickLoading] = useState(false);
+    const [customQuickSaving, setCustomQuickSaving] = useState(false);
+    const [showCustomQuickModal, setShowCustomQuickModal] = useState(false);
+    const [showCustomQuickDeleteModal, setShowCustomQuickDeleteModal] = useState(false);
+    const [customQuickName, setCustomQuickName] = useState('');
+    const [selectedDeleteQuickIds, setSelectedDeleteQuickIds] = useState([]);
     const countryAsin = country && asin ? `${country}_${asin}` : null;
 
     const metricOptions = useMemo(() => CHART_METRIC_FIELDS.map((field) => ({
@@ -2295,6 +2351,130 @@
     })), []);
     const metricMap = useMemo(() => Object.fromEntries(CHART_METRIC_FIELDS.map((field) => [field.key, field])), []);
     const termOptionMap = useMemo(() => Object.fromEntries(termOptions.map((item) => [item.value, item])), [termOptions]);
+
+    useEffect(() => {
+      if (!visible) {
+        setShowCustomQuickModal(false);
+        setShowCustomQuickDeleteModal(false);
+        setCustomQuickName('');
+        setSelectedDeleteQuickIds([]);
+        return undefined;
+      }
+      let active = true;
+      const loadCustomQuickGroups = async () => {
+        if (!currentUserId) {
+          setCustomQuickGroups([]);
+          return;
+        }
+        try {
+          setCustomQuickLoading(true);
+          const groups = await loadChartQuickGroupsFromUser();
+          if (active) setCustomQuickGroups(groups);
+        } catch (err) {
+          if (active) {
+            setCustomQuickGroups([]);
+            ctx.message.error(`加载自定义快捷失败：${err?.message || '未知错误'}`);
+          }
+        } finally {
+          if (active) setCustomQuickLoading(false);
+        }
+      };
+      loadCustomQuickGroups();
+      return () => { active = false; };
+    }, [visible]);
+
+    const handleSaveCustomQuick = useCallback(async () => {
+      const name = customQuickName.trim();
+      if (!currentUserId) {
+        ctx.message.warning('未识别到当前用户，无法保存自定义快捷');
+        return;
+      }
+      if (!name) {
+        ctx.message.warning('请输入快捷名称');
+        return;
+      }
+      if (!selectedMetricKeys.length) {
+        ctx.message.warning('请先选择至少一个指标字段');
+        return;
+      }
+      if (isChartQuickNameTaken(name, customQuickGroups)) {
+        ctx.message.warning('快捷名称已存在，请更换名称');
+        return;
+      }
+      try {
+        setCustomQuickSaving(true);
+        const latestGroups = await loadChartQuickGroupsFromUser();
+        if (isChartQuickNameTaken(name, latestGroups)) {
+          ctx.message.warning('快捷名称已存在，请更换名称');
+          setCustomQuickGroups(latestGroups);
+          return;
+        }
+        const nextGroups = [
+          ...latestGroups,
+          {
+            id: `chart_quick_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            name,
+            fields: selectedMetricKeys,
+          },
+        ];
+        await saveChartQuickGroupsToUser(nextGroups);
+        setCustomQuickGroups(nextGroups);
+        setCustomQuickName('');
+        setShowCustomQuickModal(false);
+        ctx.message.success('自定义快捷已保存');
+      } catch (err) {
+        ctx.message.error(`保存自定义快捷失败：${err?.message || '未知错误'}`);
+      } finally {
+        setCustomQuickSaving(false);
+      }
+    }, [customQuickGroups, customQuickName, selectedMetricKeys]);
+
+    const handleDeleteCustomQuick = useCallback(async (groupIds) => {
+      if (!currentUserId) {
+        ctx.message.warning('未识别到当前用户，无法删除自定义快捷');
+        return;
+      }
+      const requestedIds = Array.from(new Set(Array.isArray(groupIds) ? groupIds : [groupIds])).filter(Boolean);
+      if (!requestedIds.length) {
+        ctx.message.warning('请选择要删除的自定义快捷');
+        return false;
+      }
+      try {
+        setCustomQuickSaving(true);
+        const latestGroups = await loadChartQuickGroupsFromUser();
+        const requestedIdSet = new Set(requestedIds);
+        const existingDeleteIds = latestGroups
+          .filter((group) => requestedIdSet.has(group.id))
+          .map((group) => group.id);
+        if (!existingDeleteIds.length) {
+          setCustomQuickGroups(latestGroups);
+          ctx.message.warning('所选自定义快捷已不存在，列表已刷新');
+          return false;
+        }
+        const existingDeleteIdSet = new Set(existingDeleteIds);
+        const nextGroups = latestGroups.filter((group) => !existingDeleteIdSet.has(group.id));
+        await saveChartQuickGroupsToUser(nextGroups);
+        setCustomQuickGroups(nextGroups);
+        ctx.message.success(`已删除 ${existingDeleteIds.length} 个自定义快捷`);
+        return true;
+      } catch (err) {
+        ctx.message.error(`删除自定义快捷失败：${err?.message || '未知错误'}`);
+        return false;
+      } finally {
+        setCustomQuickSaving(false);
+      }
+    }, []);
+
+    const handleConfirmDeleteCustomQuick = useCallback(async () => {
+      if (!selectedDeleteQuickIds.length) {
+        ctx.message.warning('请选择要删除的自定义快捷');
+        return;
+      }
+      const deleted = await handleDeleteCustomQuick(selectedDeleteQuickIds);
+      if (!deleted) return;
+      setShowCustomQuickDeleteModal(false);
+      setSelectedDeleteQuickIds([]);
+    }, [handleDeleteCustomQuick, selectedDeleteQuickIds]);
 
     useEffect(() => {
       if (!visible) return undefined;
@@ -2456,6 +2636,43 @@
 
     const latestWeekKeys = weeks.slice(-8).map((week) => week.key);
     const modalTitle = countryAsin ? `SQP 趋势图：${countryAsin}` : 'SQP 趋势图';
+    const hasSameSelection = (currentKeys, targetKeys) => {
+      if (!Array.isArray(currentKeys) || !Array.isArray(targetKeys) || currentKeys.length !== targetKeys.length) return false;
+      const currentSet = new Set(currentKeys);
+      return targetKeys.every((key) => currentSet.has(key));
+    };
+    const getQuickButtonStyle = (active) => ({
+      minHeight: '40px',
+      padding: '4px 12px',
+      borderColor: active ? '#91caff' : '#dbe3ec',
+      background: active ? '#eaf3ff' : '#ffffff',
+      color: active ? '#0958d9' : '#334155',
+      borderRadius: '4px',
+      boxShadow: active ? '0 1px 2px rgba(22,119,255,0.12)' : '0 1px 1px rgba(15,23,42,0.04)',
+      fontWeight: active ? 800 : 700,
+      fontSize: `${FONT_SIZE_XS}px`,
+    });
+    const getCustomQuickButtonStyle = (active) => active
+      ? getQuickButtonStyle(true)
+      : {
+          ...getQuickButtonStyle(false),
+          borderColor: '#cbd5e1',
+          background: '#eef2f7',
+        };
+    const quickGroupStyle = {
+      display: 'flex',
+      gap: '8px',
+      alignItems: 'center',
+      flexWrap: 'nowrap',
+      flexShrink: 0,
+      padding: '6px 8px',
+      background: '#f8fafc',
+      borderRadius: '6px',
+      boxShadow: 'inset 0 0 0 1px rgba(15,23,42,0.07)',
+      boxSizing: 'border-box',
+    };
+    const allWeeksActive = weeks.length > 0 && hasSameSelection(selectedWeekKeys, weeks.map((week) => week.key));
+    const latestWeeksActive = weeks.length > 8 && hasSameSelection(selectedWeekKeys, latestWeekKeys);
 
     return React.createElement(Modal, {
       title: modalTitle,
@@ -2526,31 +2743,190 @@
               })
             )
           ),
-          React.createElement('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px', alignItems: 'center' } },
-            React.createElement('span', { style: { color: '#64748b', fontWeight: 700, fontSize: `${FONT_SIZE_SM}px` } }, '快捷：'),
-            ...CHART_QUICK_GROUPS.map((group) => React.createElement('button', {
-              key: group.label,
-              onClick: () => setSelectedMetricKeys(group.fields),
-              style: { padding: '4px 10px', border: '1px solid #bae6fd', background: '#f0f9ff', color: '#0369a1', borderRadius: '4px', cursor: 'pointer', fontWeight: 700, fontSize: `${FONT_SIZE_XS}px` },
-            }, group.label)),
-            React.createElement('span', { style: { color: '#cbd5e1' } }, '|'),
-            React.createElement('button', {
-              onClick: () => setSelectedWeekKeys(weeks.map((week) => week.key)),
-              style: { padding: '4px 10px', border: '1px solid #bbf7d0', background: '#f0fdf4', color: '#15803d', borderRadius: '4px', cursor: 'pointer', fontWeight: 700, fontSize: `${FONT_SIZE_XS}px` },
-            }, '全部周'),
-            React.createElement('button', {
-              onClick: () => setSelectedWeekKeys(latestWeekKeys),
-              disabled: !latestWeekKeys.length,
-              style: { padding: '4px 10px', border: '1px solid #fed7aa', background: latestWeekKeys.length ? '#fff7ed' : '#f8fafc', color: latestWeekKeys.length ? '#c2410c' : '#94a3b8', borderRadius: '4px', cursor: latestWeekKeys.length ? 'pointer' : 'not-allowed', fontWeight: 700, fontSize: `${FONT_SIZE_XS}px` },
-            }, '最近8周'),
-            React.createElement('span', { style: { marginLeft: 'auto', color: '#64748b', fontSize: `${FONT_SIZE_XS}px` } },
-              loading ? '正在加载真实数据...' : `周 ${selectedWeekKeys.length}/${weeks.length}，词 ${selectedTermKeys.length}/${termOptions.length}`
+          React.createElement('div', {
+            style: {
+              display: 'flex',
+              gap: '8px',
+              marginBottom: '12px',
+              alignItems: 'center',
+              flexWrap: 'nowrap',
+              overflowX: 'auto',
+              boxSizing: 'border-box',
+            },
+          },
+            React.createElement('div', { style: quickGroupStyle },
+              React.createElement('span', { style: { color: '#64748b', fontWeight: 700, fontSize: `${FONT_SIZE_XS}px`, whiteSpace: 'nowrap', flexShrink: 0 } }, '快捷指标'),
+              ...CHART_QUICK_GROUPS.map((group) => {
+                const active = hasSameSelection(selectedMetricKeys, group.fields);
+                return React.createElement(Button, {
+                  key: group.label,
+                  'aria-pressed': active,
+                  onClick: () => setSelectedMetricKeys(group.fields),
+                  style: getQuickButtonStyle(active),
+                }, group.label);
+              }),
+              React.createElement('span', {
+                'aria-hidden': true,
+                style: {
+                  width: '1px',
+                  height: '24px',
+                  margin: '0 2px',
+                  background: '#cbd5e1',
+                  flexShrink: 0,
+                },
+              }),
+              !customQuickLoading && customQuickGroups.map((group) => {
+                const active = hasSameSelection(selectedMetricKeys, group.fields);
+                return React.createElement(Button, {
+                  key: group.id,
+                  onClick: () => setSelectedMetricKeys(group.fields),
+                  disabled: customQuickSaving,
+                  title: group.name,
+                  'aria-pressed': active,
+                  style: getCustomQuickButtonStyle(active),
+                }, React.createElement('span', { style: { display: 'block', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, group.name));
+              }),
+              React.createElement(Button, {
+                disabled: !currentUserId || customQuickLoading || customQuickSaving,
+                loading: customQuickLoading || (showCustomQuickModal && customQuickSaving),
+                type: 'primary',
+                title: currentUserId ? '保存当前指标组合' : '未识别到当前用户，无法保存',
+                'aria-label': '保存当前指标组合',
+                icon: SaveOutlined ? React.createElement(SaveOutlined) : null,
+                onClick: () => { setCustomQuickName(''); setShowCustomQuickModal(true); },
+                style: { width: '40px', minWidth: '40px', height: '40px', padding: 0, borderRadius: '4px' },
+              }, SaveOutlined ? null : '存'),
+              React.createElement(Button, {
+                danger: true,
+                type: 'primary',
+                disabled: !currentUserId || customQuickLoading || customQuickSaving || !customQuickGroups.length,
+                loading: customQuickLoading || (showCustomQuickDeleteModal && customQuickSaving),
+                title: customQuickGroups.length ? '删除自定义快捷' : '暂无可删除的自定义快捷',
+                'aria-label': '删除自定义快捷',
+                icon: DeleteOutlined ? React.createElement(DeleteOutlined) : null,
+                onClick: () => { setSelectedDeleteQuickIds([]); setShowCustomQuickDeleteModal(true); },
+                style: { width: '40px', minWidth: '40px', height: '40px', padding: 0, borderRadius: '4px' },
+              }, DeleteOutlined ? null : '删')
+            ),
+            React.createElement('div', { style: quickGroupStyle },
+              React.createElement('span', { style: { color: '#64748b', fontWeight: 700, fontSize: `${FONT_SIZE_XS}px`, whiteSpace: 'nowrap', flexShrink: 0 } }, '周范围'),
+              React.createElement(Button, {
+                'aria-pressed': allWeeksActive,
+                onClick: () => setSelectedWeekKeys(weeks.map((week) => week.key)),
+                style: getQuickButtonStyle(allWeeksActive),
+              }, '全部周'),
+              React.createElement(Button, {
+                'aria-pressed': latestWeeksActive,
+                onClick: () => setSelectedWeekKeys(latestWeekKeys),
+                disabled: !latestWeekKeys.length,
+                style: getQuickButtonStyle(latestWeeksActive),
+              }, '最近8周'),
+              React.createElement('span', { style: { marginLeft: '2px', color: '#94a3b8', fontSize: `${FONT_SIZE_XS}px`, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' } },
+                loading ? '正在加载真实数据...' : `周 ${selectedWeekKeys.length}/${weeks.length}，词 ${selectedTermKeys.length}/${termOptions.length}`
+              )
             )
           ),
           errorText && React.createElement('div', { style: { marginBottom: '12px', padding: '8px 10px', background: '#fff1f0', border: '1px solid #ffccc7', borderRadius: '6px', color: '#cf1322' } }, errorText),
           React.createElement(TrendLineChart, { weeks: chartPayload.weeks, series: chartPayload.series }),
           React.createElement('div', { style: { marginTop: '8px', color: '#64748b', fontSize: `${FONT_SIZE_XS}px` } },
             '说明：空值不按 0 处理，折线会在空值处断开。'
+          ),
+          React.createElement(Modal, {
+            title: '保存自定义快捷',
+            open: showCustomQuickModal,
+            visible: showCustomQuickModal,
+            width: 420,
+            okText: '保存',
+            cancelText: '取消',
+            confirmLoading: customQuickSaving,
+            maskClosable: !customQuickSaving,
+            destroyOnClose: true,
+            onOk: handleSaveCustomQuick,
+            onCancel: () => {
+              if (customQuickSaving) return;
+              setShowCustomQuickModal(false);
+              setCustomQuickName('');
+            },
+          },
+            React.createElement('div', { style: { display: 'grid', gap: '6px' } },
+              React.createElement('label', { htmlFor: `${BLOCK_UID}_chart_quick_name`, style: { color: '#475569', fontWeight: 700, fontSize: `${FONT_SIZE_SM}px` } }, '快捷名称'),
+              React.createElement(Input, {
+                id: `${BLOCK_UID}_chart_quick_name`,
+                autoFocus: true,
+                value: customQuickName,
+                placeholder: '输入快捷名称',
+                disabled: customQuickSaving,
+                onChange: (event) => setCustomQuickName(event.target.value),
+                onPressEnter: () => { if (!customQuickSaving) handleSaveCustomQuick(); },
+                style: { width: '100%', minHeight: '40px' },
+              })
+            )
+          ),
+          React.createElement(Modal, {
+            title: '删除自定义快捷',
+            open: showCustomQuickDeleteModal,
+            visible: showCustomQuickDeleteModal,
+            width: 420,
+            okText: '删除',
+            cancelText: '取消',
+            confirmLoading: customQuickSaving,
+            okButtonProps: { danger: true, disabled: !selectedDeleteQuickIds.length },
+            maskClosable: !customQuickSaving,
+            destroyOnClose: true,
+            onOk: handleConfirmDeleteCustomQuick,
+            onCancel: () => {
+              if (customQuickSaving) return;
+              setShowCustomQuickDeleteModal(false);
+              setSelectedDeleteQuickIds([]);
+            },
+          },
+            React.createElement('div', { style: { display: 'grid', gap: '6px' } },
+              React.createElement('label', { style: { color: '#475569', fontWeight: 700, fontSize: `${FONT_SIZE_SM}px` } }, '选择要删除的快捷（可多选）'),
+              customQuickGroups.length
+                ? React.createElement('div', {
+                    style: {
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: '8px',
+                      width: '100%',
+                      maxHeight: '280px',
+                      overflowY: 'auto',
+                      padding: '2px',
+                      boxSizing: 'border-box',
+                    },
+                  },
+                    ...customQuickGroups.map((group) => {
+                      const active = selectedDeleteQuickIds.includes(group.id);
+                      return React.createElement(Button, {
+                        key: group.id,
+                        disabled: customQuickSaving,
+                        title: group.name,
+                        'aria-pressed': active,
+                        onClick: () => setSelectedDeleteQuickIds((currentIds) => (
+                          currentIds.includes(group.id)
+                            ? currentIds.filter((id) => id !== group.id)
+                            : [...currentIds, group.id]
+                        )),
+                        style: {
+                          ...getQuickButtonStyle(active),
+                          height: 'auto',
+                          maxWidth: '100%',
+                          whiteSpace: 'normal',
+                          overflowWrap: 'anywhere',
+                        },
+                      }, group.name);
+                    })
+                  )
+                : React.createElement('div', {
+                    style: {
+                      minHeight: '44px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      color: '#94a3b8',
+                      fontSize: `${FONT_SIZE_SM}px`,
+                    },
+                  }, '暂无可删除的自定义快捷')
+            )
           )
         )
     );
