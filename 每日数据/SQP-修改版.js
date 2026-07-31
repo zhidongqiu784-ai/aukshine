@@ -2641,24 +2641,40 @@ async function run() {
       const currentSet = new Set(currentKeys);
       return targetKeys.every((key) => currentSet.has(key));
     };
-    const getQuickButtonStyle = (active) => ({
+    const QUICK_BUTTON_PALETTES = {
+      default: {
+        border: '#bae6fd', background: '#f0f9ff', color: '#0369a1',
+        activeBorder: '#38bdf8', activeBackground: '#e0f2fe', activeColor: '#075985',
+        activeShadow: '0 0 0 2px rgba(14,165,233,0.14)',
+      },
+      custom: {
+        border: '#ddd6fe', background: '#f5f3ff', color: '#6d28d9',
+        activeBorder: '#a78bfa', activeBackground: '#ede9fe', activeColor: '#5b21b6',
+        activeShadow: '0 0 0 2px rgba(124,58,237,0.14)',
+      },
+      allWeeks: {
+        border: '#bbf7d0', background: '#f0fdf4', color: '#15803d',
+        activeBorder: '#4ade80', activeBackground: '#dcfce7', activeColor: '#166534',
+        activeShadow: '0 0 0 2px rgba(34,197,94,0.14)',
+      },
+      latestWeeks: {
+        border: '#fed7aa', background: '#fff7ed', color: '#c2410c',
+        activeBorder: '#fb923c', activeBackground: '#ffedd5', activeColor: '#9a3412',
+        activeShadow: '0 0 0 2px rgba(249,115,22,0.14)',
+      },
+    };
+    const getQuickButtonStyle = (active, palette = QUICK_BUTTON_PALETTES.default) => ({
       minHeight: '40px',
       padding: '4px 12px',
-      borderColor: active ? '#91caff' : '#dbe3ec',
-      background: active ? '#eaf3ff' : '#ffffff',
-      color: active ? '#0958d9' : '#334155',
+      borderColor: active ? palette.activeBorder : palette.border,
+      background: active ? palette.activeBackground : palette.background,
+      color: active ? palette.activeColor : palette.color,
       borderRadius: '4px',
-      boxShadow: active ? '0 1px 2px rgba(22,119,255,0.12)' : '0 1px 1px rgba(15,23,42,0.04)',
+      boxShadow: active ? palette.activeShadow : '0 1px 1px rgba(15,23,42,0.04)',
       fontWeight: active ? 800 : 700,
       fontSize: `${FONT_SIZE_XS}px`,
     });
-    const getCustomQuickButtonStyle = (active) => active
-      ? getQuickButtonStyle(true)
-      : {
-          ...getQuickButtonStyle(false),
-          borderColor: '#cbd5e1',
-          background: '#eef2f7',
-        };
+    const getCustomQuickButtonStyle = (active) => getQuickButtonStyle(active, QUICK_BUTTON_PALETTES.custom);
     const quickGroupStyle = {
       display: 'flex',
       gap: '8px',
@@ -2813,17 +2829,16 @@ async function run() {
               React.createElement(Button, {
                 'aria-pressed': allWeeksActive,
                 onClick: () => setSelectedWeekKeys(weeks.map((week) => week.key)),
-                style: getQuickButtonStyle(allWeeksActive),
+                style: getQuickButtonStyle(allWeeksActive, QUICK_BUTTON_PALETTES.allWeeks),
               }, '全部周'),
               React.createElement(Button, {
                 'aria-pressed': latestWeeksActive,
                 onClick: () => setSelectedWeekKeys(latestWeekKeys),
                 disabled: !latestWeekKeys.length,
-                style: getQuickButtonStyle(latestWeeksActive),
+                style: latestWeekKeys.length
+                  ? getQuickButtonStyle(latestWeeksActive, QUICK_BUTTON_PALETTES.latestWeeks)
+                  : { ...getQuickButtonStyle(false), borderColor: '#e2e8f0', background: '#f8fafc', color: '#94a3b8', boxShadow: 'none' },
               }, '最近8周'),
-              React.createElement('span', { style: { marginLeft: '2px', color: '#94a3b8', fontSize: `${FONT_SIZE_XS}px`, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' } },
-                loading ? '正在加载真实数据...' : `周 ${selectedWeekKeys.length}/${weeks.length}，词 ${selectedTermKeys.length}/${termOptions.length}`
-              )
             )
           ),
           errorText && React.createElement('div', { style: { marginBottom: '12px', padding: '8px 10px', background: '#fff1f0', border: '1px solid #ffccc7', borderRadius: '6px', color: '#cf1322' } }, errorText),
