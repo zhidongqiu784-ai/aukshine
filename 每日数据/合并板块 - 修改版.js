@@ -1016,10 +1016,8 @@
     },
     weekly_ad_total_budget: {
       title: '本周广告总预算',
-      formula: [
-        '日明细：直接显示数据表中的本周广告总预算，无需手工填写。',
-        '周汇总：系统计算本周预算，并显示本周广告花费占预算的比例。',
-      ],
+      formula: '日明细：直接显示数据表中的本周广告总预算，无需手工填写。',
+      weeklySummaryFormula: '系统计算本周预算，并显示本周广告花费占预算的比例。',
       emptyRules: [
         '日明细：weekly_performance.weekly_ad_total_budget 为空',
         '周汇总预算：目标 CPU 或本周目标拆解单量合计为空',
@@ -1035,14 +1033,12 @@
         { label: '周汇总显示公式', field: '本周广告花费合计 ÷ 周汇总预算' },
       ],
       writeBackField: 'daily_weekly_summary.merge_summary_data.weekly_ad_total_budget（仅周汇总）',
-      salesSectionTitle: '销售说明',
+      salesSectionTitle: '日明细口径',
     },
     weekly_target_completion_rate: {
       title: '本周目标完成率',
-      formula: [
-        '日合并行：若本周广告花费为空则为空；若本周广告花费 > 本周广告总预算则提示广告预算超预期；否则按秒杀天数与目标广告费率判断利润空间，并拼接本周目标完成率。',
-        '周汇总行：本周实际总单量合计 ÷ 本周目标拆解单量合计。',
-      ],
+      formula: '日合并行：若本周广告花费为空则为空；若本周广告花费 > 本周广告总预算则提示广告预算超预期；否则按秒杀天数与目标广告费率判断利润空间，并拼接本周目标完成率。',
+      weeklySummaryFormula: '本周实际总单量合计 ÷ 本周目标拆解单量合计。',
       emptyRules: ['日合并行：本周广告花费为空', '周汇总行：本周实际总单量为空或本周目标拆解单量合计为空/为 0'],
       fields: [
         { label: '本周广告花费', field: 'weekly_performance.guanggaohuafei' },
@@ -1053,6 +1049,7 @@
         { label: '本周目标拆解单量合计', field: 'target_management.target_order_qty（同一自然周汇总）' },
       ],
       writeBackField: 'daily_weekly_summary.merge_summary_data.weekly_target_completion_rate',
+      salesSectionTitle: '日明细口径',
     },
     sales_mom_rate: {
       title: '销量环比变化',
@@ -1621,6 +1618,52 @@
   ]);
   const WEEKLY_SUMMARY_CORE_FIELDS = [];
   const MERGED_WEEKLY_DISPLAY_FIELDS = new Set(['weekly_ad_total_budget', 'weekly_target_completion_rate']);
+  const WEEKLY_SUMMARY_LAST_SOURCE_FIELDS = new Set([
+    'target_ad_cvr','target_cpa','ideal_cpu_by_margin',
+    'target_profit_margin','target_ad_spend_rate','exchange_rate',
+  ]);
+  const WEEKLY_SUMMARY_TOOLTIP_OWNED_FIELDS = new Set([
+    'weekly_ad_total_budget','weekly_target_completion_rate',
+  ]);
+  // Keep these descriptions aligned with buildWeeklySummaryFromRows below.
+  const WEEKLY_SUMMARY_DERIVED_TOOLTIP_TEXT = {
+    review_orders_ratio: '本周①测评单合计 ÷ 本周实际总单量合计，结果保留 4 位小数；实际总单量为空或为 0 时为空。',
+    offsite_orders_ratio: '本周站外订单合计 ÷ 本周实际总单量合计，结果保留 4 位小数；实际总单量为空或为 0 时为空。',
+    onsite_orders_ratio: '本周站内订单合计 ÷ 本周实际总单量合计，结果保留 4 位小数；实际总单量为空或为 0 时为空。',
+    onsite_organic_orders_ratio: '本周站内纯自然单合计 ÷ 本周实际总单量合计，结果保留 4 位小数；实际总单量为空或为 0 时为空。',
+    onsite_ad_orders_ratio: '本周站内广告单合计 ÷ 本周实际总单量合计，结果保留 4 位小数；实际总单量为空或为 0 时为空。',
+    adv_rate: '本周广告订单量合计 ÷ 本周实际总单量合计，结果保留 4 位小数；实际总单量为空或为 0 时为空。',
+    natural_traffic_proportion: '本周自然流量合计 ÷ 本周总流量合计，结果保留 4 位小数；总流量为空或为 0 时为空。',
+    ctr: '本周广告点击量合计 ÷ 本周广告曝光量合计，结果保留 4 位小数；广告曝光量为空或为 0 时为空。',
+    cpc: '本周广告花费合计 ÷ 本周广告点击量合计，结果保留 2 位小数；广告点击量为空或为 0 时为空。',
+    acos: '本周广告花费合计 ÷ 本周广告销售额合计，结果保留 4 位小数；广告销售额为空或为 0 时为空。',
+    tacos: '本周广告花费合计 ÷ 本周销售额（当地币）合计，结果保留 4 位小数；销售额为空或为 0 时为空。',
+    guanggaocvr: '本周广告订单量合计 ÷ 本周广告点击量合计，结果保留 4 位小数；广告点击量为空或为 0 时为空。',
+    cpa: '本周广告花费合计 ÷ 本周广告订单量合计，结果保留 2 位小数；广告订单量为空或为 0 时为空。',
+    cpu: '本周广告花费合计 ÷ 本周实际总单量合计，结果保留 2 位小数；实际总单量为空或为 0 时为空。',
+    session_conversion_rate: '本周实际总单量合计 ÷ 本周总流量合计，结果保留 4 位小数；总流量为空或为 0 时为空。',
+    zongcvr: '本周实际总单量合计 ÷ 本周总流量合计，结果保留 4 位小数；总流量为空或为 0 时为空。',
+    volume_cvr: '本周实际总单量合计 ÷ 本周总流量合计，结果保留 4 位小数；总流量为空或为 0 时为空。',
+    cpo: '本周广告花费合计 ÷ 本周实际总单量合计，结果保留 2 位小数；实际总单量为空或为 0 时为空。',
+    order_link_real_session_conversion_rate: '（本周实际总单量合计 - 本周①测评单合计）÷ 本周总流量合计，结果保留 4 位小数；任一必要值为空或总流量为 0 时为空。',
+    real_session_conversion_rate: '与周汇总“实际 Session 转化率”相同，使用（本周实际总单量合计 - 本周①测评单合计）÷ 本周总流量合计。',
+    page_view_conversion_rate: '本周实际总单量合计 ÷ 本周页面浏览量合计，结果保留 4 位小数；页面浏览量为空或为 0 时为空。',
+    return_rate: '本周退款量合计 ÷ 本周实际总单量合计，结果保留 4 位小数；实际总单量为空或为 0 时为空。',
+    return_goods_rate: '本周退货量合计 ÷ 本周实际总单量合计，结果保留 4 位小数；实际总单量为空或为 0 时为空。',
+    profit_margin: '本周净利润（当地币）合计 ÷ 本周成交额（当地币）合计，结果保留 4 位小数；成交额为空或为 0 时为空。',
+    ad_cost_ratio: '本周广告花费合计 ÷ 本周销售额（当地币）合计，结果保留 4 位小数；销售额为空或为 0 时为空。',
+    review_cost_ratio: '本周测评退款成本合计 ÷ 本周销售额（当地币）合计，结果保留 4 位小数；销售额为空或为 0 时为空。',
+    product_cost_ratio: '本周产品成本合计 ÷ 本周销售额（当地币）合计，结果保留 4 位小数；销售额为空或为 0 时为空。',
+    offsite_cost_per_order: '本周站外佣金合计 ÷ 本周站外订单合计，结果保留 2 位小数；站外订单为空或为 0 时为空。',
+    flash_sale_cost_per_order: '本周秒杀总费用合计 ÷ 本周秒杀数量合计，结果保留 2 位小数；无法计算时按 0 显示。',
+    unit_profit_after_ad_local: '本周净利润（当地币）合计 ÷ 本周实际总单量合计，结果保留 2 位小数；实际总单量为空或为 0 时为空。',
+    unit_profit_rmb: '周汇总单台利润（当地币）× 本周最后一个有效汇率，结果保留 2 位小数；任一值为空时为空。',
+    target_ad_cvr_formula: '将周汇总广告 CVR 与本周最后一个目标广告 CVR 比较：达标显示“√”，未达标显示差值。',
+    target_cpa_formula: '将周汇总 CPA 与本周最后一个目标 CPA 比较：超标显示超出金额，否则显示“√”。',
+    ideal_cpu_by_margin_formula: '将周汇总 CPU 与本周最后一个目标 CPU 比较：超标显示超出金额，否则显示“√”。',
+    target_profit_margin_formula: '将周汇总利润率与本周最后一个目标利润率比较：未达标显示差值，否则显示“√”。',
+    target_ad_spend_rate_formula: '将周汇总广告费率与本周最后一个目标广告费率比较：超标显示差值，否则显示“√”。',
+  };
 
   const buildColumnPayload = (cols, preserved = []) => [
     ...cols.map((c) => ({ key: c.key, hidden: c.hidden === true, pinned: c.pinned === true, width: Number(c.width) || 80, headerColor: c.headerColor || null, bodyColor: getColBodyColor(c), editable: c.editable === true, richEdit: c.richEdit === true })),
@@ -8778,11 +8821,11 @@
       return lines.map((line) => line.trim()).filter(Boolean);
     };
     const tooltipSectionTitleStyle = {
-      marginBottom: '5px',
+      marginBottom: '6px',
       color: '#bae0ff',
       fontSize: '12px',
-      fontWeight: 800,
-      letterSpacing: '0.02em',
+      fontWeight: 700,
+      letterSpacing: 0,
     };
     const tooltipBodyStyle = {
       color: 'rgba(255,255,255,0.92)',
@@ -8793,24 +8836,47 @@
       overflowWrap: 'anywhere',
       textWrap: 'pretty',
     };
+    const tooltipHighlightedSectionBaseStyle = {
+      marginTop: '10px',
+      padding: '8px 10px',
+      borderRadius: '0 4px 4px 0',
+    };
+    const tooltipDailyDetailStyle = {
+      ...tooltipHighlightedSectionBaseStyle,
+      borderLeft: '3px solid #5cdbd3',
+      background: 'rgba(19,194,194,0.12)',
+    };
+    const tooltipWeeklySummaryStyle = {
+      ...tooltipHighlightedSectionBaseStyle,
+      borderLeft: '3px solid #69b1ff',
+      background: 'rgba(22,119,255,0.14)',
+    };
     const tooltipFieldRowStyle = {
       display: 'grid',
-      gridTemplateColumns: '92px minmax(0, 1fr)',
-      gap: '7px',
+      gridTemplateColumns: '86px minmax(0, 1fr)',
+      gap: '8px',
       alignItems: 'start',
+      padding: '2px 0',
+    };
+    const tooltipFieldLabelStyle = {
+      color: 'rgba(255,255,255,0.52)',
+      fontWeight: 600,
     };
     const tooltipCodeStyle = {
-      padding: '1px 5px',
-      borderRadius: '4px',
-      background: 'rgba(255,255,255,0.08)',
-      color: 'rgba(255,255,255,0.9)',
+      padding: 0,
+      background: 'transparent',
+      color: 'rgba(255,255,255,0.78)',
       fontFamily: 'monospace',
+      fontSize: '11px',
+      lineHeight: 1.55,
       whiteSpace: 'normal',
-      wordBreak: 'break-all',
+      wordBreak: 'break-word',
+      overflowWrap: 'anywhere',
     };
 
-    const renderTooltip = ({ title, formula, emptyRules = [], fields = [], writeBackField, hideEmptyRules = false, hideFieldMapping = false, sourceInfos = [], emptyRuleMode = '任意', salesSectionTitle = '取值与计算规则' }) => {
+    const renderTooltip = ({ title, formula, weeklySummaryFormula = [], emptyRules = [], fields = [], writeBackField, hideEmptyRules = false, hideFieldMapping = false, sourceInfos = [], emptyRuleMode = '任意', salesSectionTitle = '取值与计算规则' }) => {
       const formulaLines = splitTooltipText(formula || '直接展示该指标值');
+      const weeklySummaryLines = splitTooltipText(weeklySummaryFormula);
       const resolvedEmptyRules = emptyRules.length ? emptyRules : ['无特殊为空条件'];
       return React.createElement('div', {
         style: {
@@ -8831,11 +8897,30 @@
             textWrap: 'balance',
           },
         }, title),
-        React.createElement('div', { style: { paddingTop: '10px' } },
-          React.createElement('div', { style: tooltipSectionTitleStyle }, salesSectionTitle),
+        React.createElement('div', {
+          style: salesSectionTitle === '日明细口径'
+            ? tooltipDailyDetailStyle
+            : { paddingTop: '10px' },
+        },
+          React.createElement('div', {
+            style: salesSectionTitle === '日明细口径'
+              ? { ...tooltipSectionTitleStyle, color: '#87e8de' }
+              : tooltipSectionTitleStyle,
+          }, salesSectionTitle),
           React.createElement('div', { style: { display: 'grid', gap: '4px' } },
             formulaLines.map((line, idx) => React.createElement('div', {
               key: `formula_${idx}`,
+              style: tooltipBodyStyle,
+            }, line))
+          )
+        ),
+        weeklySummaryLines.length > 0 && React.createElement('div', { style: tooltipWeeklySummaryStyle },
+          React.createElement('div', {
+            style: { ...tooltipSectionTitleStyle, marginBottom: '5px', color: '#91caff' },
+          }, '周汇总口径'),
+          React.createElement('div', { style: { display: 'grid', gap: '4px' } },
+            weeklySummaryLines.map((line, idx) => React.createElement('div', {
+              key: `weekly_summary_${idx}`,
               style: tooltipBodyStyle,
             }, line))
           )
@@ -8870,23 +8955,23 @@
             lineHeight: 1.65,
           },
         },
-          React.createElement('div', { style: { ...tooltipSectionTitleStyle, color: '#b7eb8f' } }, '🔧 字段说明（开发用）'),
-          React.createElement('div', { style: { display: 'grid', gap: '5px' } },
+          React.createElement('div', { style: { ...tooltipSectionTitleStyle, color: 'rgba(255,255,255,0.58)' } }, '开发字段'),
+          React.createElement('div', { style: { display: 'grid', gap: '2px' } },
             ...sourceInfos.flatMap((source, idx) => [
               React.createElement('div', { key: `source_workflow_${idx}`, style: tooltipFieldRowStyle },
-                React.createElement('span', { style: { color: 'rgba(255,255,255,0.62)' } }, '来源工作流'),
+                React.createElement('span', { style: tooltipFieldLabelStyle }, '来源工作流'),
                 React.createElement('code', { style: tooltipCodeStyle }, source.workflow)
               ),
               source.schedule && React.createElement('div', { key: `source_schedule_${idx}`, style: tooltipFieldRowStyle },
-                React.createElement('span', { style: { color: 'rgba(255,255,255,0.62)' } }, '执行时间'),
+                React.createElement('span', { style: tooltipFieldLabelStyle }, '执行时间'),
                 React.createElement('span', null, source.schedule)
               ),
               source.scope && React.createElement('div', { key: `source_scope_${idx}`, style: tooltipFieldRowStyle },
-                React.createElement('span', { style: { color: 'rgba(255,255,255,0.62)' } }, '适用站点'),
+                React.createElement('span', { style: tooltipFieldLabelStyle }, '适用站点'),
                 React.createElement('span', null, source.scope)
               ),
               React.createElement('div', { key: `source_node_${idx}`, style: tooltipFieldRowStyle },
-                React.createElement('span', { style: { color: 'rgba(255,255,255,0.62)' } }, 'SQL 节点'),
+                React.createElement('span', { style: tooltipFieldLabelStyle }, 'SQL 节点'),
                 React.createElement('code', { style: tooltipCodeStyle }, source.node)
               ),
             ].filter(Boolean)),
@@ -8894,11 +8979,11 @@
               key: `field_${idx}`,
               style: tooltipFieldRowStyle,
             },
-              React.createElement('span', { style: { color: 'rgba(255,255,255,0.62)' } }, item.label),
+              React.createElement('span', { style: tooltipFieldLabelStyle }, item.label),
               React.createElement('code', { style: tooltipCodeStyle }, item.field)
             )) : []),
             !hideFieldMapping && React.createElement('div', { style: tooltipFieldRowStyle },
-              React.createElement('span', { style: { color: 'rgba(255,255,255,0.62)' } }, '写回字段'),
+              React.createElement('span', { style: tooltipFieldLabelStyle }, '写回字段'),
               React.createElement('code', { style: tooltipCodeStyle }, writeBackField || '无')
             )
           )
@@ -8906,8 +8991,52 @@
       );
     };
 
+    const getWeeklySummaryTooltipLines = (col) => {
+      if (!col || WEEKLY_SUMMARY_TOOLTIP_OWNED_FIELDS.has(col.field)) return [];
+      if (col.key === 'daily_country') return ['固定显示“周汇总”。'];
+      if (col.key === 'daily_date') return ['按周日到周六划分自然周，显示该周起止日期。'];
+      if (col.key === 'daily_promotion_days') return ['按周日作为每周起始日计算自然周编号，显示“第 N 周”。'];
+      if (col._dynamicKind === 'keyword') {
+        return ['按日期比较本周首个和最后一个有效自然位；任一天为“无”时显示“本周有掉队”，只有一个有效值时显示“仅首日数据”，否则显示上升、下滑或持平。'];
+      }
+      if (col._dynamicKind || !col.field) return [];
+
+      const field = col.field;
+      const label = col.label || field;
+      if (WEEKLY_SUMMARY_SUM_FIELDS.has(field)) {
+        const emptyText = field === 'flash_sale_total_cost' ? '；全部为空时按 0 计算' : '；全部为空时为空';
+        return [`同一国家 + ASIN、同一自然周（周日到周六）内，将每日“${label}”的非空数值求和${emptyText}。`];
+      }
+      if (WEEKLY_SUMMARY_AVG_FIELDS.has(field)) {
+        return [`计算同一自然周内每日“${label}”非空数值的平均值，结果保留 2 位小数；全部为空时为空。`];
+      }
+      if (WEEKLY_SUMMARY_LAST_FIELDS.has(field)) {
+        return [`按日期取本周最后一个非空“${label}”；全部为空时为空。`];
+      }
+      if (WEEKLY_SUMMARY_DERIVED_TOOLTIP_TEXT[field]) {
+        return [WEEKLY_SUMMARY_DERIVED_TOOLTIP_TEXT[field]];
+      }
+      if (WEEKLY_SUMMARY_LAST_SOURCE_FIELDS.has(field)) {
+        return [`按日期取本周最后一个有效“${label}”，必要时从目标默认值或产品配置中补取；全部为空时为空。`];
+      }
+      return [];
+    };
+
+    const renderColumnTooltip = (col, config) => {
+      const weeklySummaryLines = [
+        ...splitTooltipText(config.weeklySummaryFormula),
+        ...getWeeklySummaryTooltipLines(col),
+      ];
+      if (!weeklySummaryLines.length) return renderTooltip(config);
+      return renderTooltip({
+        ...config,
+        weeklySummaryFormula: weeklySummaryLines,
+        salesSectionTitle: config.salesSectionTitle || '日明细口径',
+      });
+    };
+
     const getHeaderTooltipText = (col) => {
-      if (col._dynamicKind === 'keyword') return renderTooltip({
+      if (col._dynamicKind === 'keyword') return renderColumnTooltip(col, {
         title: col.label,
         formula: [
           '数据来源：SIF 最近一次从亚马逊前台抓取的自然排名。',
@@ -8924,7 +9053,7 @@
         hideEmptyRules: true,
         salesSectionTitle: '自然位说明',
       });
-      if (col._dynamicKind === 'competitor') return renderTooltip({
+      if (col._dynamicKind === 'competitor') return renderColumnTooltip(col, {
         title: col._competitorGroupLabel || col.label,
         formula: `引用竞对 ASIN「${col._competitorAsin || '未命名'}」，展示当条 date 的${col._competitorSubLabel || ''}。`,
         fields: [
@@ -8934,7 +9063,7 @@
         writeBackField: `order_link_competitor_asins_daily.${col._competitorField || 'notes'}`,
         hideEmptyRules: true,
       });
-      if (FIELD_TOOLTIP_DATA[col.field]) return renderTooltip(FIELD_TOOLTIP_DATA[col.field]);
+      if (FIELD_TOOLTIP_DATA[col.field]) return renderColumnTooltip(col, FIELD_TOOLTIP_DATA[col.field]);
       if (col.src === 'weekly' && WEEKLY_PERFORMANCE_FIELD_TOOLTIP_TEXT[col.field]) {
         const weeklyTooltipLines = WEEKLY_PERFORMANCE_FIELD_TOOLTIP_TEXT[col.field].split('\n');
         const isDirectValue = WEEKLY_PERFORMANCE_DIRECT_VALUE_FIELDS.has(col.field);
@@ -8948,7 +9077,7 @@
         if (col.field === 'reviews_count') {
           weeklyFormulaLines.push(CURRENT_DAY_DATA_TOOLTIP_TEXT);
         }
-        return renderTooltip({
+        return renderColumnTooltip(col, {
           title: col.label,
           formula: weeklyFormulaLines,
           fields: [
@@ -8959,25 +9088,25 @@
           ],
           writeBackField: `weekly_performance.${col.field}（由定时 RPA 写入）`,
           hideEmptyRules: true,
-          salesSectionTitle: '销售说明',
+          salesSectionTitle: '日明细口径',
         });
       }
       const sqlSourceKey = `${col.src}.${col.field}`;
-      if (SQL_UPDATED_FIELD_TEXT[sqlSourceKey]) return renderTooltip({
+      if (SQL_UPDATED_FIELD_TEXT[sqlSourceKey]) return renderColumnTooltip(col, {
         title: col.label,
         formula: SQL_UPDATED_FIELD_TEXT[sqlSourceKey],
         sourceInfos: SQL_UPDATED_FIELD_SOURCE[sqlSourceKey],
         hideEmptyRules: true,
         hideFieldMapping: true,
       });
-      if (FIELD_TOOLTIP_TEXT[col.field]) return renderTooltip({
+      if (FIELD_TOOLTIP_TEXT[col.field]) return renderColumnTooltip(col, {
         title: col.label,
         formula: FIELD_TOOLTIP_TEXT[col.field],
         fields: [{ label: `字段来源（${col.label}）`, field: `${SRC_TABLE_LABEL[col.src] || col.src}.${col.field}` }],
         writeBackField: `${SRC_TABLE_LABEL[col.src] || col.src}.${col.field}`,
         hideEmptyRules: true,
       });
-      return renderTooltip({
+      return renderColumnTooltip(col, {
         title: col.label,
         formula: '直接展示该指标值',
         fields: [{ label: `字段来源（${col.label}）`, field: `${SRC_TABLE_LABEL[col.src] || col.src}.${col.field}` }],
