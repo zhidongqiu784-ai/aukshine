@@ -1100,16 +1100,14 @@
     },
     rsg_number: {
       title: '①测评单',
-      formula: '按当前 ASIN_国家匹配测评需求，取全部专属测评码匹配同一天的 RSG 日数据，再统计关联返款单中未取消订单的数量。',
-      emptyRules: ['当前 ASIN_国家为空', '当前站点时间为空', '未匹配到测评需求记录时按 0 写回', '未匹配到同一天 RSG 日数据时按 0 写回', '返款单号为空不计入', '订单状态为 Canceled 不计入'],
+      formula: '按当前 ASIN_国家和站点时间直接匹配订单列表，统计测评订单标记为“是”且订单状态不是 Canceled 的订单数量；没有符合条件的订单时保留原值。',
+      emptyRules: ['当前 ASIN_国家为空时保留原值', '当前站点时间为空时保留原值', '未匹配到符合条件的订单时保留原值', '订单日期为空或与当前站点时间不一致时不计入', '测评订单标记不等于“是”时不计入', '订单状态为 Canceled 时不计入'],
       fields: [
-        { label: '当前 ASIN_国家', field: 'daily_asins.asin_country = evaluation_requirement.asin_country' },
-        { label: '专属测评码', field: 'evaluation_requirement.exclusive_evaluation_code = rsg_daily.rsg_id' },
-        { label: '当前站点时间', field: 'daily_asins.date = rsg_daily.date' },
-        { label: 'RSG 日数据', field: 'rsg_daily.id = refund.rsg_daily_id' },
-        { label: '返款订单号', field: 'refund.order_number 非空' },
-        { label: '订单状态', field: 'refund.order_number = order_list.order_number; order_list.status != Canceled' },
-        { label: '测评单数量', field: 'COUNT(refund.id)' },
+        { label: '当前 ASIN_国家', field: 'daily_asins.asin_country = order_list.asin_country_code' },
+        { label: '当前站点时间', field: 'daily_asins.date = DATE(order_list.order_date)' },
+        { label: '测评订单标记', field: "order_list.Invite_order = '是'" },
+        { label: '订单状态', field: "order_list.status != 'Canceled'" },
+        { label: '测评单数量', field: 'COUNT(order_list.order_number)；数量大于 0 时写回，等于 0 时保留 daily_asins.rsg_number 原值' },
       ],
       writeBackField: 'daily_asins.rsg_number',
     },
@@ -4091,100 +4089,51 @@
       return result;
     }, [fetchAllByIn]);
 
-    const buildRsgRefundNumberMap = useCallback(async (dailyRows) => {
+    const buildInviteOrderNumberMap = useCallback(async (dailyRows) => {
       const sourceRows = Array.isArray(dailyRows) ? dailyRows.filter(Boolean) : [];
-      const asinCountryToDailyKeys = {};
-      const dailyRowMeta = {};
+      const dailyKeysByAsinCountryDate = {};
+      const asinCountries = new Set();
       const result = {};
       sourceRows.forEach((row) => {
         const rowKey = row?.country_asin_date;
-        const asinCountry = row?.asin_country || (row?.asin && row?.country ? `${row.asin}_${row.country}` : '');
+        const asinCountry = String(row?.asin_country ?? '').trim();
         const dateKey = toDateKey(row?.date);
         if (!rowKey || !asinCountry || !dateKey) return;
-        dailyRowMeta[rowKey] = { asinCountry, dateKey };
-        if (!asinCountryToDailyKeys[asinCountry]) asinCountryToDailyKeys[asinCountry] = new Set();
-        asinCountryToDailyKeys[asinCountry].add(rowKey);
+        if (!dailyKeysByAsinCountryDate[asinCountry]) dailyKeysByAsinCountryDate[asinCountry] = {};
+        if (!dailyKeysByAsinCountryDate[asinCountry][dateKey]) dailyKeysByAsinCountryDate[asinCountry][dateKey] = new Set();
+        dailyKeysByAsinCountryDate[asinCountry][dateKey].add(rowKey);
+        asinCountries.add(asinCountry);
       });
-      const asinCountries = Object.keys(asinCountryToDailyKeys);
-      if (!asinCountries.length) return result;
+      if (!asinCountries.size) return result;
 
-      const evaluationRows = await fetchAllByIn('evaluation_requirement:list', 'asin_country', asinCountries, {
+      const orderRows = await fetchAllByIn('order_list:list', 'asin_country_code', [...asinCountries], {
+        extraAnd: [{ Invite_order: { $eq: '是' } }],
+        params: {
+          fields: ['order_number', 'asin_country_code', 'Invite_order', 'status', 'order_date'],
+        },
         chunkSize: 80,
         pageSize: 500,
       });
-
-      const rsgKeyToDailyKeysByDate = {};
-      evaluationRows.forEach((row) => {
-        const asinCountry = row?.asin_country;
-        const code = String(row?.exclusive_evaluation_code ?? '').trim();
-        if (!asinCountry || !code || !asinCountryToDailyKeys[asinCountry]) return;
-        if (!rsgKeyToDailyKeysByDate[code]) rsgKeyToDailyKeysByDate[code] = {};
-        [...asinCountryToDailyKeys[asinCountry]].forEach((dailyKey) => {
-          const dateKey = dailyRowMeta[dailyKey]?.dateKey;
-          if (!dateKey) return;
-          if (!Object.prototype.hasOwnProperty.call(result, dailyKey)) result[dailyKey] = 0;
-          if (!rsgKeyToDailyKeysByDate[code][dateKey]) rsgKeyToDailyKeysByDate[code][dateKey] = new Set();
-          rsgKeyToDailyKeysByDate[code][dateKey].add(dailyKey);
-        });
-      });
-      const rsgKeys = Object.keys(rsgKeyToDailyKeysByDate);
-      const neededDates = [...new Set(Object.values(dailyRowMeta).map((meta) => meta.dateKey).filter(Boolean))];
-      if (!rsgKeys.length) return result;
-
-      const rsgDailyRows = await fetchAllByIn('rsg_daily:list', 'rsg_id', rsgKeys, {
-        extraAnd: neededDates.length ? [{ date: { $in: neededDates } }] : [],
-        chunkSize: 80,
-        pageSize: 500,
-      });
-      const rsgDailyIdToDailyKeys = {};
-      const rsgDailyIdsForQuery = [];
-      rsgDailyRows.forEach((row) => {
-        const id = row?.id;
-        const rsgKey = String(row?.rsg_id ?? '').trim();
-        const dateKey = toDateKey(row?.date);
-        const dailyKeys = rsgKeyToDailyKeysByDate[rsgKey]?.[dateKey];
-        if (id == null || !rsgKey || !dateKey || !dailyKeys) return;
-        rsgDailyIdToDailyKeys[String(id)] = dailyKeys;
-        rsgDailyIdsForQuery.push(id);
-      });
-      const rsgDailyIds = [...new Set(rsgDailyIdsForQuery)];
-      if (!rsgDailyIds.length) return result;
-
-      const refundRows = await fetchAllByIn('refund:list', 'rsg_daily_id', rsgDailyIds, {
-        chunkSize: 80,
-        pageSize: 500,
-      });
-      const orderNumbers = [...new Set(refundRows.map((row) => String(row?.order_number ?? '').trim()).filter(Boolean))];
-      if (!orderNumbers.length) return result;
-
-      const orderRows = await fetchAllByIn('order_list:list', 'order_number', orderNumbers, {
-        chunkSize: 80,
-        pageSize: 500,
-      });
-      const validOrderNumbers = new Set();
       orderRows.forEach((row) => {
         const orderNumber = String(row?.order_number ?? '').trim();
+        const asinCountry = String(row?.asin_country_code ?? '').trim();
+        const inviteOrder = String(row?.Invite_order ?? '').trim();
         const status = String(row?.status ?? '').trim();
-        if (orderNumber && status !== 'Canceled') validOrderNumbers.add(orderNumber);
-      });
-
-      refundRows.forEach((row) => {
-        const rsgDailyId = String(row?.rsg_daily_id ?? '');
-        const orderNumber = String(row?.order_number ?? '').trim();
-        if (!orderNumber || !validOrderNumbers.has(orderNumber)) return;
-        const dailyKeys = rsgDailyIdToDailyKeys[rsgDailyId];
+        const dateKey = toDateKey(row?.order_date);
+        if (!orderNumber || !asinCountry || inviteOrder !== '是' || status === 'Canceled' || !dateKey) return;
+        const dailyKeys = dailyKeysByAsinCountryDate[asinCountry]?.[dateKey];
         if (!dailyKeys) return;
         [...dailyKeys].forEach((key) => {
-          if (Object.prototype.hasOwnProperty.call(result, key)) result[key] = (result[key] || 0) + 1;
+          result[key] = (result[key] || 0) + 1;
         });
       });
       return result;
     }, [fetchAllByIn]);
 
-    const syncDailyRsgNumbersFromRefunds = useCallback(async (dailyRows, options = {}) => {
+    const syncDailyRsgNumbersFromOrders = useCallback(async (dailyRows, options = {}) => {
       const sourceRows = Array.isArray(dailyRows) ? dailyRows.filter(Boolean) : [];
       if (!sourceRows.length) return { rows: [], patchMap: {}, updateCount: 0, failCount: 0 };
-      const rsgNumberMap = await buildRsgRefundNumberMap(sourceRows);
+      const rsgNumberMap = await buildInviteOrderNumberMap(sourceRows);
       const patchMap = {};
       const updateJobs = [];
       const rows = sourceRows.map((row) => {
@@ -4216,7 +4165,7 @@
         failCount += results.filter((r) => r.status === 'rejected').length;
       }
       return { rows, patchMap, updateCount, failCount };
-    }, [buildRsgRefundNumberMap]);
+    }, [buildInviteOrderNumberMap]);
 
     const normalizeWeeklySummaryRecord = useCallback((record) => {
       if (!record?.country_asin_week_range) return null;
@@ -4486,7 +4435,7 @@
     const mergeDailyRowsForWeeklySummary = useCallback(async (dailyRows, options = {}) => {
       let sourceDailyRows = Array.isArray(dailyRows) ? dailyRows.filter(Boolean) : [];
       if (!sourceDailyRows.length) return { mergedRows: [], summaryCols: [...INITIAL_COLUMNS] };
-      const rsgSyncResult = await syncDailyRsgNumbersFromRefunds(sourceDailyRows);
+      const rsgSyncResult = await syncDailyRsgNumbersFromOrders(sourceDailyRows);
       sourceDailyRows = rsgSyncResult.rows.length ? rsgSyncResult.rows : sourceDailyRows;
 
       const dailyKeys = [...new Set(sourceDailyRows.map((d) => d.country_asin_date).filter(Boolean))];
@@ -4606,7 +4555,7 @@
       });
 
       return { mergedRows, summaryCols: [...INITIAL_COLUMNS, ...keywordCols, ...competitorCols] };
-    }, [fetchAllList, syncDailyRsgNumbersFromRefunds]);
+    }, [fetchAllList, syncDailyRsgNumbersFromOrders]);
 
     const estimateTextWidth = (text, fontSize) => String(text ?? '').length * fontSize * 0.62;
     const calcKeywordColWidth = (label) => Math.max(200, Math.min(360, Math.ceil(estimateTextWidth(label, FONT_SIZE_SM) + 48)));
@@ -4819,7 +4768,7 @@
           chunkSize: 50,
           pageSize: 500,
         });
-        const rsgSyncResult = await syncDailyRsgNumbersFromRefunds(dailyRowsForFormula, { writeBack: false });
+        const rsgSyncResult = await syncDailyRsgNumbersFromOrders(dailyRowsForFormula, { writeBack: false });
         dailyRowsForFormula = rsgSyncResult.rows.length ? rsgSyncResult.rows : dailyRowsForFormula;
         const originalActivityAnnotationMap = {};
         dailyRowsForFormula.forEach((row) => {
@@ -5574,7 +5523,7 @@
           setCalcProgress('');
         }
       }
-    }, [attachWeeklySummaryDataToRows, buildActivityAnnotationMatchMap, fetchAllByIn, getSummaryKeyForRow, refreshWeeklySummariesFromRows, syncDailyRsgNumbersFromRefunds]);
+    }, [attachWeeklySummaryDataToRows, buildActivityAnnotationMatchMap, fetchAllByIn, getSummaryKeyForRow, refreshWeeklySummariesFromRows, syncDailyRsgNumbersFromOrders]);
 
     async function loadAllDailyRowsForCurrentCountryAsin() {
       if (!filterCountry || !filterAsin) return [];
@@ -5745,7 +5694,7 @@
           if (row?.country_asin_date) relatedDailyMap[row.country_asin_date] = row;
         });
         let relatedDailyRecords = Object.values(relatedDailyMap);
-        const rsgSyncResult = await syncDailyRsgNumbersFromRefunds(relatedDailyRecords);
+        const rsgSyncResult = await syncDailyRsgNumbersFromOrders(relatedDailyRecords);
         if (rsgSyncResult.rows.length) {
           const syncedDailyMap = {};
           rsgSyncResult.rows.forEach((row) => {
@@ -5942,7 +5891,7 @@
       } finally {
         setLoading(false);
       }
-    }, [filterAsin, filterCountry, hasRequiredUrlParams, dateFilterType, getDateRange, getDailySort, fetchAllList, fetchAllByIn, buildDynamicKeywordCols, buildDynamicCompetitorCols, normalizeWeeklySummaryRecord, getSummaryKeyForRow, attachWeeklySummaryDataToRows, refreshWeeklySummariesFromRows, recalcAllCoreFormulas, showFormulaProgress, finishFormulaProgress, resetFormulaProgress, syncDailyRsgNumbersFromRefunds]);
+    }, [filterAsin, filterCountry, hasRequiredUrlParams, dateFilterType, getDateRange, getDailySort, fetchAllList, fetchAllByIn, buildDynamicKeywordCols, buildDynamicCompetitorCols, normalizeWeeklySummaryRecord, getSummaryKeyForRow, attachWeeklySummaryDataToRows, refreshWeeklySummariesFromRows, recalcAllCoreFormulas, showFormulaProgress, finishFormulaProgress, resetFormulaProgress, syncDailyRsgNumbersFromOrders]);
 
     useEffect(() => {
       const backgroundState = backgroundMergeSummaryRef.current;
