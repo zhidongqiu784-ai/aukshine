@@ -407,6 +407,7 @@
     zongliuliang: '总流量 = 同国家+ASIN下取 Sessions-Total 最大值。\nzongliuliang = max(sessions_total)。',
     session_conversion_rate: '会话转化率 = 实际总单量 ÷ 汇总流量-会话量，并保留 4 位小数。\nsession_conversion_rate = round(sales ÷ zongliuliang, 4)；zongliuliang 为 0 时为 null。',
   };
+  const WEEKLY_PERFORMANCE_UPDATE_TOOLTIP_TEXT = '每天更新2次（早上8点、16点），每次更新过去7天的数据；';
 
   const TARGET_CVR_NOTE_TOOLTIP = {
     title: '目标转化率调整提示',
@@ -6986,7 +6987,10 @@
         const weeklyTooltipLines = WEEKLY_PERFORMANCE_FIELD_TOOLTIP_TEXT[col.field].split('\n');
         return {
           title: col.label,
-          formula: weeklyTooltipLines[0] || '直接展示该指标值',
+          formula: [
+            weeklyTooltipLines[0] || '直接展示该指标值',
+            WEEKLY_PERFORMANCE_UPDATE_TOOLTIP_TEXT,
+          ],
           hideEmptyRules: true,
           fields: [
             { label: '字段标识公式', field: weeklyTooltipLines[1] || `${col.field} = 直接展示该指标值` },
