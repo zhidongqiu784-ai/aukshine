@@ -360,8 +360,8 @@ async function requestEligibleProducts() {
   if (IS_SUPERVISOR) {
     const managedResponse = await apiRequest({
       url: 'users:list', method: 'get', params: {
-        page: 1, pageSize: 1000, fields: 'username,department_manager',
-        filter: JSON.stringify({ department_manager: { $eq: CURRENT_USERNAME } }),
+        page: 1, pageSize: 1000, fields: 'username,manager',
+        filter: JSON.stringify({ manager: { $eq: CURRENT_USERNAME } }),
       },
     });
     const managedSales = pickRows(managedResponse).map((row) => row.username).filter(Boolean);

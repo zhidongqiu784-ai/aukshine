@@ -4,7 +4,7 @@
 -- :expected_row_version, :comment, :audit_log_id
 --
 -- action 仅支持 APPROVE / REJECT；审核身份与范围全部从 users、roles_users、
--- asin.sale_owner -> users.department_manager 实时回查。更新使用 id + status + row_version
+-- asin.sale_owner -> users.manager 实时回查。更新使用 id + status + row_version
 -- 三重条件，防止两个审核动作覆盖彼此。
 
 START TRANSACTION;
@@ -81,8 +81,8 @@ SET @v2_live_sale_owner = (
     FROM asin AS a
     WHERE a.asin = @v2_asin AND a.country = @v2_country
 );
-SET @v2_live_department_manager = (
-    SELECT MAX(NULLIF(TRIM(sale_user.department_manager), ''))
+SET @v2_live_sale_manager = (
+    SELECT MAX(NULLIF(TRIM(sale_user.manager), ''))
     FROM users AS sale_user
     WHERE sale_user.username = @v2_live_sale_owner
 );
@@ -97,7 +97,7 @@ SET @v2_actor_allowed = CASE
     WHEN @v2_from_status = 'PENDING_SUPERVISOR'
      AND @v2_acting_role = 'LEAD'
      AND @v2_is_supervisor = 1
-     AND @v2_live_department_manager = @v2_actor_username THEN 1
+     AND @v2_live_sale_manager = @v2_actor_username THEN 1
     WHEN @v2_from_status = 'PENDING_PROCUREMENT'
      AND @v2_acting_role = 'OPS'
      AND @v2_is_logistics = 1
