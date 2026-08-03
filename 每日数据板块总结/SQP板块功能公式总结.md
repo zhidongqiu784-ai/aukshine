@@ -160,26 +160,26 @@ SQP 板块支持保存当前用户的页面配置，也支持管理员把默认�
 - 管理员也可以把默认视图、词下字段模板、词下字段颜色和重要指标字段背景推送给指定用户。
 - 这些配置只影响页面展示习惯，不改变 SQP 业务数据本身。
 
-### 2.8 目标份额默认值维护
+### 2.8 关键词/词根目标份额默认值维护
 
-SQP 板块支持在页面上维护当前 ASIN 的默认阶段目标份额。
+SQP 板块支持在“管理关键词/词根”弹窗中，为每个关键词和词根分别维护默认阶段目标份额。现有和新建词的初始默认值均为 10%。
 
 默认阶段目标份额写入：
 
-- `asin.default_stage_target_share`
+- `sqp_keywords.default_stage_target_share`
+- `sqp_roots.default_stage_target_share`
 
 字段名公式版：
 
-- `asin.unique = 当前 ASIN_当前国家`
-- `asin.default_stage_target_share = 输入百分比 / 100`
+- `关键词/词根.default_stage_target_share = 输入百分比 / 100`
 - `if sqp_term_weekly.stage_target_share_is_manual = true => 保留手动值`
-- `else => sqp_term_weekly.stage_target_share = asin.default_stage_target_share`
+- `else => sqp_term_weekly.stage_target_share = 当前关键词/词根.default_stage_target_share`
 
 中文公式版：
 
-- 运营在页面上填 5%，系统保存时会按 0.05 写入 ASIN 表。
+- 运营给某个关键词或词根填 5%，系统保存时会按 0.05 写入对应词记录。
 - 已经手动改过目标份额的关键词或词根，不会被默认值覆盖。
-- 没有手动改过的关键词或词根，会跟随 ASIN 默认目标份额重新计算一周需出单和单日需出单。
+- 没有手动改过的周记录，会跟随所属关键词或词根的默认目标份额重新计算一周需出单和单日需出单。
 
 ## 3. 数据什么时候抓
 
@@ -308,20 +308,20 @@ SQP 板块默认日期筛选为「全部日期」。
 
 ### 4.4 阶段目标份额覆盖逻辑
 
-阶段目标份额有“手动值”和“ASIN 默认值”两种来源。
+阶段目标份额有“当前周手动值”和“关键词/词根默认值”两种来源。
 
 字段名公式版：
 
 - `manual = stage_target_share_is_manual = true`
 - `if manual then stage_target_share = 当前行手动值`
-- `else stage_target_share = asin.default_stage_target_share`
+- `else stage_target_share = 当前关键词/词根.default_stage_target_share`
 - `weekly_required_orders = CEIL(stage_target_share * purchases_count)`
 - `daily_required_orders = CEIL(weekly_required_orders / 7)`
 
 中文公式版：
 
 - 如果运营手动改过某个关键词或词根的阶段目标份额，就保留手动值。
-- 如果没有手动改过，就使用 ASIN 上维护的默认阶段目标份额。
+- 如果没有手动改过，就使用所属关键词或词根维护的默认阶段目标份额。
 - 一周需出单用阶段目标份额乘市场购买量。
 - 单日需出单用一周需出单除以 7 并向上取整。
 
@@ -405,25 +405,25 @@ SQP 板块默认日期筛选为「全部日期」。
 - 当前 ASIN 缺少的默认关键词或默认词根会自动补上。
 - 补齐后，系统会继续生成这些词对应的周汇总。
 
-### 4.9 目标份额默认值写回逻辑
+### 4.9 关键词/词根目标份额默认值写回逻辑
 
-页面上的“目标份额默认值”保存到 `asin` 表。
+“管理关键词/词根”弹窗中的目标份额默认值保存到对应的关键词或词根记录。
 
 字段名公式版：
 
-- `asin.unique = 当前 ASIN_当前国家`
-- `asin.default_stage_target_share = 输入值 / 100`
-- `load(skipFormula = true)` 刷新页面数据
+- `sqp_keywords.default_stage_target_share = 输入值 / 100`
+- `sqp_roots.default_stage_target_share = 输入值 / 100`
+- 重算当前关键词/词根的周汇总
 - `manual row keeps stage_target_share`
-- `non-manual row uses asin.default_stage_target_share`
+- `non-manual row uses 当前关键词/词根.default_stage_target_share`
 
 中文公式版：
 
 - 运营输入的是百分比，例如 5。
 - 系统写入数据库时保存为小数，例如 0.05。
-- 保存后会刷新当前页。
+- 保存后只同步当前关键词或词根的周汇总并刷新当前页。
 - 手动改过阶段目标份额的行保持原值。
-- 没手动改过的行使用新的 ASIN 默认值，并重新计算一周需出单、单日需出单和对比分析。
+- 没手动改过的行使用所属关键词或词根的新默认值，并重新计算一周需出单、单日需出单和对比分析。
 
 ### 4.10 用户视图和配置覆盖逻辑
 
@@ -513,7 +513,7 @@ SQP 板块支持部分词下字段手动编辑。
 | 16 | SQP-Asin 点击份额 | `asin_click_share` | `clicks_asin_count / clicks_count` | 当前 ASIN 点击量占市场点击量的比例。 |
 | 17 | SQP-Asin 加购份额 | `asin_cart_share` | `cart_additions_asin_count / cart_additions_count` | 当前 ASIN 加购量占市场加购量的比例。 |
 | 18 | SQP-Asin 出单份额 | `asin_purchase_share` | `purchases_asin_count / purchases_count` | 当前 ASIN 购买量占市场购买量的比例。 |
-| 19 | 阶段目标份额 | `stage_target_share` | `manual_value OR asin.default_stage_target_share` | 手动填了就用手动值，否则用 ASIN 默认阶段目标份额。 |
+| 19 | 阶段目标份额 | `stage_target_share` | `manual_value OR 当前关键词/词根.default_stage_target_share` | 手动填了就用手动值，否则用所属关键词或词根的默认阶段目标份额。 |
 | 20 | 一周需出单 | `weekly_required_orders` | `CEIL(stage_target_share * purchases_count)` | 阶段目标份额乘市场购买量并向上取整。 |
 | 21 | 单日需出单 | `daily_required_orders` | `CEIL(weekly_required_orders / 7)` | 一周需出单除以 7 并向上取整。 |
 | 22 | 市场数据环比分析 | `market_diagnosis` | `COMPARE(current_week market fields, previous_week market fields)` | 对比本周和上周市场查询、曝光、点击、加购、购买、CTR、加购率、CVR。 |
@@ -579,7 +579,7 @@ SQP 板块支持部分词下字段手动编辑。
 
 字段名公式版：
 
-- `stage_target_share = manual stage_target_share OR asin.default_stage_target_share`
+- `stage_target_share = manual stage_target_share OR 当前关键词/词根.default_stage_target_share`
 - `weekly_required_orders = CEIL(stage_target_share * purchases_count)`
 - `daily_required_orders = CEIL(weekly_required_orders / 7)`
 

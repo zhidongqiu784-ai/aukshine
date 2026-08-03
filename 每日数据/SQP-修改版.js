@@ -316,7 +316,7 @@ async function run() {
     asin_click_share: 'SQP-Asin点击量 / SQP-市场点击量',
     asin_cart_share: 'SQP-Asin加购量 / SQP-市场加购量',
     asin_purchase_share: 'SQP-Asin购买量 / SQP-市场购买量',
-    stage_target_share: 'ASIN 默认值或手填',
+    stage_target_share: '关键词/词根默认值或手填',
     weekly_required_orders: '阶段目标份额 * 市场周购买量',
     daily_required_orders: '一周需出单 / 7',
     monday_review_note: '用户手填：周一自用备注或复盘。',
@@ -514,10 +514,11 @@ async function run() {
     },
     stage_target_share: {
       title: '阶段目标份额',
-      formula: '默认取当前 ASIN 表中的阶段目标份额。当前关键词/词根手动填写后，以手动值优先。清空手动值后，恢复使用当前 ASIN 默认值。',
-      emptyRules: ['当前 ASIN 未设置默认阶段目标份额，并且当前关键词/词根也未手动填写'],
+      formula: '默认取当前关键词/词根自己的阶段目标份额。当前周手动填写后，以手动值优先。清空手动值后，恢复使用当前关键词/词根默认值。',
+      emptyRules: ['当前关键词/词根未设置默认阶段目标份额，并且当前周也未手动填写'],
       fields: [
-        { label: 'ASIN 默认值', field: 'asin.default_stage_target_share' },
+        { label: '关键词默认值', field: 'sqp_keywords.default_stage_target_share' },
+        { label: '词根默认值', field: 'sqp_roots.default_stage_target_share' },
         { label: '当前词目标份额', field: 'sqp_term_weekly.stage_target_share' },
         { label: '是否手动填写', field: 'sqp_term_weekly.stage_target_share_is_manual' },
       ],
@@ -1552,6 +1553,7 @@ async function run() {
   const div0 = (a, b) => safeNum(b) === 0 ? 0 : safeNum(a) / safeNum(b);
   const isValidNumber = (v) => v != null && v !== '' && !Number.isNaN(Number(v));
   const roundRateValue = (v) => (isValidNumber(v) ? Math.round(Number(v) * 10000) / 10000 : null);
+  const DEFAULT_TERM_STAGE_TARGET_SHARE = 0.1;
   const REQUIRED_ORDERS_FIELDS = new Set(['weekly_required_orders', 'daily_required_orders']);
   const STAGE_TARGET_SYNC_FIELDS = new Set([
     'stage_target_share',
@@ -1598,6 +1600,25 @@ async function run() {
     ...payload,
     ...buildStageTargetDerivedValues(sourceTerm || payload, stageDefaultState, payload?.purchases_count),
   });
+  const getTermStageDefaultState = (termItem) => ({
+    loaded: !!termItem,
+    value: normalizeStageTargetShare(termItem?.default_stage_target_share),
+  });
+  const getActiveTermStageDefaultState = (term, activeRefs) => {
+    if (!activeRefs) return { loaded: false, value: null };
+    const defaultMap = term?.term_type === 'root'
+      ? activeRefs.rootDefaults
+      : activeRefs.keywordDefaults;
+    const idKey = term?.term_id != null ? `id:${term.term_id}` : '';
+    const nameKey = term?.term_name ? `name:${String(term.term_name).trim()}` : '';
+    if (idKey && Object.prototype.hasOwnProperty.call(defaultMap || {}, idKey)) {
+      return { loaded: true, value: normalizeStageTargetShare(defaultMap[idKey]) };
+    }
+    if (nameKey && Object.prototype.hasOwnProperty.call(defaultMap || {}, nameKey)) {
+      return { loaded: true, value: normalizeStageTargetShare(defaultMap[nameKey]) };
+    }
+    return { loaded: true, value: null };
+  };
   const pickStageTargetSyncUpdates = (updates) => {
     const picked = {};
     Object.entries(updates || {}).forEach(([field, value]) => {
@@ -1609,25 +1630,6 @@ async function run() {
     const cleanCountry = String(country || '').trim();
     const cleanAsin = String(asin || '').trim();
     return cleanCountry && cleanAsin ? `${cleanAsin}_${cleanCountry}` : null;
-  };
-  const fetchAsinDefaultStageShare = async (country, asin) => {
-    const unique = getAsinUniqueKey(country, asin);
-    if (!unique) return { loaded: true, value: null };
-    try {
-      const res = await ctx.request({
-        url: 'asin:list',
-        method: 'get',
-        params: {
-          pageSize: 1,
-          filter: JSON.stringify({ unique: { $eq: unique } }),
-        },
-      });
-      const row = Array.isArray(res?.data?.data) ? res.data.data[0] : null;
-      return { loaded: true, value: normalizeStageTargetShare(row?.default_stage_target_share) };
-    } catch (err) {
-      console.error('读取 ASIN 默认阶段目标份额失败:', err);
-      return { loaded: false, value: null };
-    }
   };
   const calcWeeklyRequiredOrders = (stageShare, purchasesCount) => (
     stageShare == null || stageShare === '' || !isValidNumber(purchasesCount)
@@ -1813,7 +1815,7 @@ async function run() {
     };
   };
 
-  const TermSummaryCell = ({ term, asinStageDefaultState, onStageShareSaved }) => {
+  const TermSummaryCell = ({ term, onStageShareSaved }) => {
     const [editing, setEditing] = useState(false);
     const [value, setValue] = useState(term?.stage_target_share != null ? Number(term.stage_target_share) * 100 : null);
     const [saving, setSaving] = useState(false);
@@ -1831,7 +1833,7 @@ async function run() {
         const isManualInput = !(value === '' || value == null);
         const stageShare = isManualInput
           ? roundRateValue(Number(value) / 100)
-          : normalizeStageTargetShare(asinStageDefaultState?.value);
+          : normalizeStageTargetShare(term?.term_default_stage_target_share);
         const weeklyRequired = calcWeeklyRequiredOrders(stageShare, term.purchases_count);
         const dailyRequired = calcDailyRequiredOrders(weeklyRequired);
         const nextTerm = {
@@ -2953,6 +2955,8 @@ async function run() {
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [name, setName] = useState('');
+    const [newDefaultShare, setNewDefaultShare] = useState(DEFAULT_TERM_STAGE_TARGET_SHARE * 100);
+    const [defaultInputs, setDefaultInputs] = useState({});
     const [editingId, setEditingId] = useState(null);
     const [editingName, setEditingName] = useState('');
     const [updatingId, setUpdatingId] = useState(null);
@@ -3002,7 +3006,7 @@ async function run() {
         return rows;
       };
 
-      const stageDefaultState = await fetchAsinDefaultStageShare(country, asin);
+      const stageDefaultState = getTermStageDefaultState(termItem);
       const weeks = await fetchAll('sqp_weekly_main:list', {
         sort: 'report_date',
         filter: JSON.stringify({ country_asin: { $eq: countryAsin } }),
@@ -3244,7 +3248,12 @@ async function run() {
           sort: TERM_ADDED_ORDER_SORT,
           filter: JSON.stringify({ country_asin: { $eq: countryAsin } }),
         });
-        setItems(sortTermsByAddedOrder(rows));
+        const orderedRows = sortTermsByAddedOrder(rows);
+        setItems(orderedRows);
+        setDefaultInputs(Object.fromEntries(orderedRows.map((item) => [
+          item.id,
+          isValidNumber(item.default_stage_target_share) ? Number(item.default_stage_target_share) * 100 : null,
+        ])));
         let modelName = String(model || '').trim();
         if (!modelName) {
           const asinRows = await fetchAll('asin:list', {
@@ -3289,24 +3298,46 @@ async function run() {
     }, [visible, countryAsin, collection, country, asin, model, tab, title]);
 
     useEffect(() => { load(); }, [load]);
-    useEffect(() => { if (!visible) { setName(''); setTab('keyword'); setEditingId(null); setEditingName(''); setUpdatingId(null); } }, [visible]);
+    useEffect(() => {
+      if (!visible) {
+        setName('');
+        setNewDefaultShare(DEFAULT_TERM_STAGE_TARGET_SHARE * 100);
+        setDefaultInputs({});
+        setTab('keyword');
+        setEditingId(null);
+        setEditingName('');
+        setUpdatingId(null);
+      }
+    }, [visible]);
 
     const addItem = async () => {
       const trimmed = String(name || '').trim();
       if (!trimmed) { ctx.message.warning(`请输入${title}`); return; }
       if (!countryAsin) { ctx.message.warning('请先筛选到具体站点和 ASIN'); return; }
+      const defaultShare = isValidNumber(newDefaultShare)
+        ? roundRateValue(Number(newDefaultShare) / 100)
+        : DEFAULT_TERM_STAGE_TARGET_SHARE;
       try {
         setSaving(true);
         const createdRes = await ctx.request({
           url: `${collection}:create`,
           method: 'post',
-          data: withCreateTimestamps({ country_asin: countryAsin, country, asin, [nameField]: trimmed }),
+          data: withCreateTimestamps({
+            country_asin: countryAsin,
+            country,
+            asin,
+            [nameField]: trimmed,
+            default_stage_target_share: defaultShare,
+          }),
         });
         const created = createdRes?.data?.data || {};
-        const termItem = created?.id ? created : await findTermItem(trimmed);
+        const termItem = created?.id
+          ? { ...created, default_stage_target_share: defaultShare }
+          : await findTermItem(trimmed);
         ctx.message.loading?.(`正在生成${title}汇总...`);
         const result = await recalcTermWeekly(termItem, trimmed);
         setName('');
+        setNewDefaultShare(DEFAULT_TERM_STAGE_TARGET_SHARE * 100);
         await load();
         onRefresh?.({ action: 'recalc', rows: result.rows });
         ctx.message.success(`新增成功，已生成 ${result.count} 周汇总`);
@@ -3366,6 +3397,43 @@ async function run() {
       }
     };
 
+    const updateDefaultShare = async (item) => {
+      const inputValue = defaultInputs[item.id];
+      if (inputValue !== '' && inputValue != null && !isValidNumber(inputValue)) {
+        ctx.message.warning('请输入有效的目标份额默认值');
+        return;
+      }
+      const nextValue = inputValue === '' || inputValue == null
+        ? null
+        : roundRateValue(Number(inputValue) / 100);
+      const currentValue = normalizeStageTargetShare(item?.default_stage_target_share);
+      if (String(currentValue ?? '') === String(nextValue ?? '')) return;
+      const nextItem = { ...item, default_stage_target_share: nextValue };
+      const termName = String(item?.[nameField] || '').trim();
+      try {
+        setUpdatingId(item.id);
+        onRecalcStateChange?.(item.id, true);
+        await ctx.request({
+          url: `${collection}:update`,
+          method: 'post',
+          params: { filterByTk: item.id },
+          data: { default_stage_target_share: nextValue },
+        });
+        setItems((prev) => prev.map((it) => it.id === item.id ? nextItem : it));
+        onRecalcProgress?.({ label: `正在同步${title} ${termName}的非手动目标份额`, percent: 3 });
+        const result = await recalcTermWeekly(nextItem, termName, onRecalcProgress);
+        onRefresh?.({ action: 'recalc', rows: result.rows });
+        ctx.message.success(`目标份额默认值已保存，并同步 ${result.count} 周汇总`);
+        onRecalcFinish?.(`目标份额同步完成：${title} ${termName}`);
+      } catch (err) {
+        ctx.message.error(`目标份额保存失败：${err?.message || ''}`);
+        onRecalcFinish?.(`目标份额同步失败：${title} ${termName}`);
+      } finally {
+        setUpdatingId(null);
+        onRecalcStateChange?.(item.id, false);
+      }
+    };
+
     const deleteItem = async (item) => {
       try {
         if (isDefaultLocked(item)) {
@@ -3419,7 +3487,7 @@ async function run() {
       visible,
       onCancel: onClose,
       footer: null,
-      width: 680,
+      width: 860,
       destroyOnClose: true,
     },
       !countryAsin
@@ -3429,8 +3497,20 @@ async function run() {
               React.createElement(Button, { type: tab === 'keyword' ? 'primary' : 'default', onClick: () => setTab('keyword') }, '关键词'),
               React.createElement(Button, { type: tab === 'root' ? 'primary' : 'default', onClick: () => setTab('root') }, '词根')
             ),
-            React.createElement('div', { style: { display: 'flex', gap: 8, marginBottom: 12 } },
+            React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '1fr 180px auto', gap: 8, marginBottom: 12 } },
               React.createElement(Input, { value: name, placeholder: `新增${title}`, onChange: (e) => setName(e.target.value), onPressEnter: addItem }),
+              React.createElement(InputNumber, {
+                min: 0,
+                max: 100,
+                step: 0.01,
+                precision: 2,
+                value: newDefaultShare,
+                addonAfter: '%',
+                placeholder: '目标份额默认值',
+                onChange: setNewDefaultShare,
+                onPressEnter: addItem,
+                style: { width: '100%' },
+              }),
               React.createElement(Button, { type: 'primary', loading: saving, onClick: addItem }, '新增')
             ),
             loading
@@ -3446,7 +3526,7 @@ async function run() {
                     const locked = isDefaultLocked(item);
                     return React.createElement('div', {
                       key: item.id,
-                      style: { display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'center' },
+                      style: { display: 'grid', gridTemplateColumns: '1fr 220px auto', gap: 8, alignItems: 'center' },
                     },
                       isEditing
                         ? React.createElement(Input, {
@@ -3482,6 +3562,25 @@ async function run() {
                             },
                           }, '默认')
                         ),
+                      React.createElement('div', { style: { display: 'flex', gap: 6 } },
+                        React.createElement(InputNumber, {
+                          min: 0,
+                          max: 100,
+                          step: 0.01,
+                          precision: 2,
+                          value: defaultInputs[item.id],
+                          addonAfter: '%',
+                          disabled: rowBusy,
+                          onChange: (value) => setDefaultInputs((prev) => ({ ...prev, [item.id]: value })),
+                          onPressEnter: () => updateDefaultShare(item),
+                          style: { width: 140 },
+                        }),
+                        React.createElement(Button, {
+                          loading: isUpdating,
+                          disabled: rowBusy,
+                          onClick: () => updateDefaultShare(item),
+                        }, '保存份额')
+                      ),
                       React.createElement('div', { style: { display: 'flex', gap: 6 } },
                         isEditing
                           ? React.createElement(React.Fragment, null,
@@ -3884,7 +3983,6 @@ async function run() {
     const [showTermManager, setShowTermManager] = useState(false);
     const [showDefaultTermConfig, setShowDefaultTermConfig] = useState(false);
     const [showChartModal, setShowChartModal]   = useState(false);
-    const [showStageDefaultModal, setShowStageDefaultModal] = useState(false);
     const [columns, setColumns]                 = useState(INITIAL_COLUMNS.map((c) => ({ ...c })));
     const [termFieldColors, setTermFieldColors] = useState({});
     const [columnViews, setColumnViews]         = useState([]);
@@ -3907,10 +4005,6 @@ async function run() {
     const [refreshProgress, setRefreshProgress] = useState('');
     const [formulaProgress, setFormulaProgress] = useState({ active: false, label: '', percent: 0 });
     const [termRecalculatingIds, setTermRecalculatingIds] = useState({});
-    const [asinStageDefaultState, setAsinStageDefaultState] = useState({ loaded: false, value: null });
-    const [stageDefaultInput, setStageDefaultInput] = useState(null);
-    const [savingStageDefault, setSavingStageDefault] = useState(false);
-    const [stageDefaultProgress, setStageDefaultProgress] = useState({ active: false, label: '', percent: 0, status: 'normal' });
     const [defaultTermConfigVersion, setDefaultTermConfigVersion] = useState(0);
     const [dateFilterType, setDateFilterType]   = useState('all');
     const [customDateRange, setCustomDateRange] = useState(null);
@@ -3966,12 +4060,6 @@ async function run() {
     const filterModel          = urlParams?.model        || null;
     const filterSaleOwner      = urlParams?.sale_owner   || null;
     const hasRequiredUrlParams = !!(filterModel && filterCountry && filterAsin && filterSaleOwner);
-
-    const loadAsinStageDefaultShare = useCallback(async () => {
-      const state = await fetchAsinDefaultStageShare(filterCountry, filterAsin);
-      setAsinStageDefaultState(state);
-      return state;
-    }, [filterCountry, filterAsin]);
 
     const showFormulaProgress = useCallback((progress) => {
       const label = typeof progress === 'string' ? progress : (progress?.label || '正在同步公式...');
@@ -4583,13 +4671,25 @@ async function run() {
           });
           return map;
         };
+        const toDefaultMap = (rows, field) => {
+          const map = {};
+          rows.forEach((row) => {
+            const value = normalizeStageTargetShare(row.default_stage_target_share);
+            if (row.id != null) map[`id:${row.id}`] = value;
+            const name = String(row[field] || '').trim();
+            if (name) map[`name:${name}`] = value;
+          });
+          return map;
+        };
         return {
           keywordIds: toIdSet(keywords),
           keywordNames: toNameSet(keywords, 'keyword_name'),
           keywordOrder: toOrderMap(keywords, 'keyword_name'),
+          keywordDefaults: toDefaultMap(keywords, 'keyword_name'),
           rootIds: toIdSet(roots),
           rootNames: toNameSet(roots, 'root_name'),
           rootOrder: toOrderMap(roots, 'root_name'),
+          rootDefaults: toDefaultMap(roots, 'root_name'),
         };
       } catch {
         return null;
@@ -4858,8 +4958,7 @@ async function run() {
           ...(sqpFilterAnd.length > 0 ? { filter: JSON.stringify({ $and: sqpFilterAnd }) } : {}),
         };
 
-        const [stageDefaultState, rSqp, activeTermRefs] = await Promise.all([
-          loadAsinStageDefaultShare(),
+        const [rSqp, activeTermRefs] = await Promise.all([
           ctx.request({ url: 'sqp_weekly_main:list', method: 'get', params: sqpParams }),
           loadActiveTermRefs(),
         ]);
@@ -4910,7 +5009,9 @@ async function run() {
           let prevTerm = null;
           sortedRows.forEach((term) => {
             const mainRow = mainMap[getTermMainWeekKey(term)] || {};
-            const updates = buildStoredTermFormulaUpdates(term, mainRow, prevTerm, stageDefaultState);
+            const termDefaultState = getActiveTermStageDefaultState(term, activeTermRefs);
+            term.term_default_stage_target_share = termDefaultState.loaded ? termDefaultState.value : null;
+            const updates = buildStoredTermFormulaUpdates(term, mainRow, prevTerm, termDefaultState);
             const writeUpdates = skipFormula ? pickStageTargetSyncUpdates(updates) : updates;
             const changed = Object.entries(writeUpdates).some(([field, value]) => String(term[field] ?? '') !== String(value ?? ''));
             if (Object.keys(updates).length) {
@@ -4973,61 +5074,7 @@ async function run() {
       } finally {
         if (requestSeq === requestSeqRef.current) setLoading(false);
       }
-    }, [filterAsin, filterCountry, hasRequiredUrlParams, getDateRange, loadActiveTermRefs, loadAsinStageDefaultShare, mergeTermColumns, sortConfig, getTermOrderIndex]);
-
-    const openStageDefaultModal = useCallback(async () => {
-      if (!filterCountry || !filterAsin) {
-        ctx.message.warning('请先筛选到具体站点和 ASIN');
-        return;
-      }
-      setShowPanel(false);
-      setShowPush(false);
-      setShowCrossHighlightPanel(false);
-      setShowDefaultTermConfig(false);
-      setShowStageDefaultModal(true);
-      const state = await loadAsinStageDefaultShare();
-      setStageDefaultInput(state?.value != null ? Number(state.value) * 100 : null);
-    }, [filterCountry, filterAsin, loadAsinStageDefaultShare]);
-
-    const saveStageDefaultShare = useCallback(async () => {
-      const unique = getAsinUniqueKey(filterCountry, filterAsin);
-      if (!unique) {
-        ctx.message.warning('请先筛选到具体站点和 ASIN');
-        return;
-      }
-      const nextValue = stageDefaultInput === '' || stageDefaultInput == null
-        ? null
-        : roundRateValue(Number(stageDefaultInput) / 100);
-      if (stageDefaultInput !== '' && stageDefaultInput != null && !isValidNumber(stageDefaultInput)) {
-        ctx.message.error('请输入有效的目标份额默认值');
-        return;
-      }
-      try {
-        setSavingStageDefault(true);
-        setStageDefaultProgress({ active: true, label: '正在保存默认值...', percent: 12, status: 'normal' });
-        await ctx.request({
-          url: 'asin:update',
-          method: 'post',
-          params: { filterByTk: unique },
-          data: { default_stage_target_share: nextValue },
-        });
-        setStageDefaultProgress({ active: true, label: '默认值已保存，正在刷新当前页...', percent: 45, status: 'normal' });
-        setAsinStageDefaultState({ loaded: true, value: nextValue });
-        setStageDefaultProgress({ active: true, label: '正在同步非手动目标份额...', percent: 82, status: 'normal' });
-        await load({ page: curPageRef.current, size: pageSizeRef.current, skipFormula: true });
-        setStageDefaultProgress({ active: true, label: '同步完成', percent: 100, status: 'success' });
-        ctx.message.success('目标份额默认值已保存');
-        window.setTimeout(() => {
-          setShowStageDefaultModal(false);
-          setStageDefaultProgress({ active: false, label: '', percent: 0, status: 'normal' });
-        }, 700);
-      } catch (err) {
-        setStageDefaultProgress({ active: true, label: '保存失败，请重试', percent: 100, status: 'exception' });
-        ctx.message.error(`保存目标份额默认值失败：${err?.message || '未知错误'}`);
-      } finally {
-        setSavingStageDefault(false);
-      }
-    }, [filterCountry, filterAsin, load, stageDefaultInput]);
+    }, [filterAsin, filterCountry, hasRequiredUrlParams, getDateRange, loadActiveTermRefs, mergeTermColumns, sortConfig, getTermOrderIndex]);
 
     useEffect(() => {
       if (!configReady) return;
@@ -5477,7 +5524,7 @@ async function run() {
           const isManualInput = valueToSave !== null && valueToSave !== undefined && valueToSave !== '';
           const stageShare = isManualInput
             ? valueToSave
-            : normalizeStageTargetShare(asinStageDefaultState?.value);
+            : normalizeStageTargetShare(term?.term_default_stage_target_share);
           const weeklyRequired = calcWeeklyRequiredOrders(stageShare, term.purchases_count);
           const dailyRequired = calcDailyRequiredOrders(weeklyRequired);
           const nextTerm = {
@@ -5520,7 +5567,7 @@ async function run() {
         dataPatch: { [col.field]: valueToSave },
         applyLocal: (sourceRow) => ({ ...sourceRow, [col.field]: valueToSave }),
       };
-    }, [asinStageDefaultState, getTermRecord]);
+    }, [getTermRecord]);
 
     const getPatchFieldValue = useCallback((row, col, field) => {
       if (col?._isTermColumn) {
@@ -5992,11 +6039,10 @@ async function run() {
       let existingTermMap = {};
       let marketRowsByReportDate = {};
       let currentAsinRowsByReportDate = {};
-      let stageDefaultState = { loaded: false, value: null };
-      const queueTermWeeklySave = (payload, weekLabel) => {
+      const queueTermWeeklySave = (payload, weekLabel, termDefaultState) => {
         const rec = existingTermMap[payload.term_week_key] || null;
         if (rec?.term_week_key) {
-          const nextPayload = withResolvedStageTarget(payload, rec, stageDefaultState);
+          const nextPayload = withResolvedStageTarget(payload, rec, termDefaultState);
           nextPayload.compare_diagnosis = payload.compare_diagnosis
             ? buildCompareDiagnosis({ ...nextPayload, week_label: weekLabel })
             : null;
@@ -6006,7 +6052,7 @@ async function run() {
           }
           return { ...rec, ...nextPayload };
         }
-        const createPayload = withCreateTimestamps(withResolvedStageTarget(payload, payload, stageDefaultState));
+        const createPayload = withCreateTimestamps(withResolvedStageTarget(payload, payload, termDefaultState));
         createPayload.compare_diagnosis = payload.compare_diagnosis
           ? buildCompareDiagnosis({ ...createPayload, week_label: weekLabel })
           : null;
@@ -6017,6 +6063,7 @@ async function run() {
       const buildTermPayloads = async (termType, termItem, termName, weeks) => {
         let count = 0;
         let prevPayload = null;
+        const termDefaultState = getTermStageDefaultState(termItem);
         for (const week of weeks) {
           const reportDate = week.report_date ? String(week.report_date).slice(0, 10) : null;
           if (!reportDate) continue;
@@ -6096,7 +6143,7 @@ async function run() {
             payload.asin_diagnosis = buildAsinDiagnosis(payloadWithLabel, prevPayload);
             payload.compare_diagnosis = buildCompareDiagnosis(payloadWithLabel);
           }
-          const savedPayload = queueTermWeeklySave(payload, week.week_label);
+          const savedPayload = queueTermWeeklySave(payload, week.week_label, termDefaultState);
           if (savedPayload) termPatchRows.push(savedPayload);
           prevPayload = hasTermData ? payloadWithLabel : null;
           count += 1;
@@ -6114,7 +6161,6 @@ async function run() {
           asin: filterAsin,
           allowNonAdmin,
         });
-        stageDefaultState = await loadAsinStageDefaultShare();
         onProgress?.({ label: '正在读取关键词/词根...', percent: 10 });
         const [keywords, roots, weeks] = await Promise.all([
           fetchAll('sqp_keywords:list', { sort: TERM_ADDED_ORDER_SORT, filter: JSON.stringify({ country_asin: { $eq: countryAsin } }) }),
@@ -6307,7 +6353,7 @@ async function run() {
       } finally {
         setCalculatingFormulas(false);
       }
-    }, [filterCountry, filterAsin, load, loadAsinStageDefaultShare, mergeTermColumns]);
+    }, [filterCountry, filterAsin, load, mergeTermColumns]);
 
     useEffect(() => {
       calculateFormulasRef.current = calculateFormulas;
@@ -6823,99 +6869,6 @@ async function run() {
       country: filterCountry,
       asin: filterAsin,
     });
-    const stageDefaultModalEl = React.createElement(Modal, {
-      title: '目标份额默认值',
-      open: showStageDefaultModal,
-      visible: showStageDefaultModal,
-      onCancel: () => {
-        if (savingStageDefault) return;
-        setShowStageDefaultModal(false);
-        setStageDefaultProgress({ active: false, label: '', percent: 0, status: 'normal' });
-      },
-      destroyOnClose: false,
-      width: 460,
-      footer: React.createElement('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: '8px' } },
-        React.createElement(Button, {
-          disabled: savingStageDefault,
-          onClick: () => {
-            setShowStageDefaultModal(false);
-            setStageDefaultProgress({ active: false, label: '', percent: 0, status: 'normal' });
-          },
-        }, '取消'),
-        React.createElement(Button, {
-          type: 'primary',
-          loading: savingStageDefault,
-          onClick: saveStageDefaultShare,
-        }, '保存')
-      ),
-    },
-      React.createElement('div', { style: { display: 'grid', gap: '12px' } },
-        React.createElement('div', { style: { color: '#334155', fontWeight: 700 } },
-          `${filterCountry || '-'} / ${filterAsin || '-'}`
-        ),
-        React.createElement('div', { style: { display: 'grid', gap: '6px' } },
-          React.createElement('div', { style: { color: '#475569', fontSize: `${FONT_SIZE_SM}px`, fontWeight: 700 } }, '默认阶段目标份额'),
-          React.createElement(InputNumber, {
-            min: 0,
-            max: 100,
-            step: 0.01,
-            precision: 2,
-            value: stageDefaultInput,
-            addonAfter: '%',
-            disabled: savingStageDefault,
-            onChange: setStageDefaultInput,
-            onPressEnter: saveStageDefaultShare,
-            style: { width: '100%' },
-          })
-        ),
-        React.createElement('div', { style: { color: '#64748b', fontSize: `${FONT_SIZE_XS}px`, lineHeight: 1.6 } },
-          '保存后，当前 ASIN 下非手动阶段目标会按该默认值刷新；已手动修改的行不会被覆盖。'
-        ),
-        stageDefaultProgress.active && React.createElement('div', {
-          style: {
-            height: '26px',
-            border: `1px solid ${stageDefaultProgress.status === 'exception' ? '#ffccc7' : '#91caff'}`,
-            borderRadius: '4px',
-            background: stageDefaultProgress.status === 'exception' ? '#fff1f0' : '#f0f7ff',
-            overflow: 'hidden',
-            position: 'relative',
-          },
-        },
-          React.createElement('div', {
-            style: {
-              position: 'absolute',
-              left: 0,
-              top: 0,
-              bottom: 0,
-              width: `${Math.max(2, Math.min(100, stageDefaultProgress.percent || 0))}%`,
-              background: stageDefaultProgress.status === 'exception'
-                ? 'linear-gradient(90deg, #ff7875, #ff4d4f)'
-                : stageDefaultProgress.status === 'success'
-                  ? 'linear-gradient(90deg, #95de64, #52c41a)'
-                  : 'linear-gradient(90deg, #69c0ff, #1677ff)',
-              transition: 'width 0.25s ease',
-            },
-          }),
-          React.createElement('div', {
-            style: {
-              position: 'relative',
-              zIndex: 1,
-              height: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '0 8px',
-              color: stageDefaultProgress.percent >= 55 ? '#fff' : (stageDefaultProgress.status === 'exception' ? '#cf1322' : '#0958d9'),
-              fontSize: `${FONT_SIZE_XS}px`,
-              fontWeight: 700,
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            },
-          }, `${stageDefaultProgress.label || '正在保存...'} ${Math.round(stageDefaultProgress.percent || 0)}%`)
-        )
-      )
-    );
 
     const getSourceFieldName = (col) => {
       const sourceCollection = SRC_COLLECTION_NAME[col.src];
@@ -7359,8 +7312,7 @@ async function run() {
           onClick: () => { setShowCrossHighlightPanel((v) => !v); setShowPanel(false); setShowPush(false); setShowDefaultTermConfig(false); },
           style: btnStyle('#EB6793', '#fff', '#d84f7c'),
         }, crossHighlightEnabled ? '高亮行列：开' : '高亮行列'),
-          React.createElement('button', { type: 'button', onClick: openStageDefaultModal, style: btnStyle('#EB6793', '#fff', '#d84f7c') }, '目标份额默认值'),
-          React.createElement('button', { type: 'button', onClick: () => { setShowTermManager(true); setShowDefaultTermConfig(false); }, style: btnStyle('#EB6793', '#fff', '#d84f7c') }, '🔑 管理关键词/词根'),
+          React.createElement('button', { type: 'button', onClick: () => { setShowTermManager(true); setShowDefaultTermConfig(false); }, style: btnStyle('#EB6793', '#fff', '#d84f7c') }, '🔑 管理关键词和目标份额'),
           IS_ADMIN && React.createElement('button', { type: 'button', onClick: () => { setShowDefaultTermConfig(true); setShowPanel(false); setShowPush(false); setShowCrossHighlightPanel(false); }, style: btnStyle('#EB6793', '#fff', '#d84f7c') }, '默认词配置'),
           React.createElement('button', { type: 'button', onClick: () => { setShowChartModal(true); setShowPanel(false); setShowPush(false); setShowCrossHighlightPanel(false); setShowDefaultTermConfig(false); }, style: btnStyle('#EB6793', '#fff', '#d84f7c') }, '📈 打开图表')
         ),
@@ -7438,7 +7390,6 @@ async function run() {
       termManagerEl,
       defaultTermConfigEl,
       chartModalEl,
-      stageDefaultModalEl,
 
       React.createElement('textarea', {
         ref: clipboardRef,
