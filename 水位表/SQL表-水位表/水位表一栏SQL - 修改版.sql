@@ -324,7 +324,6 @@ SELECT
 
 -- ✅ 优化：直接使用过滤好的 base_target 作为驱动表，无需再次扫描 daily_sales
 FROM base_target ds
-         JOIN sale_model m ON ds.model = m.model
          LEFT JOIN shop_pivot sp ON ds.asin = sp.asin AND ds.country = sp.country
          LEFT JOIN otw_agg otw ON ds.asin = otw.asin AND ds.country = otw.country
          LEFT JOIN inv_calc inv ON ds.asin = inv.asin AND ds.country = inv.country
