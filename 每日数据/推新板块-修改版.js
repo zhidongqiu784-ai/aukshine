@@ -243,6 +243,33 @@
     return PAGE_SIZE_OPTIONS.includes(String(normalized)) ? normalized : DEFAULT_PAGE_SIZE;
   };
 
+  const createKeywordTrackingOrUpdate = async (ctx, rowId, createData, updateData) => {
+    try {
+      return await ctx.request({
+        url: 'daily_keyword_tracking:create',
+        method: 'post',
+        data: createData,
+      });
+    } catch (createError) {
+      const existingRes = await ctx.request({
+        url: 'daily_keyword_tracking:list',
+        method: 'get',
+        params: {
+          pageSize: 1,
+          filter: JSON.stringify({ country_asin_date: { $eq: rowId } }),
+        },
+      });
+      const existing = Array.isArray(existingRes?.data?.data) ? existingRes.data.data[0] : null;
+      if (!existing) throw createError;
+      return ctx.request({
+        url: 'daily_keyword_tracking:update',
+        method: 'post',
+        params: { filterByTk: rowId },
+        data: updateData,
+      });
+    }
+  };
+
   const KW_ROLE_ORDER = ['主推', '辅1', '辅2', '辅3', '辅4'];
 
   const KW_ROLE_COLORS = {
@@ -1690,16 +1717,15 @@
             data: { actual_keyword_position: valueToSave }
           });
         } else {
-          await ctx.request({
-            url: 'daily_keyword_tracking:create',
-            method: 'post',
-            data: withCreateTimestamps({
+          const createData = withCreateTimestamps({
               country_asin_date: rowId,
               country: country || null,
               asin: asin || null,
               date: date || null,
               actual_keyword_position: valueToSave,
-            }),
+          });
+          await createKeywordTrackingOrUpdate(ctx, rowId, createData, {
+            actual_keyword_position: valueToSave,
           });
         }
 
@@ -3099,6 +3125,8 @@
     const formulaProgressFinishTimerRef = useRef(null);
     const backgroundPushSummaryRef = useRef({ timer: null, running: false, pendingForce: false });
     const currentPagePushSummaryRef = useRef({ timer: null, running: false, pendingRowsByKey: {} });
+    const savePromiseRef = useRef(null);
+    const skipNextLoadForSortRef = useRef(false);
     const panelBtnRef = useRef(null);
     const pushBtnRef  = useRef(null);
     const crossHighlightBtnRef = useRef(null);
@@ -3864,14 +3892,9 @@
             }
           }),
 
-          ctx.request({
-            url: 'new_eval_words_daily:list',
-            method: 'get',
-            params: {
-              pageSize: calcRelatedPageSize,
-              filter: subFilter
-            }
-          }),
+          fetchAllList('new_eval_words_daily:list', {
+            filter: subFilter,
+          }, 100),
 
           ctx.request({
             url: 'weekly_performance:list',
@@ -3882,14 +3905,9 @@
             }
           }),
 
-          ctx.request({
-            url: 'daily_order_link_tracking:list',
-            method: 'get',
-            params: {
-              pageSize: Math.max(keys.length, 100),
-              filter: subFilter
-            }
-          })
+          fetchAllList('daily_order_link_tracking:list', {
+            filter: subFilter,
+          }, 100)
         ]);
 
         const keywordTrackingRecords = Array.isArray(rKeywordTracking?.data?.data)
@@ -3900,16 +3918,12 @@
           ? rKw.data.data
           : [];
 
-        let kwDailyRecords = Array.isArray(rKwDaily?.data?.data)
-          ? rKwDaily.data.data
-          : [];
+        let kwDailyRecords = Array.isArray(rKwDaily) ? rKwDaily : [];
 
         const weeklyRecords = Array.isArray(rWeekly?.data?.data)
           ? rWeekly.data.data
           : [];
-        const orderLinkRecords = Array.isArray(rOrderLink?.data?.data)
-          ? rOrderLink.data.data
-          : [];
+        const orderLinkRecords = Array.isArray(rOrderLink) ? rOrderLink : [];
 
         const actualReviewSync = await syncKeywordActualReviewQtyFromRefunds(sourceRows, kwRecords, kwDailyRecords);
         kwDailyRecords = actualReviewSync.kwDailyRecords;
@@ -4150,18 +4164,38 @@
                       data: job.orderLinkUpdates,
                     });
                   } else {
-                    const parts = job.countryAsinDate.split('_');
-                    await ctx.request({
-                      url: 'daily_order_link_tracking:create',
-                      method: 'post',
-                      data: withCreateTimestamps({
-                        country_asin_date: job.countryAsinDate,
-                        country: parts[0] || null,
-                        asin: parts[1] || null,
-                        date: parts[2] || null,
-                        ...job.orderLinkUpdates,
-                      }),
+                    const exactFilter = JSON.stringify({
+                      country_asin_date: { $eq: job.countryAsinDate },
                     });
+                    const exactRes = await ctx.request({
+                      url: 'daily_order_link_tracking:list',
+                      method: 'get',
+                      params: { filter: exactFilter, pageSize: 1 },
+                    });
+                    const exactExisting = Array.isArray(exactRes?.data?.data)
+                      ? exactRes.data.data[0]
+                      : null;
+                    if (exactExisting) {
+                      await ctx.request({
+                        url: 'daily_order_link_tracking:update',
+                        method: 'post',
+                        params: { filterByTk: job.countryAsinDate },
+                        data: job.orderLinkUpdates,
+                      });
+                    } else {
+                      const parts = job.countryAsinDate.split('_');
+                      await ctx.request({
+                        url: 'daily_order_link_tracking:create',
+                        method: 'post',
+                        data: withCreateTimestamps({
+                          country_asin_date: job.countryAsinDate,
+                          country: parts[0] || null,
+                          asin: parts[1] || null,
+                          date: parts[2] || null,
+                          ...job.orderLinkUpdates,
+                        }),
+                      });
+                    }
                   }
                 })());
 
@@ -4266,12 +4300,7 @@
       return rows;
     }, [filterAsin, filterCountry]);
 
-    const getDailySort = useCallback(() => {
-      if (!sortConfig.key) return 'date';
-      const col = INITIAL_COLUMNS.find((c) => c.key === sortConfig.key);
-      if (!col || col.src !== 'daily') return 'date';
-      return sortConfig.dir === 'desc' ? `-${col.field}` : col.field;
-    }, [sortConfig]);
+    const getDailySort = useCallback(() => 'date', []);
 
     const shouldShowWeeklySummary = useMemo(() => (
       !sortConfig.key || sortConfig.key === 'daily_date'
@@ -4477,16 +4506,38 @@
         for (let i = 0; i < jobs.length; i += 100) {
           const batch = jobs.slice(i, i + 100);
           const results = await Promise.allSettled(batch.map(async (job) => {
-            if (job.existing?.id) {
-              if (isFormulaSameValue(job.existing.actual_review_qty, job.actualReviewQty)) return job.existing;
+            let existing = job.existing?.id ? job.existing : nextMap[job.key];
+            if (!existing?.id) {
+              const existingRes = await ctx.request({
+                url: 'new_eval_words_daily:list',
+                method: 'get',
+                params: {
+                  pageSize: 1,
+                  sort: '-createdAt',
+                  filter: JSON.stringify({
+                    $and: [
+                      { country_asin_date: { $eq: job.rowKey } },
+                      { eval_word_id: { $eq: Number(job.kwId) || job.kwId } },
+                    ],
+                  }),
+                },
+              });
+              existing = Array.isArray(existingRes?.data?.data) ? existingRes.data.data[0] : null;
+              if (existing?.id) {
+                nextMap[job.key] = existing;
+                nextKwDailyRows.push(existing);
+              }
+            }
+            if (existing?.id) {
+              if (isFormulaSameValue(existing.actual_review_qty, job.actualReviewQty)) return existing;
               await ctx.request({
                 url: 'new_eval_words_daily:update',
                 method: 'post',
-                params: { filterByTk: job.existing.id },
+                params: { filterByTk: existing.id },
                 data: { actual_review_qty: job.actualReviewQty },
               });
-              Object.assign(job.existing, { actual_review_qty: job.actualReviewQty });
-              return job.existing;
+              Object.assign(existing, { actual_review_qty: job.actualReviewQty });
+              return existing;
             }
             const res = await ctx.request({
               url: 'new_eval_words_daily:create',
@@ -4720,40 +4771,6 @@
       });
     }, [sortConfig.dir]);
 
-    const normalizeWeeklySummaryRecord = useCallback((record) => {
-      if (!record?.country_asin_week_range) return null;
-      const scopedSummaryData = record[WEEKLY_SUMMARY_DATA_FIELD];
-      const legacySummaryData = record.summary_data;
-      const summaryData = scopedSummaryData && typeof scopedSummaryData === 'object'
-        ? scopedSummaryData
-        : legacySummaryData && typeof legacySummaryData === 'object'
-        ? legacySummaryData
-        : {};
-      const weekStart = record.week_start_date || '';
-      const weekEnd = record.week_end_date || '';
-      return {
-        ...record,
-        ...summaryData,
-        _isWeeklySummary: true,
-        __rowType: WEEKLY_SUMMARY_ROW_TYPE,
-        id: record.country_asin_week_range,
-        country: record.country || summaryData.country || '',
-        asin: record.asin || summaryData.asin || '',
-        asin_country: record.asin_country || summaryData.asin_country || '',
-        week_start_date: weekStart,
-        week_end_date: weekEnd,
-        week_no: record.week_no ?? summaryData.week_no ?? null,
-        week_range_label: record.week_range_label || `${weekStart}~${weekEnd}`,
-        country_asin_date: record.country_asin_week_range,
-        country_asin_week: record.country_asin_week_range,
-        date: weekStart && weekEnd ? `${weekStart} ~ ${weekEnd}` : (record.week_range_label || ''),
-        promotion_days: record.week_no ? `第${record.week_no}周` : (summaryData.daily_promotion_days || ''),
-        actual_keyword_position: '',
-        actual_kw_pos_screenshot: '',
-        summary_data: summaryData,
-      };
-    }, []);
-
     const syncWeeklySummaryRows = useCallback(async (summaryRows) => {
       const summaries = (Array.isArray(summaryRows) ? summaryRows : [])
         .filter((row) => row?.country_asin_week_range);
@@ -4798,31 +4815,9 @@
         });
       }));
       const failCount = writeResults.filter((item) => item.status === 'rejected').length;
-      if (failCount > 0) {
-        throw new Error(`${failCount} 条写入失败`);
-      }
-
-      const refreshedRows = await fetchAllByIn(`${WEEKLY_SUMMARY_COLLECTION}:list`, 'country_asin_week_range', keys, {
-        chunkSize: 80,
-        pageSize: 500,
-      }).catch(() => []);
-      const refreshedMap = {};
-      refreshedRows.forEach((row) => {
-        const normalized = normalizeWeeklySummaryRecord(row);
-        if (normalized) refreshedMap[normalized.country_asin_week_range] = normalized;
-      });
-      return summaries.map((summary) => refreshedMap[summary.country_asin_week_range] || summary);
-    }, [fetchAllByIn, normalizeWeeklySummaryRecord]);
-
-    const loadWeeklySummaryRowsForDailyRows = useCallback(async (dailyRows) => {
-      const keys = [...new Set((Array.isArray(dailyRows) ? dailyRows : []).map(getWeeklySummaryKeyForDailyRow).filter(Boolean))];
-      if (!keys.length) return [];
-      const records = await fetchAllByIn(`${WEEKLY_SUMMARY_COLLECTION}:list`, 'country_asin_week_range', keys, {
-        chunkSize: 80,
-        pageSize: 500,
-      }).catch(() => []);
-      return records.map(normalizeWeeklySummaryRecord).filter(Boolean);
-    }, [fetchAllByIn, normalizeWeeklySummaryRecord]);
+      if (failCount > 0) ctx.message.warning(`${failCount} 条周汇总缓存写入失败，页面仍显示实时计算结果`);
+      return summaries;
+    }, [fetchAllByIn]);
 
     const recalcAndPersistWeeklySummariesForRows = useCallback(async (changedRows) => {
       const groups = {};
@@ -5094,13 +5089,13 @@
           ctx.request({ url: 'weekly_performance:list',        method: 'get', params: { pageSize: relatedPageSize, filter: weekFilter } }),
           ctx.request({ url: 'daily_keyword_tracking:list',    method: 'get', params: { pageSize: relatedPageSize, filter: subFilter } }),
           ctx.request({ url: 'new_eval_words:list',            method: 'get', params: { pageSize: relatedPageSize, filter: caFilter } }),
-          ctx.request({ url: 'new_eval_words_daily:list',      method: 'get', params: { pageSize: relatedPageSize, filter: subFilter } }),
+          fetchAllList('new_eval_words_daily:list', { filter: subFilter }, 100),
         ]);
 
         const weeklyRecords          = Array.isArray(rWeekly?.data?.data)          ? rWeekly.data.data          : [];
         const keywordTrackingRecords = Array.isArray(rKeywordTracking?.data?.data) ? rKeywordTracking.data.data : [];
         const kwRecords              = Array.isArray(rKw?.data?.data)              ? rKw.data.data              : [];
-        let kwDailyRecords           = Array.isArray(rKwDaily?.data?.data)         ? rKwDaily.data.data         : [];
+        let kwDailyRecords           = Array.isArray(rKwDaily)                     ? rKwDaily                   : [];
 
         const actualReviewSync = await syncKeywordActualReviewQtyFromRefunds(dailyRecords, kwRecords, kwDailyRecords);
         kwDailyRecords = actualReviewSync.kwDailyRecords;
@@ -5158,30 +5153,17 @@
 
         let weeklySummaryRows = [];
         if (shouldShowWeeklySummary) {
-          weeklySummaryRows = await loadWeeklySummaryRowsForDailyRows(mergedData);
+          weeklySummaryRows = await recalcAndPersistWeeklySummariesForRows(mergedData);
         }
 
         setData(interleaveWeeklySummaryRows(mergedData, weeklySummaryRows));
         setTotal(totalCount);
-        const loadedSummaryKeys = new Set(weeklySummaryRows.map((row) => row.country_asin_week_range).filter(Boolean));
-        const missingSummaryRows = shouldShowWeeklySummary
-          ? mergedData.filter((row) => {
-              const key = getWeeklySummaryKeyForDailyRow(row);
-              return key && !loadedSummaryKeys.has(key);
-            })
-          : [];
         const shouldRunBackgroundSummary = !options.skipBackgroundSummary && filterCountry && filterAsin;
-        if (!options.skipCurrentPageSummaryRefresh && mergedData.length) {
-          scheduleCurrentPagePushSummaryRefresh(mergedData, {
-            delay: (!skipFormula || missingSummaryRows.length) ? 80 : 180,
-            keepProgressForBackground: shouldRunBackgroundSummary,
-          });
-        }
         if (shouldRunBackgroundSummary) {
           scheduleCurrentCountryAsinPushSummarySync({
             force: true,
-            showQueuedProgress: !mergedData.length || options.skipCurrentPageSummaryRefresh,
-            delay: mergedData.length ? 1000 : ((!skipFormula || missingSummaryRows.length) ? 200 : 900),
+            showQueuedProgress: !mergedData.length,
+            delay: mergedData.length ? 1000 : 200,
           });
         }
         return mergedData;
@@ -5190,10 +5172,14 @@
         setData([]); setTotal(0);
         return [];
       } finally { setLoading(false); }
-    }, [filterAsin, filterCountry, hasRequiredUrlParams, getDateRange, buildDynamicKwCols, getDailySort, buildMergedRows, shouldShowWeeklySummary, loadWeeklySummaryRowsForDailyRows, interleaveWeeklySummaryRows, syncKeywordActualReviewQtyFromRefunds, showKwOptionalFields]);
+    }, [filterAsin, filterCountry, hasRequiredUrlParams, getDateRange, buildDynamicKwCols, getDailySort, buildMergedRows, shouldShowWeeklySummary, recalcAndPersistWeeklySummariesForRows, interleaveWeeklySummaryRows, syncKeywordActualReviewQtyFromRefunds, showKwOptionalFields, fetchAllList, sortConfig]);
 
     useEffect(() => {
       if (!columnViewReady) return;
+      if (skipNextLoadForSortRef.current) {
+        skipNextLoadForSortRef.current = false;
+        return;
+      }
       setCurPage(1);
       loadData({ page: 1, size: pageSizeRef.current });
     }, [columnViewReady, loadData]);
@@ -5292,18 +5278,13 @@
         loadData({ page, size, skipFormula: true });
       }
     }, [loadData]);
-    const handleSort = useCallback((colKey) => {
-      setSortConfig((prev) => {
-        if (prev.key !== colKey) return { key: colKey, dir: 'asc' };
-        if (prev.dir === 'asc') return { key: colKey, dir: 'desc' };
-        return { key: null, dir: null };
-      });
-      setCurPage(1);
-    }, []);
-
     const sortedData = useMemo(() => {
-      if (shouldShowWeeklySummary) return data;
-      const sourceData = shouldShowWeeklySummary ? data : data.filter((row) => !row?._isWeeklySummary);
+      if (shouldShowWeeklySummary) {
+        const dailyRows = data.filter((row) => !row?._isWeeklySummary);
+        const summaryRows = data.filter((row) => row?._isWeeklySummary);
+        return interleaveWeeklySummaryRows(dailyRows, summaryRows);
+      }
+      const sourceData = data.filter((row) => !row?._isWeeklySummary);
       if (!sortConfig.key || !sourceData.length) return sourceData;
       const col   = INITIAL_COLUMNS.find((c) => c.key === sortConfig.key);
       const field = col ? col.field : sortConfig.key;
@@ -5318,7 +5299,7 @@
         }
         const cmp = String(va || '').localeCompare(String(vb || '')); return sortConfig.dir === 'asc' ? cmp : -cmp;
       });
-    }, [data, shouldShowWeeklySummary, sortConfig]);
+    }, [data, interleaveWeeklySummaryRows, shouldShowWeeklySummary, sortConfig]);
 
     const pagedData = sortedData;
 
@@ -5823,16 +5804,15 @@
                 data: { [item.field]: item.oldValue },
               });
             } else if (item.oldValue != null && item.oldValue !== '') {
-              await ctx.request({
-                url: 'daily_keyword_tracking:create',
-                method: 'post',
-                data: withCreateTimestamps({
+              const createData = withCreateTimestamps({
                   country_asin_date: item.rowId,
                   country: item.country,
                   asin: item.asin,
                   date: item.date,
                   [item.field]: item.oldValue,
-                }),
+              });
+              await createKeywordTrackingOrUpdate(ctx, item.rowId, createData, {
+                [item.field]: item.oldValue,
               });
             }
             localPatches.set(item.rowId, { ...(localPatches.get(item.rowId) || {}), [item.field]: item.oldValue });
@@ -6058,16 +6038,15 @@
               data: { [op.field]: op.valueToSave },
             });
           } else {
-            await ctx.request({
-              url: 'daily_keyword_tracking:create',
-              method: 'post',
-              data: withCreateTimestamps({
+            const createData = withCreateTimestamps({
                 country_asin_date: op.rowId,
                 country: op.country,
                 asin: op.asin,
                 date: op.date,
                 [op.field]: op.valueToSave,
-              }),
+            });
+            await createKeywordTrackingOrUpdate(ctx, op.rowId, createData, {
+              [op.field]: op.valueToSave,
             });
           }
         }
@@ -6411,15 +6390,24 @@
 
     const cancelEdit = useCallback(() => { setEditingCell(null); setEditValue(null); }, []);
 
-    const saveEdit = useCallback(async () => {
-      if (!editingCell || saving) return;
+    const saveEdit = useCallback(() => {
+      if (savePromiseRef.current) return savePromiseRef.current;
+      if (!editingCell) return Promise.resolve(true);
+      if (saving) return Promise.resolve(false);
       const { rowId, field, src } = editingCell;
       const updateConfig = SRC_UPDATE_CONFIG[src];
-      if (!updateConfig) { ctx.message.error(`字段来源 "${src}" 暂不支持编辑`); return; }
+      if (!updateConfig) {
+        ctx.message.error(`字段来源 "${src}" 暂不支持编辑`);
+        return Promise.resolve(false);
+      }
       const row = data.find((r) => (r.country_asin_date || r.id) === rowId);
-      if (!row) return;
+      if (!row) return Promise.resolve(false);
       const pkValue = row[updateConfig.pkField];
-      if (!pkValue) { ctx.message.error(`无法找到记录主键（${updateConfig.pkField}）`); cancelEdit(); return; }
+      if (!pkValue) {
+        ctx.message.error(`无法找到记录主键（${updateConfig.pkField}）`);
+        cancelEdit();
+        return Promise.resolve(false);
+      }
       let valueToSave = editValue;
       if (field === 'promo_day') valueToSave = editValue;
       else if (RATE_FIELDS.has(field)) {
@@ -6441,53 +6429,82 @@
       }
       const oldValue = row[field] ?? null;
 
-      try {
-        setSaving(true);
-        showFormulaProgress({ label: '正在保存数据...', percent: 10 });
-        await ctx.request({ url: updateConfig.url, method: 'post', params: { filterByTk: pkValue }, data: { [field]: valueToSave } });
-        setData((prev) => prev.map((r) => (r.country_asin_date || r.id) === rowId ? { ...r, [field]: valueToSave } : r));
-        ctx.message.success('保存成功');
-        if (src === 'daily' && DAILY_PRICE_TRIGGER_FIELDS.has(field)) {
-          try {
-            showFormulaProgress({ label: '正在同步日公式...', percent: 35 });
-            const dailyUpdates = await recalcDailyPriceFormulas(ctx, rowId);
-            if (dailyUpdates) {
-              setData((prev) => prev.map((r) => (r.country_asin_date || r.id) === rowId ? { ...r, ...dailyUpdates } : r));
+      const saveTask = (async () => {
+        try {
+          setSaving(true);
+          showFormulaProgress({ label: '正在保存数据...', percent: 10 });
+          await ctx.request({ url: updateConfig.url, method: 'post', params: { filterByTk: pkValue }, data: { [field]: valueToSave } });
+          setData((prev) => prev.map((r) => (r.country_asin_date || r.id) === rowId ? { ...r, [field]: valueToSave } : r));
+          ctx.message.success('保存成功');
+          if (src === 'daily' && DAILY_PRICE_TRIGGER_FIELDS.has(field)) {
+            try {
+              showFormulaProgress({ label: '正在同步日公式...', percent: 35 });
+              const dailyUpdates = await recalcDailyPriceFormulas(ctx, rowId);
+              if (dailyUpdates) {
+                setData((prev) => prev.map((r) => (r.country_asin_date || r.id) === rowId ? { ...r, ...dailyUpdates } : r));
+              }
+            } catch (e) {
+              ctx.message.warning(`LP/WP/TP 公式重算失败：${e?.message || ''}`);
             }
-          } catch (e) {
-            ctx.message.warning(`LP/WP/TP 公式重算失败：${e?.message || ''}`);
           }
-        }
-        const shouldRecalcKeywordTracking =
-          (src === 'keyword_tracking' && KT_TRIGGER_FIELDS.has(field)) ||
-          (src === 'weekly' && WEEKLY_ACTUAL_NATURAL_TRIGGER_FIELDS.has(field));
+          const shouldRecalcKeywordTracking =
+            (src === 'keyword_tracking' && KT_TRIGGER_FIELDS.has(field)) ||
+            (src === 'weekly' && WEEKLY_ACTUAL_NATURAL_TRIGGER_FIELDS.has(field));
 
-        if (shouldRecalcKeywordTracking) {
-          try {
-            showFormulaProgress({ label: '正在同步日公式...', percent: 35 });
-            await recalcKeywordTracking(rowId);
-          } catch (e) {
-            ctx.message.warning(`自动计算失败：${e?.message || ''}`);
+          if (shouldRecalcKeywordTracking) {
+            try {
+              showFormulaProgress({ label: '正在同步日公式...', percent: 35 });
+              await recalcKeywordTracking(rowId);
+            } catch (e) {
+              ctx.message.warning(`自动计算失败：${e?.message || ''}`);
+            }
           }
+          await persistWeeklySummariesForChangedRows([{ ...row, [field]: valueToSave }]);
+          pushUndoEntry({
+            label: '编辑单元格',
+            items: [{
+              kind: 'normal',
+              rowId,
+              field,
+              src,
+              updateConfig,
+              pkValue,
+              oldValue,
+              newValue: valueToSave,
+            }],
+          });
+          setEditingCell(null);
+          setEditValue(null);
+          return true;
+        } catch (err) {
+          ctx.message.error(`保存失败：${err?.message || '未知错误'}`);
+          return false;
+        } finally {
+          setSaving(false);
         }
-        await persistWeeklySummariesForChangedRows([{ ...row, [field]: valueToSave }]);
-        pushUndoEntry({
-          label: '编辑单元格',
-          items: [{
-            kind: 'normal',
-            rowId,
-            field,
-            src,
-            updateConfig,
-            pkValue,
-            oldValue,
-            newValue: valueToSave,
-          }],
-        });
-        setEditingCell(null); setEditValue(null);
-      } catch (err) { ctx.message.error(`保存失败：${err?.message || '未知错误'}`); }
-      finally { setSaving(false); }
+      })();
+      savePromiseRef.current = saveTask;
+      saveTask.finally(() => {
+        if (savePromiseRef.current === saveTask) savePromiseRef.current = null;
+      });
+      return saveTask;
     }, [editingCell, editValue, data, saving, recalcKeywordTracking, persistWeeklySummariesForChangedRows, pushUndoEntry]);
+
+    const handleSort = useCallback(async (colKey) => {
+      if (saving && !savePromiseRef.current) return;
+      const saved = savePromiseRef.current
+        ? await savePromiseRef.current
+        : editingCell
+        ? await saveEdit()
+        : true;
+      if (!saved) return;
+      skipNextLoadForSortRef.current = true;
+      setSortConfig((prev) => {
+        if (prev.key !== colKey) return { key: colKey, dir: 'asc' };
+        if (prev.dir === 'asc') return { key: colKey, dir: 'desc' };
+        return { key: null, dir: null };
+      });
+    }, [editingCell, saveEdit, saving]);
 
     const refreshData  = useCallback(async () => {
       if (refreshingData || calcAllLoading || loading) return;
