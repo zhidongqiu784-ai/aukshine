@@ -6643,38 +6643,42 @@
       if (!weeklyImportSelectedFields.length) {
         setWeeklyImportTemplateHref('');
         setWeeklyImportTemplateBuilding(false);
-        setWeeklyImportProgress('请至少选择一个模板字段');
+        setWeeklyImportProgress('');
         return undefined;
       }
       if (!filterCountry || !filterAsin) {
         setWeeklyImportTemplateHref('');
         setWeeklyImportTemplateBuilding(false);
-        setWeeklyImportProgress('请先进入具体国家和 ASIN 页面后下载模板');
+        setWeeklyImportProgress('');
         return undefined;
       }
       let cancelled = false;
-      setWeeklyImportTemplateBuilding(true);
+      setWeeklyImportTemplateBuilding(false);
       setWeeklyImportTemplateHref('');
-      setWeeklyImportProgress('正在生成 Excel 模板...');
-      (async () => {
-        try {
-          const buffer = await buildWeeklyImportWorkbook(weeklyImportSelectedFields, {
-            country: filterCountry,
-            asin: filterAsin,
-          });
-          if (cancelled) return;
-          setWeeklyImportTemplateHref(excelBufferToDataUrl(buffer));
-          setWeeklyImportProgress('Excel 模板已自动生成，可直接下载');
-        } catch (error) {
-          if (cancelled) return;
-          setWeeklyImportProgress('Excel 模板生成失败');
-          ctx.message.error({ content: `Excel 模板生成失败：${error?.message || 'Excel 模块加载失败'}`, duration: 8 });
-        } finally {
-          if (!cancelled) setWeeklyImportTemplateBuilding(false);
-        }
-      })();
+      setWeeklyImportProgress('');
+      const timer = setTimeout(() => {
+        setWeeklyImportTemplateBuilding(true);
+        (async () => {
+          try {
+            const buffer = await buildWeeklyImportWorkbook(weeklyImportSelectedFields, {
+              country: filterCountry,
+              asin: filterAsin,
+            });
+            if (cancelled) return;
+            setWeeklyImportTemplateHref(excelBufferToDataUrl(buffer));
+            setWeeklyImportProgress('');
+          } catch (error) {
+            if (cancelled) return;
+            setWeeklyImportProgress('');
+            ctx.message.error({ content: `Excel 模板生成失败：${error?.message || 'Excel 模块加载失败'}`, duration: 8 });
+          } finally {
+            if (!cancelled) setWeeklyImportTemplateBuilding(false);
+          }
+        })();
+      }, 800);
       return () => {
         cancelled = true;
+        clearTimeout(timer);
       };
     }, [weeklyImportVisible, weeklyImportSelectedFields, filterCountry, filterAsin]);
 
@@ -10537,7 +10541,7 @@
           }, ...WEEKLY_IMPORT_FIELD_OPTIONS.map((option) => React.createElement(Checkbox, {
             key: option.field,
             checked: weeklyImportSelectedFields.includes(option.field),
-            disabled: weeklyImportBusy || weeklyImportTemplateBuilding,
+            disabled: weeklyImportBusy,
             onChange: (event) => {
               setWeeklyImportSelectedFields((current) => (
                 event.target.checked
