@@ -1,7 +1,8 @@
 ﻿async function run() {
   const React = ctx.libs.React;
   const { useState, useRef, useMemo, useCallback, useEffect, useSyncExternalStore } = React;
-  const { Pagination, Input, InputNumber, Select, DatePicker, Drawer, Table, Button, Popconfirm, Popover, ConfigProvider, Tooltip, Modal } = ctx.libs.antd;
+  const { Pagination, Input, InputNumber, Select, DatePicker, Drawer, Table, Button, Popconfirm, ConfigProvider, Tooltip, Modal, Checkbox, Upload } = ctx.libs.antd;
+  const { DeleteOutlined, SaveOutlined, UploadOutlined, DownloadOutlined } = ctx.libs.antdIcons || {};
 
   const currentUserId    = await ctx.getVar('ctx.user.id') || null;
   const currentUserName  = await ctx.getVar('ctx.user.username') || 'guest';
@@ -9,6 +10,7 @@
   const BLOCK_UID        = ctx.model?.uid || 'default_block';
   const COLUMN_VIEW_SETTING_KEY = `${BLOCK_UID}__column_view_setting`;
   const DEFAULT_COLUMN_VIEWS_KEY = `${BLOCK_UID}__default_column_views`;
+  const CHART_QUICK_SETTING_KEY = `${BLOCK_UID}__chart_quick_groups`;
   const BLOCK_NAME       = '合并板块';
   const BLOCK_NAME_SETTING_KEY = `${BLOCK_UID}__block_name`;
   const COLUMN_GROUP_ORDER_KEY = '__column_group_order';
@@ -472,11 +474,9 @@
     { key:'profit_cumulative_break_even',   src:'profit', field:'cumulative_break_even',   label:'累计盈亏平衡（当地币）',     group:'profit',             axis:'left',  valueType:'decimal' },
   ];
   const TREND_CHART_FIELD_GROUPS = [
-    { key:'fixed',              label:'固定列' },
-    { key:'traffic_conversion', label:'流量结构&转化' },
-    { key:'order_structure',    label:'订单结构' },
-    { key:'ad_data',            label:'广告数据' },
-    { key:'profit',             label:'利润数据' },
+    { key:'order_traffic_conversion', label:'订单&流量&转化', sourceGroups:['fixed', 'traffic_conversion', 'order_structure'] },
+    { key:'ad_data',                  label:'广告数据',        sourceGroups:['ad_data'] },
+    { key:'profit',                   label:'利润数据',        sourceGroups:['profit'] },
   ];
   const TREND_CHART_PRESETS = {
     traffic: ['weekly_zongliuliang', 'weekly_organic_traffic', 'weekly_guanggaodianji'],
@@ -491,7 +491,6 @@
     { value:'adConversion',   label:'广告转化' },
     { value:'adEfficiency',   label:'广告效率' },
     { value:'adInvestment',   label:'广告投入效果' },
-    { value:'custom',         label:'自定义' },
   ];
   const TREND_CHART_DEFAULT_PRESET_KEY = 'traffic';
   const TREND_CHART_DEFAULT_FIELD_KEYS = TREND_CHART_PRESETS[TREND_CHART_DEFAULT_PRESET_KEY];
@@ -502,6 +501,53 @@
     { value:'30d',       label:'近30天' },
     { value:'custom',    label:'自定义日期' },
   ];
+  const TREND_CHART_FIELD_KEY_SET = new Set(TREND_CHART_FIELDS.map((field) => field.key));
+  const normalizeTrendChartQuickGroups = (groups) => {
+    if (!Array.isArray(groups)) return [];
+    const seenIds = new Set();
+    const seenNames = new Set();
+    return groups.reduce((result, group) => {
+      const id = String(group?.id || '').trim();
+      const name = String(group?.name || '').trim();
+      const fields = Array.from(new Set(Array.isArray(group?.fields) ? group.fields : []))
+        .filter((field) => TREND_CHART_FIELD_KEY_SET.has(field));
+      const normalizedName = name.toLocaleLowerCase();
+      if (!id || !name || !fields.length || seenIds.has(id) || seenNames.has(normalizedName)) return result;
+      seenIds.add(id);
+      seenNames.add(normalizedName);
+      result.push({ id, name, fields });
+      return result;
+    }, []);
+  };
+  const isTrendChartQuickNameTaken = (name, customGroups = []) => {
+    const normalizedName = String(name || '').trim().toLocaleLowerCase();
+    if (!normalizedName) return false;
+    return TREND_CHART_PRESET_OPTIONS.some((option) => option.label.toLocaleLowerCase() === normalizedName)
+      || customGroups.some((group) => group.name.toLocaleLowerCase() === normalizedName);
+  };
+  const loadTrendChartQuickGroupsFromUser = async () => {
+    if (!currentUserId) return [];
+    const userRes = await ctx.request({ url: 'users:get', method: 'get', params: { filterByTk: currentUserId } });
+    return normalizeTrendChartQuickGroups(userRes?.data?.data?.setting?.[CHART_QUICK_SETTING_KEY]);
+  };
+  const saveTrendChartQuickGroupsToUser = async (groups) => {
+    if (!currentUserId) return false;
+    const userRes = await ctx.request({ url: 'users:get', method: 'get', params: { filterByTk: currentUserId } });
+    const existingSetting = userRes?.data?.data?.setting || {};
+    await ctx.request({
+      url: 'users:update',
+      method: 'post',
+      params: { filterByTk: currentUserId },
+      data: {
+        setting: {
+          ...existingSetting,
+          [CHART_QUICK_SETTING_KEY]: normalizeTrendChartQuickGroups(groups),
+          [BLOCK_NAME_SETTING_KEY]: BLOCK_NAME,
+        },
+      },
+    });
+    return true;
+  };
 
   const isBlankLike = (v) => v === null || v === undefined || v === '';
   const toFormulaNumber = (v) => {
@@ -940,7 +986,7 @@
     category: '类别 = 从小类排名数组取第一个类别。\ncategory = small_cate_rank[0].category。',
   };
 
-  const WEEKLY_PERFORMANCE_UPDATE_TOOLTIP_TEXT = '每天更新2次（早上8点、16点），每次更新过去60天的数据；';
+  const WEEKLY_PERFORMANCE_UPDATE_TOOLTIP_TEXT = '每天更新2次（早上8点、16点），每次更新过去7天的数据；';
   const WEEKLY_PERFORMANCE_AD_UPDATE_TOOLTIP_TEXT = '每天更新2次（早上8点、16点），每次更新过去7天的数据；';
   const WEEKLY_PERFORMANCE_SALES_DIRECT_TOOLTIP_TEXT = '该数据由系统定时同步，无需手工填写。';
   const WEEKLY_PERFORMANCE_SALES_CALCULATED_TOOLTIP_TEXT = '该指标由系统定时计算并同步，无需手工填写。';
@@ -2242,6 +2288,325 @@
     return n / d;
   };
 
+  const WEEKLY_IMPORT_SHEET_NAME = '数据导入';
+  const WEEKLY_IMPORT_HEADER_ROW = 6;
+  const WEEKLY_IMPORT_DATA_START_ROW = 7;
+  const WEEKLY_IMPORT_MAX_ROWS = 2000;
+  const WEEKLY_IMPORT_FIELD_OPTIONS = [
+    { field: 'sales', label: '实际总单量', type: 'integer' },
+    { field: 'order_items', label: '总订单量', type: 'integer' },
+    { field: 'zongliuliang', label: '汇总流量-会话量', type: 'integer' },
+    { field: 'sessions_mobile', label: '手机端流量', type: 'integer' },
+    { field: 'sessions', label: '电脑端流量', type: 'integer' },
+    { field: 'page_views_total', label: '页面浏览量', type: 'integer' },
+    { field: 'page_views', label: 'PV-Browser', type: 'integer' },
+    { field: 'page_views_mobile', label: 'PV-Mobile', type: 'integer' },
+    { field: 'guanggaodianji', label: '广告点击量', type: 'integer' },
+    { field: 'guanggaohuafei', label: '广告花费', type: 'decimal' },
+    { field: 'guanggaodan', label: '广告总单量', type: 'integer' },
+    { field: 'ad_sales_amount', label: '广告销售额', type: 'decimal' },
+    { field: 'impressions', label: '广告曝光量', type: 'integer' },
+    { field: 'ad_direct_order_quantity', label: '直接成交订单量', type: 'integer' },
+    { field: 'ad_direct_sales_amount', label: '直接成交额', type: 'decimal' },
+    { field: 'amount', label: '销售额', type: 'decimal' },
+    { field: 'ads_sp_cost', label: 'SP广告费', type: 'decimal' },
+    { field: 'ads_sp_sales', label: 'SP广告销售额', type: 'decimal' },
+    { field: 'ads_sd_cost', label: 'SD广告费', type: 'decimal' },
+    { field: 'ads_sd_sales', label: 'SD广告销售额', type: 'decimal' },
+    { field: 'shared_ads_sb_cost', label: 'SB广告费', type: 'decimal' },
+    { field: 'shared_ads_sb_sales', label: 'SB广告销售额', type: 'decimal' },
+    { field: 'shared_ads_sbv_cost', label: 'SBV广告费', type: 'decimal' },
+    { field: 'shared_ads_sbv_sales', label: 'SBV广告销售额', type: 'decimal' },
+    { field: 'promotion_volume', label: '促销销量', type: 'integer' },
+    { field: 'b2b_volume', label: 'B2B销量', type: 'integer' },
+    { field: 'return_count', label: '退款量', type: 'integer' },
+    { field: 'return_goods_count', label: '退货量', type: 'integer' },
+    { field: 'ranking', label: '小类排名', type: 'integer' },
+    { field: 'prev_rank', label: '上一次小类排名', type: 'integer' },
+    { field: 'reviews_count', label: '评论数量', type: 'integer' },
+    { field: 'avg_star', label: '评分', type: 'decimal' },
+    { field: 'prev_star', label: '前一个评分', type: 'decimal' },
+    { field: 'category', label: '小类类别', type: 'text' },
+  ];
+  const WEEKLY_IMPORT_FIELDS_BY_LABEL = Object.fromEntries(WEEKLY_IMPORT_FIELD_OPTIONS.map((item) => [item.label, item]));
+  const WEEKLY_IMPORT_BLANK_MARKERS = new Set(['', '-', '/', '#VALUE!']);
+  const WEEKLY_IMPORT_ALLOWED_COUNTRIES = new Set(Object.keys(COUNTRY_COLORS));
+  let weeklyImportExcelJsPromise = null;
+  const loadWeeklyImportExcelJs = async () => {
+    if (!weeklyImportExcelJsPromise) {
+      weeklyImportExcelJsPromise = ctx.importAsync('exceljs@4.4.0').then((module) => {
+        const library = module?.default || module;
+        const Workbook = library?.Workbook || module?.Workbook;
+        if (typeof Workbook !== 'function') throw new Error('Excel 模块未提供 Workbook');
+        return { Workbook };
+      }).catch((error) => {
+        weeklyImportExcelJsPromise = null;
+        throw error;
+      });
+    }
+    return weeklyImportExcelJsPromise;
+  };
+  const getExcelColumnName = (columnNumber) => {
+    let number = Number(columnNumber);
+    let name = '';
+    while (number > 0) {
+      const remainder = (number - 1) % 26;
+      name = String.fromCharCode(65 + remainder) + name;
+      number = Math.floor((number - 1) / 26);
+    }
+    return name;
+  };
+  const excelBufferToDataUrl = (buffer) => {
+    const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    let base64 = '';
+    for (let offset = 0; offset < bytes.length; offset += 3) {
+      const first = bytes[offset];
+      const hasSecond = offset + 1 < bytes.length;
+      const hasThird = offset + 2 < bytes.length;
+      const second = hasSecond ? bytes[offset + 1] : 0;
+      const third = hasThird ? bytes[offset + 2] : 0;
+      const value = (first << 16) | (second << 8) | third;
+      base64 += alphabet[(value >>> 18) & 63];
+      base64 += alphabet[(value >>> 12) & 63];
+      base64 += hasSecond ? alphabet[(value >>> 6) & 63] : '=';
+      base64 += hasThird ? alphabet[value & 63] : '=';
+    }
+    return `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${base64}`;
+  };
+  const buildWeeklyImportWorkbook = async (selectedFields, metadata = {}) => {
+    const selected = new Set(Array.isArray(selectedFields) ? selectedFields : []);
+    const businessOptions = WEEKLY_IMPORT_FIELD_OPTIONS.filter((item) => selected.has(item.field));
+    if (!businessOptions.length) throw new Error('请至少选择一个导入字段');
+    const country = String(metadata.country || '').trim().toUpperCase();
+    const asin = String(metadata.asin || '').trim().toUpperCase();
+    const { Workbook } = await loadWeeklyImportExcelJs();
+    const workbook = new Workbook();
+    workbook.creator = '每日数据';
+    workbook.created = new Date();
+    workbook.calcProperties.fullCalcOnLoad = true;
+    const sheet = workbook.addWorksheet(WEEKLY_IMPORT_SHEET_NAME, {
+      views: [{ state: 'frozen', ySplit: WEEKLY_IMPORT_HEADER_ROW }],
+      properties: { defaultRowHeight: 22 },
+    });
+    const headers = ['日期', ...businessOptions.map((item) => item.label)];
+    const layoutLastColumnNumber = Math.max(headers.length, 16);
+    const lastColumn = getExcelColumnName(layoutLastColumnNumber);
+    const thinBorder = {
+      top: { style: 'thin', color: { argb: 'FFD5DCE5' } },
+      left: { style: 'thin', color: { argb: 'FFD5DCE5' } },
+      bottom: { style: 'thin', color: { argb: 'FFD5DCE5' } },
+      right: { style: 'thin', color: { argb: 'FFD5DCE5' } },
+    };
+    const setFill = (cell, color) => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } };
+    };
+
+    ['国家', 'ASIN', '导入数据起始日期', '导入数据终止日期'].forEach((label, index) => {
+      const cell = sheet.getCell(index + 1, 1);
+      cell.value = label;
+      cell.font = { name: '微软雅黑', size: 11, bold: true, color: { argb: 'FF243447' } };
+      cell.alignment = { horizontal: 'left', vertical: 'middle' };
+      cell.border = thinBorder;
+      setFill(cell, 'FFE8EEF5');
+      const inputCell = sheet.getCell(index + 1, 2);
+      inputCell.font = { name: '微软雅黑', size: 11, color: { argb: 'FF000000' } };
+      inputCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      inputCell.border = thinBorder;
+      setFill(inputCell, 'FFFFFFFF');
+    });
+    sheet.getCell('B1').value = country;
+    sheet.getCell('B2').value = asin;
+    sheet.getCell('B1').dataValidation = {
+      type: 'list',
+      allowBlank: false,
+      formulae: [`"${[...WEEKLY_IMPORT_ALLOWED_COUNTRIES].sort().join(',')}"`],
+      showErrorMessage: true,
+      errorTitle: '国家错误',
+      error: '请从下拉列表选择国家',
+    };
+    ['B3', 'B4'].forEach((address) => {
+      sheet.getCell(address).numFmt = 'yyyy-mm-dd';
+      sheet.getCell(address).dataValidation = {
+        type: 'date',
+        operator: 'greaterThanOrEqual',
+        allowBlank: false,
+        formulae: [new Date(2000, 0, 1)],
+        showErrorMessage: true,
+        errorTitle: '日期错误',
+        error: '请选择有效日期',
+      };
+    });
+    sheet.mergeCells(`D1:${lastColumn}4`);
+    const guideCell = sheet.getCell('D1');
+    guideCell.value = '填写指南：\n\n1、顶部只填写一次“国家”“ASIN”“导入数据起始日期”和“导入数据终止日期”。\n2、第7行起“日期”由公式按天自动生成，不需要手工填写。\n3、只在起止日期范围内填写已选择的业务字段。\n4、空白、“-”、“/”和“#VALUE!”均视为空值，不会写入或保护。';
+    guideCell.font = { name: '微软雅黑', size: 11, bold: true, color: { argb: 'FF5F4600' } };
+    guideCell.alignment = { vertical: 'top', wrapText: true };
+    guideCell.border = {
+      top: { style: 'thin', color: { argb: 'FFD6A84B' } },
+      bottom: { style: 'thin', color: { argb: 'FFD6A84B' } },
+    };
+    setFill(guideCell, 'FFFFF3CD');
+    sheet.mergeCells(`A5:${lastColumn}5`);
+    const groupCell = sheet.getCell('A5');
+    groupCell.value = '产品表现导入字段';
+    groupCell.font = { name: '微软雅黑', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+    groupCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    groupCell.border = thinBorder;
+    setFill(groupCell, 'FF6F52A2');
+
+    headers.forEach((header, index) => {
+      const cell = sheet.getCell(WEEKLY_IMPORT_HEADER_ROW, index + 1);
+      cell.value = header;
+      cell.font = { name: '微软雅黑', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      cell.border = thinBorder;
+      setFill(cell, index === 0 ? 'FF3076B6' : 'FF147D84');
+    });
+    for (let offset = 0; offset < WEEKLY_IMPORT_MAX_ROWS; offset += 1) {
+      const rowNumber = WEEKLY_IMPORT_DATA_START_ROW + offset;
+      const dateCell = sheet.getCell(rowNumber, 1);
+      dateCell.value = {
+        formula: `IF(OR($B$3="",$B$4=""),"",IF(ROW()-ROW($A$7)+$B$3<=$B$4,ROW()-ROW($A$7)+$B$3,""))`,
+      };
+      dateCell.numFmt = 'yyyy-mm-dd';
+      dateCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      dateCell.border = thinBorder;
+      for (let columnIndex = 0; columnIndex < businessOptions.length; columnIndex += 1) {
+        const option = businessOptions[columnIndex];
+        const cell = sheet.getCell(rowNumber, columnIndex + 2);
+        cell.numFmt = option.type === 'integer' ? '0' : (option.type === 'decimal' ? '0.00' : '@');
+        cell.alignment = { horizontal: option.type === 'text' ? 'left' : 'right', vertical: 'middle', wrapText: option.type === 'text' };
+        cell.border = thinBorder;
+      }
+    }
+    sheet.getColumn(1).width = 14;
+    businessOptions.forEach((option, index) => {
+      sheet.getColumn(index + 2).width = Math.min(24, Math.max(14, option.label.length * 2 + 2));
+    });
+    for (let columnNumber = headers.length + 1; columnNumber <= layoutLastColumnNumber; columnNumber += 1) {
+      sheet.getColumn(columnNumber).width = 8;
+    }
+    sheet.getRow(1).height = 24;
+    sheet.getRow(2).height = 24;
+    sheet.getRow(3).height = 24;
+    sheet.getRow(4).height = 24;
+    sheet.getRow(5).height = 26;
+    sheet.getRow(6).height = 38;
+    sheet.autoFilter = { from: { row: WEEKLY_IMPORT_HEADER_ROW, column: 1 }, to: { row: WEEKLY_IMPORT_HEADER_ROW, column: headers.length } };
+    return workbook.xlsx.writeBuffer();
+  };
+  const getWeeklyImportCellValue = (cell) => {
+    const value = cell?.value;
+    if (value == null) return '';
+    if (value instanceof Date) return value;
+    if (typeof value !== 'object') return value;
+    if (Object.prototype.hasOwnProperty.call(value, 'result')) return value.result ?? '';
+    if (Array.isArray(value.richText)) return value.richText.map((item) => item?.text || '').join('');
+    if (Object.prototype.hasOwnProperty.call(value, 'text')) return value.text ?? '';
+    return cell?.text ?? '';
+  };
+  const readWeeklyImportWorkbook = async (file) => {
+    const { Workbook } = await loadWeeklyImportExcelJs();
+    const workbook = new Workbook();
+    await workbook.xlsx.load(await file.arrayBuffer());
+    const sheet = workbook.getWorksheet(WEEKLY_IMPORT_SHEET_NAME) || workbook.worksheets?.[0];
+    if (!sheet) throw new Error('Excel 中没有可读取的工作表');
+    return { workbook, sheet };
+  };
+  const normalizeWeeklyImportDate = (value) => {
+    if (value instanceof Date && Number.isFinite(value.getTime())) {
+      const year = value.getUTCFullYear();
+      const month = value.getUTCMonth() + 1;
+      const day = value.getUTCDate();
+      return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    }
+    const text = String(value ?? '').trim();
+    let year;
+    let month;
+    let day;
+    const dateMatch = text.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+    if (dateMatch) {
+      year = Number(dateMatch[1]);
+      month = Number(dateMatch[2]);
+      day = Number(dateMatch[3]);
+    } else if (/^\d{5}(?:\.0+)?$/.test(text)) {
+      const serial = Number(text);
+      const excelDate = new Date(Date.UTC(1899, 11, 30) + Math.round(serial) * 86400000);
+      year = excelDate.getUTCFullYear();
+      month = excelDate.getUTCMonth() + 1;
+      day = excelDate.getUTCDate();
+    } else {
+      throw new Error('日期必须为 YYYY-MM-DD');
+    }
+    const checked = new Date(Date.UTC(year, month - 1, day));
+    if (checked.getUTCFullYear() !== year || checked.getUTCMonth() + 1 !== month || checked.getUTCDate() !== day) {
+      throw new Error('日期不存在');
+    }
+    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  };
+  const isWeeklyImportBlank = (value) => WEEKLY_IMPORT_BLANK_MARKERS.has(String(value ?? '').trim().toUpperCase());
+  const parseWeeklyImportValue = (rawValue, option) => {
+    const text = String(rawValue ?? '').trim();
+    if (isWeeklyImportBlank(text)) return undefined;
+    if (option.type === 'text') return text;
+    const normalized = text.replace(/,/g, '');
+    const value = Number(normalized);
+    if (!Number.isFinite(value)) throw new Error('必须填写有效数字');
+    if (option.type === 'integer' && !Number.isInteger(value)) throw new Error('必须填写整数');
+    return value;
+  };
+  const parseManualOverrideFields = (value) => {
+    if (Array.isArray(value)) return value.filter((item) => typeof item === 'string' && item);
+    if (value && typeof value === 'object') return Object.keys(value);
+    if (typeof value !== 'string' || !value.trim()) return [];
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed.filter((item) => typeof item === 'string' && item) : Object.keys(parsed || {});
+    } catch (_error) {
+      return [];
+    }
+  };
+  const calculateWeeklyImportDerivedFields = (fields) => {
+    const result = {};
+    const hasAll = (...names) => names.every((name) => toFormulaNumber(fields?.[name]) != null);
+    const divide = (numerator, denominator, digits = 4, absolute = false) => {
+      const value = safeDivide(numerator, denominator);
+      if (value == null) return null;
+      const rounded = roundRate(value, digits);
+      return absolute && rounded != null ? Math.abs(rounded) : rounded;
+    };
+    if (hasAll('order_items', 'guanggaodan')) result.zirandan = toFormulaNumber(fields.order_items) - toFormulaNumber(fields.guanggaodan);
+    if (hasAll('guanggaodan', 'sales')) result.adv_rate = divide(fields.guanggaodan, fields.sales, 4);
+    if (hasAll('zongliuliang', 'guanggaodianji')) {
+      const organicTraffic = toFormulaNumber(fields.zongliuliang) - toFormulaNumber(fields.guanggaodianji);
+      result.zirandianji = organicTraffic;
+      result.organic_traffic = organicTraffic;
+      result.natural_traffic_proportion = divide(organicTraffic, fields.zongliuliang, 4);
+    }
+    if (hasAll('order_items', 'zongliuliang')) result.zongcvr = divide(fields.order_items, fields.zongliuliang, 4);
+    if (hasAll('guanggaodan', 'guanggaodianji')) result.guanggaocvr = divide(fields.guanggaodan, fields.guanggaodianji, 4);
+    if (hasAll('guanggaodianji', 'impressions')) result.ctr = divide(fields.guanggaodianji, fields.impressions, 4);
+    if (hasAll('guanggaohuafei', 'guanggaodianji')) result.cpc = divide(fields.guanggaohuafei, fields.guanggaodianji, 2);
+    if (hasAll('guanggaohuafei', 'guanggaodan')) {
+      result.cpa = divide(fields.guanggaohuafei, fields.guanggaodan, 2);
+      result.cpo = divide(fields.guanggaohuafei, fields.guanggaodan, 2, true);
+    }
+    if (hasAll('guanggaohuafei', 'sales')) result.cpu = divide(fields.guanggaohuafei, fields.sales, 2, true);
+    if (hasAll('sales', 'zongliuliang')) {
+      result.volume_cvr = divide(fields.sales, fields.zongliuliang, 4);
+      result.session_conversion_rate = result.volume_cvr;
+    }
+    if (hasAll('return_count', 'sales')) result.return_rate = divide(fields.return_count, fields.sales, 4);
+    if (hasAll('return_goods_count', 'sales')) result.return_goods_rate = divide(fields.return_goods_count, fields.sales, 4);
+    if (hasAll('guanggaohuafei', 'ad_sales_amount')) result.acos = divide(fields.guanggaohuafei, fields.ad_sales_amount, 4);
+    if (hasAll('guanggaohuafei', 'amount')) result.tacos = divide(fields.guanggaohuafei, fields.amount, 4);
+    if (hasAll('guanggaodan', 'ad_direct_order_quantity')) {
+      result.indirect_order_volume = toFormulaNumber(fields.guanggaodan) - toFormulaNumber(fields.ad_direct_order_quantity);
+    }
+    return result;
+  };
+
   const sumFieldFromRows = (rows, field, colsByField = null) => {
     const col = colsByField?.[field] || null;
     let hasValue = false;
@@ -3082,7 +3447,7 @@
     const uploadFile = async (file) => {
       setUploading(true);
       try {
-        const formData = new FormData();
+        const formData = new window.FormData();
         formData.append('file', file);
         const res = await ctx.request({ url: 'attachments:upload', method: 'post', data: formData, headers: { 'Content-Type': 'multipart/form-data' } });
         const url = res?.data?.data?.url || res?.data?.url;
@@ -3289,7 +3654,7 @@
 
     if (!safeDates.length || !safeSeries.length) {
       return React.createElement('div', {
-        style: { minHeight: '360px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', background: '#111827', border: '1px solid #1f2937', borderRadius: '8px', fontSize: '16px' },
+        style: { minHeight: '360px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', background: '#111827', borderRadius: '8px', fontSize: '16px' },
       }, '所选条件没有真实数据');
     }
 
@@ -3399,7 +3764,7 @@
     const tooltipTransform = hoverX != null && hoverX > width * 0.62 ? 'translateX(-100%) translateX(-12px)' : 'translateX(12px)';
 
     return React.createElement('div', {
-      style: { position: 'relative', width: '100%', boxSizing: 'border-box', background: '#111827', border: '1px solid #1f2937', borderRadius: '8px', padding: '18px', color: '#cbd5e1', fontVariantNumeric: 'tabular-nums' },
+      style: { position: 'relative', width: '100%', boxSizing: 'border-box', background: '#111827', borderRadius: '8px', padding: '18px', color: '#cbd5e1', fontVariantNumeric: 'tabular-nums' },
       onMouseLeave: () => setHoverIndex(null),
     },
       React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '8px 14px', padding: '0 4px 12px', maxHeight: '96px', overflowY: 'auto' } },
@@ -3470,8 +3835,13 @@
     const [errorText, setErrorText] = useState('');
     const [chartRows, setChartRows] = useState([]);
     const [selectedFieldKeys, setSelectedFieldKeys] = useState(TREND_CHART_DEFAULT_FIELD_KEYS);
-    const [selectedPresetKey, setSelectedPresetKey] = useState(TREND_CHART_DEFAULT_PRESET_KEY);
-    const [indicatorPanelOpen, setIndicatorPanelOpen] = useState(false);
+    const [customQuickGroups, setCustomQuickGroups] = useState([]);
+    const [customQuickLoading, setCustomQuickLoading] = useState(false);
+    const [customQuickSaving, setCustomQuickSaving] = useState(false);
+    const [showCustomQuickModal, setShowCustomQuickModal] = useState(false);
+    const [showCustomQuickDeleteModal, setShowCustomQuickDeleteModal] = useState(false);
+    const [customQuickName, setCustomQuickName] = useState('');
+    const [selectedDeleteQuickIds, setSelectedDeleteQuickIds] = useState([]);
     const [dateRangeState, setDateRangeState] = useState({ scopeKey: '', value: null });
     const [dateModeState, setDateModeState] = useState({ scopeKey: '', value: 'available' });
     const dateRangeStart = dateRange?.[0] || '';
@@ -3493,31 +3863,145 @@
       ? todayDate
       : presetDateRange?.[1] || selectedDateRange?.[1] || dateRangeEnd;
     const fieldMap = useMemo(() => Object.fromEntries(TREND_CHART_FIELDS.map((field) => [field.key, field])), []);
+    const fieldKeysByGroup = useMemo(() => Object.fromEntries(TREND_CHART_FIELD_GROUPS.map((group) => [
+      group.key,
+      TREND_CHART_FIELDS.filter((field) => group.sourceGroups.includes(field.group)).map((field) => field.key),
+    ])), []);
     const fieldOptionsByGroup = useMemo(() => Object.fromEntries(TREND_CHART_FIELD_GROUPS.map((group) => [
       group.key,
-      TREND_CHART_FIELDS.filter((field) => field.group === group.key).map((field) => ({ value: field.key, label: field.label })),
+      TREND_CHART_FIELDS.filter((field) => group.sourceGroups.includes(field.group)).map((field) => ({ value: field.key, label: field.label })),
     ])), []);
-    const presetOptionsWithDetails = useMemo(() => TREND_CHART_PRESET_OPTIONS.map((option) => {
-      const fieldKeys = option.value === 'custom' ? selectedFieldKeys : (TREND_CHART_PRESETS[option.value] || []);
-      const fieldLabels = fieldKeys.map((key) => fieldMap[key]?.label).filter(Boolean);
-      const detailText = fieldLabels.length ? fieldLabels.join('、') : '未选择字段';
-      return {
-        ...option,
-        title: option.label,
-        label: React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '18px', width: '100%', minWidth: 0 } },
-          React.createElement('span', { style: { flexShrink: 0, color: '#334155', fontWeight: 700 } }, option.label),
-          React.createElement('span', { title: detailText, style: { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'right', color: '#64748b', fontSize: `${FONT_SIZE_XS}px` } }, detailText)
-        ),
-      };
-    }), [fieldMap, selectedFieldKeys]);
     const updateSelectedFieldsByGroup = (groupKey, groupFieldKeys) => {
-      const groupKeys = new Set(TREND_CHART_FIELDS.filter((field) => field.group === groupKey).map((field) => field.key));
+      const groupKeys = new Set(fieldKeysByGroup[groupKey] || []);
       const nextGroupKeys = new Set(Array.isArray(groupFieldKeys) ? groupFieldKeys : []);
-      setSelectedPresetKey('custom');
       setSelectedFieldKeys((currentKeys) => TREND_CHART_FIELDS.filter((field) => (
         groupKeys.has(field.key) ? nextGroupKeys.has(field.key) : currentKeys.includes(field.key)
       )).map((field) => field.key));
     };
+
+    useEffect(() => {
+      if (!visible) {
+        setShowCustomQuickModal(false);
+        setShowCustomQuickDeleteModal(false);
+        setCustomQuickName('');
+        setSelectedDeleteQuickIds([]);
+        return undefined;
+      }
+      let active = true;
+      const loadCustomQuickGroups = async () => {
+        if (!currentUserId) {
+          setCustomQuickGroups([]);
+          return;
+        }
+        try {
+          setCustomQuickLoading(true);
+          const groups = await loadTrendChartQuickGroupsFromUser();
+          if (active) setCustomQuickGroups(groups);
+        } catch (error) {
+          if (active) {
+            setCustomQuickGroups([]);
+            ctx.message.error(`加载自定义指标失败：${error?.message || '未知错误'}`);
+          }
+        } finally {
+          if (active) setCustomQuickLoading(false);
+        }
+      };
+      loadCustomQuickGroups();
+      return () => { active = false; };
+    }, [visible]);
+
+    const handleSaveCustomQuick = useCallback(async () => {
+      const name = customQuickName.trim();
+      if (!currentUserId) {
+        ctx.message.warning('未识别到当前用户，无法保存自定义指标');
+        return;
+      }
+      if (!name) {
+        ctx.message.warning('请输入指标名称');
+        return;
+      }
+      if (!selectedFieldKeys.length) {
+        ctx.message.warning('请先选择至少一个指标字段');
+        return;
+      }
+      if (isTrendChartQuickNameTaken(name, customQuickGroups)) {
+        ctx.message.warning('指标名称已存在，请更换名称');
+        return;
+      }
+      try {
+        setCustomQuickSaving(true);
+        const latestGroups = await loadTrendChartQuickGroupsFromUser();
+        if (isTrendChartQuickNameTaken(name, latestGroups)) {
+          ctx.message.warning('指标名称已存在，请更换名称');
+          setCustomQuickGroups(latestGroups);
+          return;
+        }
+        const nextGroups = [
+          ...latestGroups,
+          {
+            id: `chart_quick_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            name,
+            fields: selectedFieldKeys,
+          },
+        ];
+        await saveTrendChartQuickGroupsToUser(nextGroups);
+        setCustomQuickGroups(nextGroups);
+        setCustomQuickName('');
+        setShowCustomQuickModal(false);
+        ctx.message.success('自定义指标已保存');
+      } catch (error) {
+        ctx.message.error(`保存自定义指标失败：${error?.message || '未知错误'}`);
+      } finally {
+        setCustomQuickSaving(false);
+      }
+    }, [customQuickGroups, customQuickName, selectedFieldKeys]);
+
+    const handleDeleteCustomQuick = useCallback(async (groupIds) => {
+      if (!currentUserId) {
+        ctx.message.warning('未识别到当前用户，无法删除自定义指标');
+        return false;
+      }
+      const requestedIds = Array.from(new Set(Array.isArray(groupIds) ? groupIds : [groupIds])).filter(Boolean);
+      if (!requestedIds.length) {
+        ctx.message.warning('请选择要删除的自定义指标');
+        return false;
+      }
+      try {
+        setCustomQuickSaving(true);
+        const latestGroups = await loadTrendChartQuickGroupsFromUser();
+        const requestedIdSet = new Set(requestedIds);
+        const existingDeleteIds = latestGroups
+          .filter((group) => requestedIdSet.has(group.id))
+          .map((group) => group.id);
+        if (!existingDeleteIds.length) {
+          setCustomQuickGroups(latestGroups);
+          ctx.message.warning('所选自定义指标已不存在，列表已刷新');
+          return false;
+        }
+        const existingDeleteIdSet = new Set(existingDeleteIds);
+        const nextGroups = latestGroups.filter((group) => !existingDeleteIdSet.has(group.id));
+        await saveTrendChartQuickGroupsToUser(nextGroups);
+        setCustomQuickGroups(nextGroups);
+        ctx.message.success(`已删除 ${existingDeleteIds.length} 个自定义指标`);
+        return true;
+      } catch (error) {
+        ctx.message.error(`删除自定义指标失败：${error?.message || '未知错误'}`);
+        return false;
+      } finally {
+        setCustomQuickSaving(false);
+      }
+    }, []);
+
+    const handleConfirmDeleteCustomQuick = useCallback(async () => {
+      if (!selectedDeleteQuickIds.length) {
+        ctx.message.warning('请选择要删除的自定义指标');
+        return;
+      }
+      const deleted = await handleDeleteCustomQuick(selectedDeleteQuickIds);
+      if (!deleted) return;
+      setShowCustomQuickDeleteModal(false);
+      setSelectedDeleteQuickIds([]);
+    }, [handleDeleteCustomQuick, selectedDeleteQuickIds]);
 
     useEffect(() => {
       if (!visible) return undefined;
@@ -3616,44 +4100,69 @@
     const pickerDateRange = dateMode === 'custom'
       ? displayedDateRange
       : presetDateRange || availableDateRange;
-    const indicatorPanel = React.createElement('div', {
-      style: { width: 'min(860px, calc(100vw - 64px))', maxHeight: 'min(620px, calc(100vh - 160px))', overflowY: 'auto', padding: '4px' },
-    },
-      React.createElement('div', { style: { marginBottom: '12px' } },
-        React.createElement('div', { style: { marginBottom: '4px', color: '#334155', fontSize: `${FONT_SIZE_XS}px`, fontWeight: 700 } }, '对比主题'),
-        React.createElement(Select, {
-          value: selectedPresetKey,
-          options: presetOptionsWithDetails,
-          optionLabelProp: 'title',
-          onChange: (value) => {
-            setSelectedPresetKey(value);
-            if (value !== 'custom' && TREND_CHART_PRESETS[value]) setSelectedFieldKeys([...TREND_CHART_PRESETS[value]]);
-          },
-          style: { width: '100%' },
-        })
-      ),
-      React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px' } },
-        TREND_CHART_FIELD_GROUPS.map((group) => React.createElement('div', { key: `trend_group_${group.key}`, style: { minWidth: 0 } },
-          React.createElement('div', { style: { marginBottom: '4px', color: '#64748b', fontSize: `${FONT_SIZE_XS}px`, fontWeight: 700 } }, group.label),
-          React.createElement(Select, {
-            mode: 'multiple',
-            allowClear: true,
-            showSearch: true,
-            placeholder: `选择${group.label}字段`,
-            value: selectedFieldKeys.filter((key) => fieldMap[key]?.group === group.key),
-            options: fieldOptionsByGroup[group.key] || [],
-            onChange: (values) => updateSelectedFieldsByGroup(group.key, values),
-            optionFilterProp: 'label',
-            maxTagCount: 'responsive',
-            style: { width: '100%' },
-          })
-        ))
-      ),
-      React.createElement('div', { style: { marginTop: '10px', color: '#64748b', fontSize: `${FONT_SIZE_XS}px`, textAlign: 'right' } }, `已选择 ${selectedFieldKeys.length} 个指标`)
-    );
+    const hasSameSelection = (currentKeys, targetKeys) => {
+      if (!Array.isArray(currentKeys) || !Array.isArray(targetKeys) || currentKeys.length !== targetKeys.length) return false;
+      const currentSet = new Set(currentKeys);
+      return targetKeys.every((key) => currentSet.has(key));
+    };
+    const QUICK_BUTTON_PALETTES = {
+      default: {
+        border: '#bae6fd', background: '#f0f9ff', color: '#0369a1',
+        activeBorder: '#38bdf8', activeBackground: '#e0f2fe', activeColor: '#075985',
+        activeShadow: '0 0 0 2px rgba(14,165,233,0.14)',
+      },
+      custom: {
+        border: '#ddd6fe', background: '#f5f3ff', color: '#6d28d9',
+        activeBorder: '#a78bfa', activeBackground: '#ede9fe', activeColor: '#5b21b6',
+        activeShadow: '0 0 0 2px rgba(124,58,237,0.14)',
+      },
+      availableDates: {
+        border: '#bbf7d0', background: '#f0fdf4', color: '#15803d',
+        activeBorder: '#4ade80', activeBackground: '#dcfce7', activeColor: '#166534',
+        activeShadow: '0 0 0 2px rgba(34,197,94,0.14)',
+      },
+      recentDates: {
+        border: '#fed7aa', background: '#fff7ed', color: '#c2410c',
+        activeBorder: '#fb923c', activeBackground: '#ffedd5', activeColor: '#9a3412',
+        activeShadow: '0 0 0 2px rgba(249,115,22,0.14)',
+      },
+    };
+    const getQuickButtonStyle = (active, palette = QUICK_BUTTON_PALETTES.default) => ({
+      minHeight: '40px',
+      padding: '4px 12px',
+      borderColor: active ? palette.activeBorder : palette.border,
+      background: active ? palette.activeBackground : palette.background,
+      color: active ? palette.activeColor : palette.color,
+      borderRadius: '4px',
+      boxShadow: active ? palette.activeShadow : '0 1px 1px rgba(15,23,42,0.04)',
+      fontWeight: active ? 800 : 700,
+      fontSize: `${FONT_SIZE_XS}px`,
+    });
+    const quickGroupStyle = {
+      display: 'flex',
+      gap: '8px',
+      alignItems: 'center',
+      flexWrap: 'nowrap',
+      flexShrink: 0,
+      padding: '6px 8px',
+      background: '#f8fafc',
+      borderRadius: '6px',
+      boxShadow: 'inset 0 0 0 1px rgba(15,23,42,0.07)',
+      boxSizing: 'border-box',
+    };
+    const quickGroupLabelStyle = {
+      color: '#64748b',
+      fontWeight: 700,
+      fontSize: `${FONT_SIZE_XS}px`,
+      whiteSpace: 'nowrap',
+      flexShrink: 0,
+    };
+    const setQuickDateMode = (value) => {
+      setDateModeState({ scopeKey: dateRangeScopeKey, value });
+      setDateRangeState({ scopeKey: dateRangeScopeKey, value: null });
+    };
 
     return React.createElement(Modal, {
-      title: country && asin ? `合并板块趋势图：${country}_${asin}` : '合并板块趋势图',
       open: visible,
       visible,
       onCancel: onClose,
@@ -3665,32 +4174,102 @@
       !country || !asin
         ? React.createElement('div', { style: { padding: 24, color: '#999' } }, '请先筛选到具体国家和 ASIN。')
         : React.createElement('div', null,
-          React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'flex-end', marginBottom: '12px' } },
-            React.createElement(Popover, {
-              content: indicatorPanel,
-              trigger: 'click',
-              placement: 'bottomLeft',
-              open: indicatorPanelOpen,
-              visible: indicatorPanelOpen,
-              onOpenChange: setIndicatorPanelOpen,
-              onVisibleChange: setIndicatorPanelOpen,
+          React.createElement('div', {
+            style: {
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+              gap: '10px',
+              marginBottom: '10px',
             },
-              React.createElement(Button, { type: 'primary', style: { minWidth: '180px' } }, `选择对比指标（${selectedFieldKeys.length}）`)
-            ),
-            React.createElement('div', { style: { flex: '0 1 180px', minWidth: '150px' } },
-              React.createElement('div', { style: { marginBottom: '4px', fontWeight: 700, color: '#334155' } }, '日期选择'),
+          },
+            TREND_CHART_FIELD_GROUPS.map((group) => React.createElement('div', { key: `trend_group_${group.key}`, style: { minWidth: 0 } },
+              React.createElement('div', { style: { marginBottom: '4px', color: '#334155', fontSize: `${FONT_SIZE_XS}px`, fontWeight: 700 } }, group.label),
               React.createElement(Select, {
-                value: dateMode,
-                options: TREND_CHART_DATE_MODE_OPTIONS,
-                onChange: (value) => {
-                  setDateModeState({ scopeKey: dateRangeScopeKey, value });
-                  if (value !== 'custom') setDateRangeState({ scopeKey: dateRangeScopeKey, value: null });
-                },
+                mode: 'multiple',
+                allowClear: true,
+                showSearch: true,
+                placeholder: `选择${group.label}字段`,
+                value: selectedFieldKeys.filter((key) => (fieldKeysByGroup[group.key] || []).includes(key)),
+                options: fieldOptionsByGroup[group.key] || [],
+                onChange: (values) => updateSelectedFieldsByGroup(group.key, values),
+                optionFilterProp: 'label',
+                maxTagCount: 'responsive',
                 style: { width: '100%' },
               })
+            ))
+          ),
+          React.createElement('div', {
+            'aria-busy': loading,
+            style: {
+              display: 'flex',
+              gap: '8px',
+              marginBottom: '12px',
+              alignItems: 'center',
+              flexWrap: 'nowrap',
+              overflowX: 'auto',
+              boxSizing: 'border-box',
+            },
+          },
+            React.createElement('div', { style: quickGroupStyle },
+              React.createElement('span', { style: quickGroupLabelStyle }, '快捷指标'),
+              ...TREND_CHART_PRESET_OPTIONS.map((option) => {
+                const fields = TREND_CHART_PRESETS[option.value] || [];
+                const active = hasSameSelection(selectedFieldKeys, fields);
+                return React.createElement(Button, {
+                  key: option.value,
+                  'aria-pressed': active,
+                  onClick: () => setSelectedFieldKeys([...fields]),
+                  style: getQuickButtonStyle(active),
+                }, option.label);
+              })
             ),
-            React.createElement('div', { style: { flex: '0 1 320px', minWidth: '260px' } },
-              React.createElement('div', { style: { marginBottom: '4px', fontWeight: 700, color: '#334155' } }, '选择日期范围'),
+            React.createElement('div', { style: quickGroupStyle },
+              React.createElement('span', { style: quickGroupLabelStyle }, '自定义指标'),
+              !customQuickLoading && customQuickGroups.map((group) => {
+                const active = hasSameSelection(selectedFieldKeys, group.fields);
+                return React.createElement(Button, {
+                  key: group.id,
+                  onClick: () => setSelectedFieldKeys(group.fields),
+                  disabled: customQuickSaving,
+                  title: group.name,
+                  'aria-pressed': active,
+                  style: getQuickButtonStyle(active, QUICK_BUTTON_PALETTES.custom),
+                }, React.createElement('span', { style: { display: 'block', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, group.name));
+              }),
+              React.createElement(Button, {
+                disabled: !currentUserId || customQuickLoading || customQuickSaving,
+                loading: customQuickLoading || (showCustomQuickModal && customQuickSaving),
+                type: 'primary',
+                title: currentUserId ? '保存当前指标组合' : '未识别到当前用户，无法保存',
+                'aria-label': '保存当前指标组合',
+                icon: SaveOutlined ? React.createElement(SaveOutlined) : null,
+                onClick: () => { setCustomQuickName(''); setShowCustomQuickModal(true); },
+                style: { width: '40px', minWidth: '40px', height: '40px', padding: 0, borderRadius: '4px' },
+              }, SaveOutlined ? null : '存'),
+              React.createElement(Button, {
+                danger: true,
+                type: 'primary',
+                disabled: !currentUserId || customQuickLoading || customQuickSaving || !customQuickGroups.length,
+                loading: customQuickLoading || (showCustomQuickDeleteModal && customQuickSaving),
+                title: customQuickGroups.length ? '删除自定义指标' : '暂无可删除的自定义指标',
+                'aria-label': '删除自定义指标',
+                icon: DeleteOutlined ? React.createElement(DeleteOutlined) : null,
+                onClick: () => { setSelectedDeleteQuickIds([]); setShowCustomQuickDeleteModal(true); },
+                style: { width: '40px', minWidth: '40px', height: '40px', padding: 0, borderRadius: '4px' },
+              }, DeleteOutlined ? null : '删')
+            ),
+            React.createElement('div', { style: quickGroupStyle },
+              React.createElement('span', { style: quickGroupLabelStyle }, '日期快捷'),
+              ...TREND_CHART_DATE_MODE_OPTIONS.filter((option) => option.value !== 'custom').map((option) => {
+                const active = dateMode === option.value;
+                const palette = option.value === 'available' ? QUICK_BUTTON_PALETTES.availableDates : QUICK_BUTTON_PALETTES.recentDates;
+                return React.createElement(Button, {
+                  key: option.value,
+                  'aria-pressed': active,
+                  onClick: () => setQuickDateMode(option.value),
+                  style: getQuickButtonStyle(active, palette),
+                }, option.label);
+              }),
               React.createElement(DatePicker.RangePicker, {
                 locale: DATE_PICKER_LOCALE,
                 value: pickerDateRange?.[0] && pickerDateRange?.[1]
@@ -3705,16 +4284,112 @@
                 },
                 placeholder: ['开始日期', '结束日期'],
                 allowClear: true,
-                style: { width: '100%' },
+                style: { width: '240px', minWidth: '240px', height: '40px' },
               })
-            ),
-            React.createElement('div', { style: { color: '#64748b', fontSize: `${FONT_SIZE_XS}px`, paddingBottom: '6px', whiteSpace: 'nowrap' } }, loading ? '正在加载真实数据...' : `共 ${chartPayload.dates.length} 个连续日期点`)
+            )
           ),
           errorText && React.createElement('div', { style: { marginBottom: '12px', padding: '8px 10px', background: '#fff1f0', border: '1px solid #ffccc7', borderRadius: '6px', color: '#cf1322' } }, errorText),
           React.createElement('div', { style: { width: '100%', paddingBottom: '6px' } },
             React.createElement(MergedTrendLineChart, { dates: chartPayload.dates, series: chartPayload.series })
           ),
-          React.createElement('div', { style: { marginTop: '8px', color: '#64748b', fontSize: `${FONT_SIZE_XS}px` } }, '说明：图表展示实际数值，不做归一化或趋势换算；已有数据日期为最早真实指标日期至今天，0 视为有效数据，空值日期会保留并以断线表示。')
+          React.createElement('div', { style: { marginTop: '8px', color: '#64748b', fontSize: `${FONT_SIZE_XS}px` } }, '说明：图表展示实际数值，不做归一化或趋势换算；已有数据日期为最早真实指标日期至今天，0 视为有效数据，空值日期会保留并以断线表示。'),
+          React.createElement(Modal, {
+            title: '保存自定义指标',
+            open: showCustomQuickModal,
+            visible: showCustomQuickModal,
+            width: 420,
+            okText: '保存',
+            cancelText: '取消',
+            confirmLoading: customQuickSaving,
+            maskClosable: !customQuickSaving,
+            destroyOnClose: true,
+            onOk: handleSaveCustomQuick,
+            onCancel: () => {
+              if (customQuickSaving) return;
+              setShowCustomQuickModal(false);
+              setCustomQuickName('');
+            },
+          },
+            React.createElement('div', { style: { display: 'grid', gap: '6px' } },
+              React.createElement('label', { htmlFor: `${BLOCK_UID}_chart_quick_name`, style: { color: '#475569', fontWeight: 700, fontSize: `${FONT_SIZE_SM}px` } }, '指标名称'),
+              React.createElement(Input, {
+                id: `${BLOCK_UID}_chart_quick_name`,
+                autoFocus: true,
+                value: customQuickName,
+                placeholder: '输入指标名称',
+                disabled: customQuickSaving,
+                onChange: (event) => setCustomQuickName(event.target.value),
+                onPressEnter: () => { if (!customQuickSaving) handleSaveCustomQuick(); },
+                style: { width: '100%', minHeight: '40px' },
+              })
+            )
+          ),
+          React.createElement(Modal, {
+            title: '删除自定义指标',
+            open: showCustomQuickDeleteModal,
+            visible: showCustomQuickDeleteModal,
+            width: 420,
+            okText: '删除',
+            cancelText: '取消',
+            confirmLoading: customQuickSaving,
+            okButtonProps: { danger: true, disabled: !selectedDeleteQuickIds.length },
+            maskClosable: !customQuickSaving,
+            destroyOnClose: true,
+            onOk: handleConfirmDeleteCustomQuick,
+            onCancel: () => {
+              if (customQuickSaving) return;
+              setShowCustomQuickDeleteModal(false);
+              setSelectedDeleteQuickIds([]);
+            },
+          },
+            React.createElement('div', { style: { display: 'grid', gap: '6px' } },
+              React.createElement('label', { style: { color: '#475569', fontWeight: 700, fontSize: `${FONT_SIZE_SM}px` } }, '选择要删除的指标（可多选）'),
+              customQuickGroups.length
+                ? React.createElement('div', {
+                    style: {
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: '8px',
+                      width: '100%',
+                      maxHeight: '280px',
+                      overflowY: 'auto',
+                      padding: '2px',
+                      boxSizing: 'border-box',
+                    },
+                  },
+                    ...customQuickGroups.map((group) => {
+                      const active = selectedDeleteQuickIds.includes(group.id);
+                      return React.createElement(Button, {
+                        key: group.id,
+                        disabled: customQuickSaving,
+                        title: group.name,
+                        'aria-pressed': active,
+                        onClick: () => setSelectedDeleteQuickIds((currentIds) => (
+                          currentIds.includes(group.id)
+                            ? currentIds.filter((id) => id !== group.id)
+                            : [...currentIds, group.id]
+                        )),
+                        style: {
+                          ...getQuickButtonStyle(active),
+                          height: 'auto',
+                          maxWidth: '100%',
+                          whiteSpace: 'normal',
+                          overflowWrap: 'anywhere',
+                        },
+                      }, group.name);
+                    })
+                  )
+                : React.createElement('div', {
+                    style: {
+                      minHeight: '44px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      color: '#94a3b8',
+                      fontSize: `${FONT_SIZE_SM}px`,
+                    },
+                  }, '暂无可删除的自定义指标')
+            )
+          )
         )
     );
   };
@@ -3744,6 +4419,14 @@
     const [targetManagerVisible, setTargetManagerVisible] = useState(false);
     const [targetManagerLoading, setTargetManagerLoading] = useState(false);
     const [targetManagerSaving, setTargetManagerSaving] = useState(false);
+    const [weeklyImportVisible, setWeeklyImportVisible] = useState(false);
+    const [weeklyImportSelectedFields, setWeeklyImportSelectedFields] = useState([]);
+    const [weeklyImportTemplateHref, setWeeklyImportTemplateHref] = useState('');
+    const [weeklyImportTemplateBuilding, setWeeklyImportTemplateBuilding] = useState(false);
+    const [weeklyImportFileList, setWeeklyImportFileList] = useState([]);
+    const [weeklyImportPreview, setWeeklyImportPreview] = useState(null);
+    const [weeklyImportBusy, setWeeklyImportBusy] = useState(false);
+    const [weeklyImportProgress, setWeeklyImportProgress] = useState('');
     const [targetDefaultRecord, setTargetDefaultRecord] = useState(null);
     const [targetAdCvrDraft, setTargetAdCvrDraft] = useState(null);
     const [targetCpaDraft, setTargetCpaDraft] = useState(null);
@@ -3802,6 +4485,7 @@
     const clipboardRef = useRef(null);
     const dataRef = useRef([]);
     const formulaProgressFinishTimerRef = useRef(null);
+    const cellFormulaSyncQueueRef = useRef({ running: false, pendingRowsByKey: new Map() });
     const weeklySummaryPersistQueueRef = useRef({ rowsByKey: {}, cols: INITIAL_COLUMNS, timer: null });
     const weeklySummaryMapRef = useRef({});
     const pendingFormulaAsinCountriesRef = useRef(new Set());
@@ -3810,6 +4494,7 @@
     const currentPageMergeSummaryRef = useRef({ timer: null, running: false, pendingKeys: new Set() });
     const selectingRef = useRef(false);
     const selectionDraftRef = useRef(null);
+    const pendingCellInteractionRef = useRef(null);
     const selectionStoreRef = useRef(null);
     if (!selectionStoreRef.current) selectionStoreRef.current = createSelectionStore();
     const selectionStore = selectionStoreRef.current;
@@ -5936,6 +6621,266 @@
       }
     }, [filterAsin, filterCountry, hasRequiredUrlParams, dateFilterType, getDateRange, getDailySort, fetchAllList, fetchAllByIn, buildDynamicKeywordCols, buildDynamicCompetitorCols, normalizeWeeklySummaryRecord, getSummaryKeyForRow, attachWeeklySummaryDataToRows, refreshWeeklySummariesFromRows, recalcAllCoreFormulas, showFormulaProgress, finishFormulaProgress, resetFormulaProgress, syncDailyRsgNumbersFromOrders]);
 
+    const openWeeklyImport = useCallback(() => {
+      setWeeklyImportVisible(true);
+      setWeeklyImportTemplateHref('');
+      setWeeklyImportFileList([]);
+      setWeeklyImportPreview(null);
+      setWeeklyImportProgress('');
+    }, []);
+
+    const closeWeeklyImport = useCallback(() => {
+      if (weeklyImportBusy || weeklyImportTemplateBuilding) return;
+      setWeeklyImportVisible(false);
+      setWeeklyImportTemplateHref('');
+      setWeeklyImportFileList([]);
+      setWeeklyImportPreview(null);
+      setWeeklyImportProgress('');
+    }, [weeklyImportBusy, weeklyImportTemplateBuilding]);
+
+    useEffect(() => {
+      if (!weeklyImportVisible) return undefined;
+      if (!weeklyImportSelectedFields.length) {
+        setWeeklyImportTemplateHref('');
+        setWeeklyImportTemplateBuilding(false);
+        setWeeklyImportProgress('请至少选择一个模板字段');
+        return undefined;
+      }
+      if (!filterCountry || !filterAsin) {
+        setWeeklyImportTemplateHref('');
+        setWeeklyImportTemplateBuilding(false);
+        setWeeklyImportProgress('请先进入具体国家和 ASIN 页面后下载模板');
+        return undefined;
+      }
+      let cancelled = false;
+      setWeeklyImportTemplateBuilding(true);
+      setWeeklyImportTemplateHref('');
+      setWeeklyImportProgress('正在生成 Excel 模板...');
+      (async () => {
+        try {
+          const buffer = await buildWeeklyImportWorkbook(weeklyImportSelectedFields, {
+            country: filterCountry,
+            asin: filterAsin,
+          });
+          if (cancelled) return;
+          setWeeklyImportTemplateHref(excelBufferToDataUrl(buffer));
+          setWeeklyImportProgress('Excel 模板已自动生成，可直接下载');
+        } catch (error) {
+          if (cancelled) return;
+          setWeeklyImportProgress('Excel 模板生成失败');
+          ctx.message.error({ content: `Excel 模板生成失败：${error?.message || 'Excel 模块加载失败'}`, duration: 8 });
+        } finally {
+          if (!cancelled) setWeeklyImportTemplateBuilding(false);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [weeklyImportVisible, weeklyImportSelectedFields, filterCountry, filterAsin]);
+
+    const preflightWeeklyImport = useCallback(async () => {
+      const file = weeklyImportFileList[0];
+      if (!file) {
+        ctx.message.warning('请先选择 Excel 文件');
+        return;
+      }
+      setWeeklyImportBusy(true);
+      setWeeklyImportPreview(null);
+      setWeeklyImportProgress('正在读取并校验 Excel...');
+      try {
+        const { sheet } = await readWeeklyImportWorkbook(file);
+        const country = String(getWeeklyImportCellValue(sheet.getCell('B1')) ?? '').trim().toUpperCase();
+        const asin = String(getWeeklyImportCellValue(sheet.getCell('B2')) ?? '').trim().toUpperCase();
+        let startDate = '';
+        let endDate = '';
+        const metadataErrors = [];
+        if (!WEEKLY_IMPORT_ALLOWED_COUNTRIES.has(country)) metadataErrors.push(`国家“${country || '空'}”不在支持范围内`);
+        if (!/^[A-Z0-9]{10}$/.test(asin)) metadataErrors.push('ASIN 必须是 10 位字母或数字');
+        try {
+          startDate = normalizeWeeklyImportDate(getWeeklyImportCellValue(sheet.getCell('B3')));
+        } catch (error) {
+          metadataErrors.push(`导入数据起始日期：${error?.message || '日期错误'}`);
+        }
+        try {
+          endDate = normalizeWeeklyImportDate(getWeeklyImportCellValue(sheet.getCell('B4')));
+        } catch (error) {
+          metadataErrors.push(`导入数据终止日期：${error?.message || '日期错误'}`);
+        }
+        if (metadataErrors.length) throw new Error(metadataErrors.join('\n'));
+        const startMs = Date.parse(`${startDate}T00:00:00Z`);
+        const endMs = Date.parse(`${endDate}T00:00:00Z`);
+        const dateCount = Math.floor((endMs - startMs) / 86400000) + 1;
+        if (dateCount <= 0) throw new Error('导入数据终止日期不能早于起始日期');
+        if (dateCount > WEEKLY_IMPORT_MAX_ROWS) throw new Error(`起止日期最多允许 ${WEEKLY_IMPORT_MAX_ROWS} 天，请拆分文件`);
+
+        const headerRow = sheet.getRow(WEEKLY_IMPORT_HEADER_ROW);
+        const rawHeaders = [];
+        for (let columnNumber = 1; columnNumber <= headerRow.cellCount; columnNumber += 1) {
+          rawHeaders.push(String(getWeeklyImportCellValue(headerRow.getCell(columnNumber)) ?? '').trim());
+        }
+        let lastHeaderIndex = rawHeaders.length - 1;
+        while (lastHeaderIndex >= 0 && !rawHeaders[lastHeaderIndex]) lastHeaderIndex -= 1;
+        const headers = rawHeaders.slice(0, lastHeaderIndex + 1);
+        if (headers.length < 2 || headers[0] !== '日期') throw new Error('第6行第一列必须是“日期”，且至少包含一个业务字段');
+        if (headers.some((header) => !header)) throw new Error('Excel 第6行表头中间存在空列');
+        const duplicateHeaders = headers.filter((header, index) => headers.indexOf(header) !== index);
+        if (duplicateHeaders.length) throw new Error(`Excel 表头重复：${[...new Set(duplicateHeaders)].join('、')}`);
+        const unknownHeaders = headers.slice(1).filter((header) => !WEEKLY_IMPORT_FIELDS_BY_LABEL[header]);
+        if (unknownHeaders.length) throw new Error(`Excel 包含不支持的列：${unknownHeaders.join('、')}`);
+
+        const businessOptions = headers.slice(1)
+          .map((header) => WEEKLY_IMPORT_FIELDS_BY_LABEL[header]);
+        if (!businessOptions.length) throw new Error('Excel 至少需要一个可导入的业务字段');
+        const columnIndexByHeader = Object.fromEntries(headers.map((header, index) => [header, index]));
+        const errors = [];
+        const parsedRows = [];
+        let skippedRows = 0;
+
+        for (let dayIndex = 0; dayIndex < dateCount; dayIndex += 1) {
+          const rowNumber = WEEKLY_IMPORT_DATA_START_ROW + dayIndex;
+          const sourceRow = sheet.getRow(rowNumber);
+          const hasBusinessValue = businessOptions.some((option) => (
+            !isWeeklyImportBlank(getWeeklyImportCellValue(sourceRow.getCell(columnIndexByHeader[option.label] + 1)))
+          ));
+          if (!hasBusinessValue) {
+            skippedRows += 1;
+            continue;
+          }
+          const date = normalizeWeeklyImportDate(new Date(startMs + dayIndex * 86400000));
+          const key = `${country}_${asin}_${date}`;
+          const values = {};
+          businessOptions.forEach((option) => {
+            const rawValue = getWeeklyImportCellValue(sourceRow.getCell(columnIndexByHeader[option.label] + 1));
+            try {
+              const parsedValue = parseWeeklyImportValue(rawValue, option);
+              if (parsedValue !== undefined) values[option.field] = parsedValue;
+            } catch (error) {
+              errors.push(`第 ${rowNumber} 行“${option.label}”：${error?.message || '格式错误'}`);
+            }
+          });
+          if (Object.keys(values).length) parsedRows.push({ rowNumber, key, country, asin, date, values });
+          else skippedRows += 1;
+        }
+        for (let rowNumber = WEEKLY_IMPORT_DATA_START_ROW + dateCount; rowNumber <= sheet.actualRowCount; rowNumber += 1) {
+          const sourceRow = sheet.getRow(rowNumber);
+          const hasOutOfRangeValue = businessOptions.some((option) => (
+            !isWeeklyImportBlank(getWeeklyImportCellValue(sourceRow.getCell(columnIndexByHeader[option.label] + 1)))
+          ));
+          if (hasOutOfRangeValue) errors.push(`第 ${rowNumber} 行：存在超出终止日期 ${endDate} 的业务数据`);
+          if (errors.length > 12) break;
+        }
+
+        if (errors.length) {
+          const shown = errors.slice(0, 12).join('\n');
+          throw new Error(`${shown}${errors.length > 12 ? `\n另有 ${errors.length - 12} 个错误` : ''}`);
+        }
+        if (!parsedRows.length) throw new Error('Excel 中没有有效业务数据');
+
+        setWeeklyImportProgress('正在读取线上已有记录...');
+        const existingRows = await fetchAllByIn('weekly_performance:list', 'country_asin_week', parsedRows.map((row) => row.key), {
+          chunkSize: 80,
+          pageSize: 500,
+        });
+        const existingMap = Object.fromEntries(existingRows.filter((row) => row?.country_asin_week).map((row) => [row.country_asin_week, row]));
+        const createCount = parsedRows.filter((row) => !existingMap[row.key]).length;
+        const updateCount = parsedRows.length - createCount;
+        const protectedFieldCount = parsedRows.reduce((total, row) => total + Object.keys(row.values).length, 0);
+        setWeeklyImportSelectedFields(businessOptions.map((option) => option.field));
+        setWeeklyImportPreview({
+          rows: parsedRows,
+          fileName: file.name,
+          skippedRows,
+          createCount,
+          updateCount,
+          protectedFieldCount,
+          fieldLabels: businessOptions.map((option) => option.label),
+          country,
+          asin,
+          startDate,
+          endDate,
+        });
+        setWeeklyImportProgress('预检通过');
+        ctx.message.success(`Excel 预检通过：有效数据 ${parsedRows.length} 行`);
+      } catch (error) {
+        setWeeklyImportProgress('预检失败');
+        ctx.message.error({ content: `导入预检失败：${error?.message || '未知错误'}`, duration: 8 });
+      } finally {
+        setWeeklyImportBusy(false);
+      }
+    }, [fetchAllByIn, weeklyImportFileList]);
+
+    const executeWeeklyImport = useCallback(async () => {
+      const preview = weeklyImportPreview;
+      if (!preview?.rows?.length) {
+        ctx.message.warning('请先完成线上预检');
+        return;
+      }
+      setWeeklyImportBusy(true);
+      let completed = 0;
+      try {
+        setWeeklyImportProgress('正在重新读取线上记录...');
+        const existingRows = await fetchAllByIn('weekly_performance:list', 'country_asin_week', preview.rows.map((row) => row.key), {
+          chunkSize: 80,
+          pageSize: 500,
+        });
+        const existingMap = Object.fromEntries(existingRows.filter((row) => row?.country_asin_week).map((row) => [row.country_asin_week, row]));
+        for (const row of preview.rows) {
+          setWeeklyImportProgress(`正在写入 ${completed + 1}/${preview.rows.length}...`);
+          const existing = existingMap[row.key] || null;
+          const effectiveFields = { ...(existing || {}), ...row.values };
+          const derivedFields = calculateWeeklyImportDerivedFields(effectiveFields);
+          const manualOverrideFields = [
+            ...new Set([
+              ...parseManualOverrideFields(existing?.manual_override_fields),
+              ...Object.keys(row.values),
+            ]),
+          ].sort();
+          const payload = {
+            ...row.values,
+            ...derivedFields,
+            manual_override_fields: manualOverrideFields,
+          };
+          try {
+            if (existing) {
+              await ctx.request({
+                url: 'weekly_performance:update',
+                method: 'post',
+                params: { filterByTk: row.key },
+                data: payload,
+              });
+            } else {
+              await ctx.request({
+                url: 'weekly_performance:create',
+                method: 'post',
+                data: {
+                  country_asin_week: row.key,
+                  country: row.country,
+                  asin: row.asin,
+                  date: row.date,
+                  ...payload,
+                },
+              });
+            }
+          } catch (error) {
+            throw new Error(`第 ${row.rowNumber} 行 ${row.key} 写入失败：${error?.message || 'API 错误'}`);
+          }
+          completed += 1;
+        }
+        setWeeklyImportProgress('导入完成，正在刷新页面...');
+        await loadData({ page: curPageRef.current, size: pageSizeRef.current });
+        ctx.message.success(`导入完成：成功 ${completed} 行，保护字段值 ${preview.protectedFieldCount} 个`);
+        setWeeklyImportVisible(false);
+        setWeeklyImportFileList([]);
+        setWeeklyImportPreview(null);
+        setWeeklyImportProgress('');
+      } catch (error) {
+        setWeeklyImportProgress(`导入停止：此前成功 ${completed} 行`);
+        ctx.message.error({ content: `导入失败：${error?.message || '未知错误'}；此前成功 ${completed} 行`, duration: 10 });
+      } finally {
+        setWeeklyImportBusy(false);
+      }
+    }, [fetchAllByIn, loadData, weeklyImportPreview]);
+
     useEffect(() => {
       const backgroundState = backgroundMergeSummaryRef.current;
       if (backgroundState?.timer) clearTimeout(backgroundState.timer);
@@ -6069,6 +7014,44 @@
       const onProgress = options.onProgress;
       await syncCoreFormulasForRows(targetRows, { onProgress, scheduleBackground: false });
     }, [syncCoreFormulasForRows]);
+
+    const enqueueCellFormulaSync = useCallback((changedRows = []) => {
+      const queue = cellFormulaSyncQueueRef.current;
+      (Array.isArray(changedRows) ? changedRows : []).filter(Boolean).forEach((row) => {
+        const key = row.country_asin_date || row.id;
+        if (key) queue.pendingRowsByKey.set(key, row);
+      });
+      if (queue.running || !queue.pendingRowsByKey.size) return;
+
+      queue.running = true;
+      (async () => {
+        let failed = false;
+        try {
+          while (queue.pendingRowsByKey.size) {
+            const pendingRows = [...queue.pendingRowsByKey.values()];
+            queue.pendingRowsByKey.clear();
+            const currentRows = Array.isArray(dataRef.current) ? dataRef.current : [];
+            const latestRows = pendingRows.map((queuedRow) => {
+              const key = queuedRow.country_asin_date || queuedRow.id;
+              return currentRows.find((row) => (row.country_asin_date || row.id) === key) || queuedRow;
+            });
+
+            showFormulaProgress({ label: '保存成功，正在同步公式...', percent: 8 });
+            try {
+              await syncFormulasForChangedRows(latestRows, { onProgress: showFormulaProgress });
+            } catch (formulaErr) {
+              failed = true;
+              ctx.message.warning(`保存成功，但公式同步失败：${formulaErr?.message || '未知错误'}`);
+            }
+          }
+
+          if (failed) resetFormulaProgress();
+          else finishFormulaProgress('公式同步完成');
+        } finally {
+          queue.running = false;
+        }
+      })();
+    }, [finishFormulaProgress, resetFormulaProgress, showFormulaProgress, syncFormulasForChangedRows]);
 
     const pushUndoEntry = useCallback((entry) => {
       const items = Array.isArray(entry?.items) ? entry.items.filter(Boolean) : [];
@@ -7723,11 +8706,15 @@
     }, []);
 
     const handleCellMouseDown = useCallback((e, r, c) => {
-      if (e.button !== 0 || editingCell || isResizing) return;
+      if (e.button !== 0 || isResizing) return;
 
       const tag = String(e.target?.tagName || '').toLowerCase();
       const closestEl = e.target?.closest?.('.ant-picker, .ant-select, .ant-input-number');
       if (['input', 'textarea', 'select', 'button'].includes(tag) || closestEl) return;
+      if (editingCell) {
+        pendingCellInteractionRef.current = { r, c, openEditor: false };
+        return;
+      }
 
       const nextRange = { start: { r, c }, end: { r, c } };
       selectingRef.current = true;
@@ -8007,6 +8994,7 @@
     const fillSelectedCells = useCallback(async (rawValue) => {
       const rect = normalizeSelection(selectedRange);
       if (!rect || saving) return;
+      const isSingleCellFill = rect.r1 === rect.r2 && rect.c1 === rect.c2;
       setSelectionInputValue('');
       const patches = new Map();
       const sourcePatches = new Map();
@@ -8165,18 +9153,23 @@
 
         const changedRows = [...changedRowsMap.values()];
         if (changedRows.length) {
-          showFormulaProgress({ label: '选区已填充，正在同步公式...', percent: 8 });
-          await syncFormulasForChangedRows(changedRows, { onProgress: showFormulaProgress });
-          finishFormulaProgress('填充公式同步完成');
+          if (isSingleCellFill) {
+            setSaving(false);
+            enqueueCellFormulaSync(changedRows);
+          } else {
+            showFormulaProgress({ label: '选区已填充，正在同步公式...', percent: 8 });
+            await syncFormulasForChangedRows(changedRows, { onProgress: showFormulaProgress });
+            finishFormulaProgress('填充公式同步完成');
+          }
         }
         ctx.message.success(`已填充 ${requests.length + richOps.length} 个单元格`);
       } catch (err) {
-        resetFormulaProgress();
+        if (!isSingleCellFill) resetFormulaProgress();
         ctx.message.error(`填充失败：${err?.message || '未知错误'}`);
       } finally {
         setSaving(false);
       }
-    }, [finishFormulaProgress, getCellValue, isCellEditable, loadData, normalizeSelection, pagedData, parsePastedValue, pushUndoEntry, resetFormulaProgress, saving, selectedRange, showFormulaProgress, syncFormulasForChangedRows, updateDataAndRefreshWeekly, visibleCols]);
+    }, [enqueueCellFormulaSync, finishFormulaProgress, getCellValue, isCellEditable, loadData, normalizeSelection, pagedData, parsePastedValue, pushUndoEntry, resetFormulaProgress, saving, selectedRange, showFormulaProgress, syncFormulasForChangedRows, updateDataAndRefreshWeekly, visibleCols]);
 
     const clearSelectedCells = useCallback(async () => {
       const rect = normalizeSelection(selectedRange);
@@ -8471,19 +9464,40 @@
       else setEditValue(currentValue != null && currentValue !== '' ? currentValue : '');
     }, [saving, selectionStore]);
 
+    const resumePendingCellInteraction = useCallback(() => {
+      const pending = pendingCellInteractionRef.current;
+      pendingCellInteractionRef.current = null;
+      if (!pending) return;
+
+      if (pending.openEditor && pending.rowId && pending.col) {
+        startEdit(pending.rowId, pending.col, pending.currentValue);
+        return;
+      }
+
+      if (!Number.isInteger(pending.r) || !Number.isInteger(pending.c)) return;
+      const nextRange = { start: { r: pending.r, c: pending.c }, end: { r: pending.r, c: pending.c } };
+      selectingRef.current = false;
+      selectionDraftRef.current = nextRange;
+      selectionStore.setRange(nextRange);
+      setActiveCell({ r: pending.r, c: pending.c });
+      setSelectedRange(nextRange);
+      setSelectionInputValue('');
+      focusClipboardWithoutScroll();
+    }, [focusClipboardWithoutScroll, selectionStore, startEdit]);
+
     const cancelEdit = useCallback(() => { setEditingCell(null); setEditValue(null); }, []);
 
     const saveEdit = useCallback(async () => {
       if (!editingCell || saving) return;
       const { rowId, field, src } = editingCell;
       const row = data.find((r) => (r.country_asin_date || r.id) === rowId);
-      if (!row) return;
+      if (!row) { pendingCellInteractionRef.current = null; return; }
       const dynamicKeywordCol = dynamicKeywordCols.find((c) => c.key === editingCell.colKey);
       if (dynamicKeywordCol?._dynamicKind === 'keyword') {
         const payload = row[dynamicKeywordCol.field];
         const kw = payload?.kw;
         const daily = payload?.daily || {};
-        if (!kw?.id) { ctx.message.error('无法找到 SQP 关键词记录'); cancelEdit(); return; }
+        if (!kw?.id) { pendingCellInteractionRef.current = null; ctx.message.error('无法找到 SQP 关键词记录'); cancelEdit(); return; }
         const normalizedEditValue = editValue && typeof editValue === 'object' ? editValue?.daily?.actual_rank : editValue;
         const valueToSave = normalizedEditValue !== '' && normalizedEditValue != null ? String(normalizedEditValue).trim() || null : null;
         const oldValue = daily.actual_rank ?? null;
@@ -8510,8 +9524,10 @@
           savedCell = true;
           pushUndoEntry({ label: '编辑单元格', items: [{ kind: 'keyword', rowId, colField: dynamicKeywordCol.field, dailyId: nextDaily.id, oldValue, newValue: valueToSave }] });
           setSaving(false);
+          resumePendingCellInteraction();
           ctx.message.success('保存成功');
         } catch (err) {
+          pendingCellInteractionRef.current = null;
           ctx.message.error(`保存 SQP 关键词自然位失败：${err?.message || '未知错误'}`);
         } finally {
           if (!savedCell) setSaving(false);
@@ -8524,7 +9540,7 @@
         const competitor = payload?.competitor;
         const daily = payload?.daily || {};
         const fieldName = dynamicCompetitorCol._competitorField || 'notes';
-        if (!competitor?.id) { ctx.message.error('无法找到竞对记录'); cancelEdit(); return; }
+        if (!competitor?.id) { pendingCellInteractionRef.current = null; ctx.message.error('无法找到竞对记录'); cancelEdit(); return; }
         const normalizedEditValue = editValue && typeof editValue === 'object' ? editValue?.daily?.[fieldName] : editValue;
         const valueToSave = normalizedEditValue !== '' && normalizedEditValue != null ? normalizedEditValue : null;
         const oldValue = daily[fieldName] ?? null;
@@ -8549,8 +9565,10 @@
           savedCell = true;
           pushUndoEntry({ label: '编辑单元格', items: [{ kind: 'competitor', rowId, colField: dynamicCompetitorCol.field, dailyId: nextDaily.id, field: fieldName, oldValue, newValue: valueToSave }] });
           setSaving(false);
+          resumePendingCellInteraction();
           ctx.message.success('保存成功');
         } catch (err) {
+          pendingCellInteractionRef.current = null;
           ctx.message.error(`保存竞对失败：${err?.message || '未知错误'}`);
         } finally {
           if (!savedCell) setSaving(false);
@@ -8558,9 +9576,9 @@
         return;
       }
       const updateConfig = SRC_UPDATE_CONFIG[src];
-      if (!updateConfig) { ctx.message.error(`字段来源 "${src}" 暂不支持编辑`); return; }
+      if (!updateConfig) { pendingCellInteractionRef.current = null; ctx.message.error(`字段来源 "${src}" 暂不支持编辑`); return; }
       const pkValue = row[updateConfig.pkField];
-      if (!pkValue) { ctx.message.error(`无法找到记录主键：${updateConfig.pkField}`); cancelEdit(); return; }
+      if (!pkValue) { pendingCellInteractionRef.current = null; ctx.message.error(`无法找到记录主键：${updateConfig.pkField}`); cancelEdit(); return; }
       let valueToSave = editValue;
       if (field === 'promo_day') valueToSave = editValue;
       else if (field === 'order_structure_diagnostic') valueToSave = editValue || null;
@@ -8587,27 +9605,19 @@
         savedCell = true;
         pushUndoEntry({ label: '编辑单元格', items: [{ kind: 'static', rowId, src, field, pkValue, oldValue, newValue: valueToSave }] });
         setSaving(false);
+        resumePendingCellInteraction();
         if (isFormulaSensitiveField(field)) {
-          showFormulaProgress({ label: '保存成功，正在同步公式...', percent: 8 });
-
-          setTimeout(async () => {
-            try {
-              await syncFormulasForChangedRows([nextRow], { onProgress: showFormulaProgress });
-              finishFormulaProgress('公式同步完成');
-            } catch (formulaErr) {
-              resetFormulaProgress();
-              ctx.message.warning(`保存成功，但公式同步失败：${formulaErr?.message || '未知错误'}`);
-            }
-          }, 0);
+          enqueueCellFormulaSync([nextRow]);
         } else {
           ctx.message.success('保存成功');
         }
       } catch (err) {
+        pendingCellInteractionRef.current = null;
         ctx.message.error(`保存失败：${err?.message || '未知错误'}`);
       } finally {
         if (!savedCell) setSaving(false);
       }
-    }, [editingCell, editValue, data, dynamicKeywordCols, dynamicCompetitorCols, saving, cancelEdit, finishFormulaProgress, pushUndoEntry, resetFormulaProgress, showFormulaProgress, syncFormulasForChangedRows, updateDataAndRefreshWeekly]);
+    }, [editingCell, editValue, data, dynamicKeywordCols, dynamicCompetitorCols, saving, cancelEdit, enqueueCellFormulaSync, pushUndoEntry, resumePendingCellInteraction, updateDataAndRefreshWeekly]);
 
     const refreshData  = useCallback(async () => {
       if (refreshingData || calcLoading || loading) return;
@@ -8740,18 +9750,15 @@
         updateDataAndRefreshWeekly((prev) => prev.map((r) => (r.country_asin_date || r.id) === rowId ? mergeSourcePatch(r, col.src, { [col.field]: valueToSave }) : r));
         pushUndoEntry({ label: '编辑单元格', items: [{ kind: 'static', rowId, src: col.src, field: col.field, pkValue, oldValue: getCellValue(col, row) ?? null, newValue: valueToSave }] });
         if (isFormulaSensitiveField(col)) {
-          showFormulaProgress({ label: '保存成功，正在同步公式...', percent: 8 });
-          await syncFormulasForChangedRows([nextRow], { onProgress: showFormulaProgress });
-          finishFormulaProgress('公式同步完成');
+          enqueueCellFormulaSync([nextRow]);
         }
         restoreTableScroll(scrollPos);
         return true;
       } catch (err) {
-        resetFormulaProgress();
         ctx.message.error(`保存失败：${err?.message || ''}`);
         return false;
       }
-    }, [captureTableScroll, finishFormulaProgress, getCellValue, pushUndoEntry, resetFormulaProgress, restoreTableScroll, showFormulaProgress, syncFormulasForChangedRows, updateDataAndRefreshWeekly]);
+    }, [captureTableScroll, enqueueCellFormulaSync, getCellValue, pushUndoEntry, restoreTableScroll, updateDataAndRefreshWeekly]);
 
     const btnStyle = (bg, color, border) => ({
       minHeight: '30px',
@@ -9481,6 +10488,131 @@
       const idx = getCompetitorRoleIndex(rec.role);
       return Number.isFinite(idx) && idx !== 9999 ? Math.max(max, idx) : max;
     }, 0) + 1}`;
+    const weeklyImportModal = React.createElement(Modal, {
+      title: '导入产品表现数据',
+      open: weeklyImportVisible,
+      visible: weeklyImportVisible,
+      onCancel: closeWeeklyImport,
+      width: 780,
+      maskClosable: !weeklyImportBusy && !weeklyImportTemplateBuilding,
+      destroyOnClose: true,
+      footer: [
+        React.createElement(Button, { key: 'cancel', onClick: closeWeeklyImport, disabled: weeklyImportBusy || weeklyImportTemplateBuilding }, '取消'),
+        React.createElement(Button, {
+          key: 'preflight',
+          onClick: preflightWeeklyImport,
+          loading: weeklyImportBusy && !weeklyImportPreview,
+          disabled: weeklyImportBusy || weeklyImportTemplateBuilding || !weeklyImportFileList.length,
+        }, '线上预检'),
+        React.createElement(Popconfirm, {
+          key: 'execute_confirm',
+          title: '确定写入产品表现数据并保护本次填写的字段？',
+          okText: '确定导入',
+          cancelText: '取消',
+          onConfirm: executeWeeklyImport,
+          disabled: weeklyImportBusy || !weeklyImportPreview,
+        }, React.createElement(Button, {
+          type: 'primary',
+          loading: weeklyImportBusy && Boolean(weeklyImportPreview),
+          disabled: weeklyImportBusy || !weeklyImportPreview,
+          icon: UploadOutlined ? React.createElement(UploadOutlined) : null,
+        }, '正式导入')),
+      ],
+    },
+      React.createElement('div', { style: { display: 'grid', gap: '14px' } },
+        React.createElement('section', null,
+          React.createElement('div', { style: { marginBottom: 8, color: '#262626', fontWeight: 700 } }, '1. 选择模板字段'),
+          React.createElement('div', {
+            style: {
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+              gap: '8px 12px',
+              maxHeight: '260px',
+              overflowY: 'auto',
+              padding: '12px',
+              border: '1px solid #e8e8e8',
+              borderRadius: 6,
+              background: '#fafafa',
+            },
+          }, ...WEEKLY_IMPORT_FIELD_OPTIONS.map((option) => React.createElement(Checkbox, {
+            key: option.field,
+            checked: weeklyImportSelectedFields.includes(option.field),
+            disabled: weeklyImportBusy || weeklyImportTemplateBuilding,
+            onChange: (event) => {
+              setWeeklyImportSelectedFields((current) => (
+                event.target.checked
+                  ? [...new Set([...current, option.field])]
+                  : current.filter((field) => field !== option.field)
+              ));
+              setWeeklyImportTemplateHref('');
+              setWeeklyImportPreview(null);
+            },
+          }, option.label))),
+          React.createElement('div', { style: { marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' } },
+            React.createElement(Button, {
+              type: 'primary',
+              href: weeklyImportTemplateHref || undefined,
+              download: 'weekly_performance_import_template.xlsx',
+              loading: weeklyImportTemplateBuilding,
+              disabled: !weeklyImportSelectedFields.length || !filterCountry || !filterAsin || weeklyImportBusy || weeklyImportTemplateBuilding || !weeklyImportTemplateHref,
+              icon: DownloadOutlined ? React.createElement(DownloadOutlined) : null,
+            }, '生成并下载模版')
+          )
+        ),
+        React.createElement('section', null,
+          React.createElement('div', { style: { marginBottom: 8, color: '#262626', fontWeight: 700 } }, '2. 选择填写后的 Excel'),
+          React.createElement(Upload, {
+            accept: '.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            maxCount: 1,
+            fileList: weeklyImportFileList,
+            beforeUpload: (file) => {
+              if (!/\.xlsx$/i.test(file?.name || '')) {
+                ctx.message.error('只支持 XLSX 文件');
+                return Upload.LIST_IGNORE || false;
+              }
+              setWeeklyImportFileList([file]);
+              setWeeklyImportPreview(null);
+              setWeeklyImportProgress('');
+              return false;
+            },
+            onRemove: () => {
+              if (weeklyImportBusy) return false;
+              setWeeklyImportFileList([]);
+              setWeeklyImportPreview(null);
+              setWeeklyImportProgress('');
+              return true;
+            },
+            disabled: weeklyImportBusy || weeklyImportTemplateBuilding,
+          }, React.createElement(Button, {
+            icon: UploadOutlined ? React.createElement(UploadOutlined) : null,
+            disabled: weeklyImportBusy || weeklyImportTemplateBuilding,
+          }, '选择 Excel 文件'))
+        ),
+        weeklyImportProgress && React.createElement('div', {
+          style: {
+            padding: '9px 12px',
+            border: `1px solid ${weeklyImportPreview ? '#b7eb8f' : '#d9d9d9'}`,
+            borderRadius: 6,
+            background: weeklyImportPreview ? '#f6ffed' : '#fafafa',
+            color: weeklyImportPreview ? '#135200' : '#595959',
+            fontWeight: 600,
+          },
+        }, weeklyImportProgress),
+        weeklyImportPreview && React.createElement('section', {
+          style: { padding: '12px', border: '1px solid #b7eb8f', borderRadius: 6, background: '#f6ffed' },
+        },
+          React.createElement('div', { style: { marginBottom: 8, color: '#135200', fontWeight: 800 } }, '线上预检结果'),
+          React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 8 } },
+            React.createElement('span', null, `新增 ${weeklyImportPreview.createCount}`),
+            React.createElement('span', null, `更新 ${weeklyImportPreview.updateCount}`),
+            React.createElement('span', null, `跳过 ${weeklyImportPreview.skippedRows}`),
+            React.createElement('span', null, `保护字段值 ${weeklyImportPreview.protectedFieldCount}`)
+          ),
+          React.createElement('div', { style: { marginTop: 8, color: '#3f6600' } }, `${weeklyImportPreview.country} / ${weeklyImportPreview.asin} / ${weeklyImportPreview.startDate} 至 ${weeklyImportPreview.endDate}`),
+          React.createElement('div', { style: { marginTop: 8, color: '#3f6600', overflowWrap: 'anywhere' } }, weeklyImportPreview.fieldLabels.join('、'))
+        )
+      )
+    );
     const keywordManagerModal = React.createElement(Modal, {
       title: currentCountryAsin ? `管理 SQP ${sqpMeta.title}：${currentCountryAsin}` : `管理 SQP ${sqpMeta.title}`,
       open: keywordManagerVisible,
@@ -9736,7 +10868,7 @@
         )
       )
     );
-    const actionBusy = loading || refreshingData || calcLoading;
+    const actionBusy = loading || refreshingData || calcLoading || weeklyImportBusy || weeklyImportTemplateBuilding;
     const formulaProgressEl = formulaProgress.active && React.createElement('div', {
       style: {
         width: '260px',
@@ -9837,6 +10969,7 @@
       targetManagerModal,
       couponManagerModal,
       competitorManagerModal,
+      weeklyImportModal,
       React.createElement(MergedTrendChartModal, { visible: trendChartVisible, onClose: () => setTrendChartVisible(false), country: filterCountry, asin: filterAsin, dateRange: getDateRange }),
       React.createElement('div', {
         style: { display: 'flex', alignItems: 'center', columnGap: '14px', rowGap: '6px', flexWrap: 'wrap', marginBottom: '4px' },
@@ -9924,6 +11057,20 @@
           React.createElement('button', { type: 'button', onClick: openCompetitorManager, disabled: !currentCountryAsin, style: { ...btnStyle('#EB6793', '#fff', '#d84f7c'), opacity: currentCountryAsin ? 1 : 0.6, cursor: currentCountryAsin ? 'pointer' : 'not-allowed' } }, '管理竞对 ASIN'),
           React.createElement('button', { type: 'button', onClick: openKeywordManager, disabled: !currentCountryAsin, style: { ...btnStyle('#EB6793', '#fff', '#d84f7c'), opacity: currentCountryAsin ? 1 : 0.6, cursor: currentCountryAsin ? 'pointer' : 'not-allowed' } }, '管理 SQP 关键词'),
           React.createElement('button', { type: 'button', onClick: openCouponManager, disabled: !currentAsinCountry, style: { ...btnStyle('#EB6793', '#fff', '#d84f7c'), opacity: currentAsinCountry ? 1 : 0.6, cursor: currentAsinCountry ? 'pointer' : 'not-allowed' } }, '管理 Coupon 预估比例'),
+          React.createElement('button', {
+            type: 'button',
+            onClick: openWeeklyImport,
+            disabled: actionBusy,
+            title: '导入产品表现数据',
+            style: {
+              ...btnStyle('#EB6793', '#fff', '#d84f7c'),
+              opacity: actionBusy ? 0.6 : 1,
+              cursor: actionBusy ? 'not-allowed' : 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px',
+            },
+          }, UploadOutlined ? React.createElement(UploadOutlined) : null, '导入数据'),
           React.createElement('button', { type: 'button', onClick: () => { setTrendChartVisible(true); setShowPanel(false); setShowPush(false); setShowCrossHighlightPanel(false); }, disabled: !currentCountryAsin, style: { ...btnStyle('#EB6793', '#fff', '#d84f7c'), opacity: currentCountryAsin ? 1 : 0.6, cursor: currentCountryAsin ? 'pointer' : 'not-allowed' } }, '打开图表'),
         ),
 
@@ -10329,7 +11476,15 @@
                           rowSpan: weeklyMergedCell?.rowSpan || undefined,
                           title: typeof renderedContent === 'string' ? renderedContent : (typeof displayContent === 'string' ? displayContent : undefined),
                           onMouseDown: (e) => handleCellMouseDown(e, rIdx, cIdx),
-                          onDoubleClick: () => { if (canEdit && !isEditing) startEdit(rowId, col, getCellValue(col, row)); },
+                          onDoubleClick: () => {
+                            if (!canEdit || isEditing) return;
+                            const currentValue = getCellValue(col, row);
+                            if (editingCell || saving) {
+                              pendingCellInteractionRef.current = { r: rIdx, c: cIdx, rowId, col, currentValue, openEditor: true };
+                              return;
+                            }
+                            startEdit(rowId, col, currentValue);
+                          },
                           style: {
                             position: isPinned ? 'sticky' : 'relative',
                             left: isPinned ? `${leftOff}px` : undefined,
