@@ -312,87 +312,39 @@ function optionalNumber(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : NaN;
 }
-function v19CoverSeries(dateValues, inventories, demands, outputCount = dateValues.length) {
-  const size = dateValues.length;
-  const normalizedDemands = demands.map((value) => {
-    const parsed = optionalNumber(value);
-    return Number.isFinite(parsed) ? Math.max(0, parsed) : NaN;
+function v19StockDaysSeries(inventories, weightedSales, outputCount = inventories.length) {
+  return Array.from({ length: Math.min(outputCount, inventories.length) }, (_, index) => {
+    const inventory = optionalNumber(inventories[index]);
+    const dailySales = optionalNumber(weightedSales[index]);
+    if (!Number.isFinite(inventory) || !Number.isFinite(dailySales) || dailySales <= 0) return null;
+    if (inventory <= 0) return 0;
+    return Math.floor(inventory / dailySales);
   });
-  const prefix = new Array(size + 1).fill(0);
-  const nextMissing = new Array(size + 1).fill(size);
-  let missingIndex = size;
-  for (let index = size - 1; index >= 0; index -= 1) {
-    if (!Number.isFinite(normalizedDemands[index])) missingIndex = index;
-    nextMissing[index] = missingIndex;
-  }
-  normalizedDemands.forEach((value, index) => {
-    prefix[index + 1] = prefix[index] + (Number.isFinite(value) ? value : 0);
-  });
-  const values = new Array(Math.min(outputCount, size)).fill(null);
-  const lowerBounds = new Array(values.length).fill(false);
-  values.forEach((_, start) => {
-    const inventory = optionalNumber(inventories[start]);
-    if (!Number.isFinite(inventory) || !Number.isFinite(normalizedDemands[start])) return;
-    if (inventory <= 0) { values[start] = 0; return; }
-    const lastAvailable = nextMissing[start] - 1;
-    if (lastAvailable < start) return;
-    let low = start; let high = lastAvailable; let depletedAt = -1;
-    while (low <= high) {
-      const middle = Math.floor((low + high) / 2);
-      const consumed = prefix[middle + 1] - prefix[start];
-      if (consumed > inventory) { depletedAt = middle; high = middle - 1; } else low = middle + 1;
-    }
-    if (depletedAt >= 0) {
-      values[start] = Math.max(0, v19DaysBetween(dateValues[start], dateValues[depletedAt]));
-      return;
-    }
-    values[start] = Math.max(0, v19DaysBetween(dateValues[start], dateValues[lastAvailable]) + 1);
-    lowerBounds[start] = true;
-  });
-  return { values, lowerBounds };
 }
-function v19CoverText(value, lowerBound) {
-  return Number.isFinite(value) ? `${lowerBound ? '≥' : ''}${fmt(value, 1)}` : '-';
+function v19StockDaysText(value) {
+  return Number.isFinite(value) ? fmt(value, 0) : '-';
 }
-function v19CoverDetail(dateValues, inventories, demands, start) {
-  const inventory = optionalNumber(inventories[start]);
-  const firstDemand = optionalNumber(demands[start]);
-  if (!Number.isFinite(inventory) || !Number.isFinite(firstDemand)) return null;
-  if (inventory <= 0) return { inventory, cumulativeDemand: 0, startDate: dateValues[start], endDate: dateValues[start], depleted: true };
-  let cumulativeDemand = 0;
-  let lastAvailable = start - 1;
-  for (let index = start; index < dateValues.length; index += 1) {
-    const demand = optionalNumber(demands[index]);
-    if (!Number.isFinite(demand)) break;
-    cumulativeDemand += Math.max(0, demand);
-    lastAvailable = index;
-    if (cumulativeDemand > inventory) {
-      return { inventory, cumulativeDemand, startDate: dateValues[start], endDate: dateValues[index], depleted: true };
-    }
-  }
-  return lastAvailable >= start
-    ? { inventory, cumulativeDemand, startDate: dateValues[start], endDate: dateValues[lastAvailable], depleted: false }
-    : null;
+function v19StockDaysDetailLines(stockName, inventoryValue, weightedSalesValue, daysValue) {
+  const inventory = optionalNumber(inventoryValue);
+  const weightedSales = optionalNumber(weightedSalesValue);
+  if (!Number.isFinite(inventory)) return [`${stockName}缺失，无法计算`];
+  if (!Number.isFinite(weightedSales) || weightedSales <= 0) return [
+    `${stockName}：${fmt(inventory, 2)} 台`,
+    '加权基准销量缺失或 ≤ 0，无法计算',
+  ];
+  if (inventory <= 0) return [
+    `${stockName}：${fmt(inventory, 2)} 台 ≤ 0`,
+    '安全库存天数 = 0 天',
+  ];
+  return [
+    `${stockName}：${fmt(inventory, 2)} 台；加权基准销量：${fmt(weightedSales, 2)} 台/天`,
+    `floor(${fmt(inventory, 2)} ÷ ${fmt(weightedSales, 2)}) = ${v19StockDaysText(daysValue)} 天`,
+  ];
 }
 function fmt(value, digits = 0) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return '-';
   return parsed.toLocaleString('zh-CN', { minimumFractionDigits: digits, maximumFractionDigits: digits });
-}
-function v19CoverDetailLines(detail, value, lowerBound, demandName) {
-  if (!detail || !Number.isFinite(value)) return ['库存或销量预测数据不足，无法计算'];
-  if (detail.inventory <= 0) return [`起始库存 ${fmt(detail.inventory, 2)} 台 ≤ 0`, '可撑天数 = 0 天'];
-  const range = `${shortDate(detail.startDate)}～${shortDate(detail.endDate)}`;
-  if (detail.depleted) return [
-    `起始库存：${fmt(detail.inventory, 2)} 台`,
-    `${range} 累计 ${demandName}：${fmt(detail.cumulativeDemand, 2)} 台，首次超过库存`,
-    `可撑天数 = ${shortDate(detail.endDate)} − ${shortDate(detail.startDate)} = ${fmt(value, 1)} 天`,
-  ];
-  return [
-    `起始库存：${fmt(detail.inventory, 2)} 台`,
-    `${range} 累计 ${demandName}：${fmt(detail.cumulativeDemand, 2)} 台，库存尚未耗尽`,
-    `预测范围内至少可撑 ${lowerBound ? '≥' : ''}${fmt(value, 1)} 天`,
-  ];
 }
 function inRange(value, start, end) {
   const text = dateText(value);
@@ -1056,10 +1008,12 @@ function V19TrendChart({ row, changes, role, poApproved, orderWeek, channelOptio
   const projectionEnd = lastForecastDate > endDate ? lastForecastDate : endDate;
   const projectionLength = Math.max(N, Math.round((projectionEnd - startDate) / 86400000) + 1);
   const projectionDates = Array.from({ length: projectionLength }, (_, index) => formatDate(addDays(startDate, index)));
-  const saleInventoryValues = projectionDates.map((date) => dailyMap.get(date)?.sale_inventory);
-  const saleDemandValues = projectionDates.map((date) => dailyMap.get(date)?.sale_maybe_sales);
-  const saleCover = v19CoverSeries(projectionDates, saleInventoryValues, saleDemandValues, N);
-  const existingValues = saleCover.values.map((value, index) => index <= todayIndex ? null : value);
+  const weightedSalesValues = projectionDates.map((date) => dailyMap.get(date)?.weighted_sales);
+  const existingValues = v19StockDaysSeries(
+    projectionDates.map((date) => dailyMap.get(date)?.sale_inventory),
+    weightedSalesValues,
+    N,
+  ).map((value, index) => index <= todayIndex ? null : value);
   const hasSaleForecastLine = existingValues.some(Number.isFinite);
   function nearestValue(values, index, fallback = 0) {
     if (Number.isFinite(values[index])) return values[index];
@@ -1135,7 +1089,6 @@ function V19TrendChart({ row, changes, role, poApproved, orderWeek, channelOptio
       });
     });
     const invArr = new Array(projectionDates.length).fill(NaN);
-    const demArr = new Array(projectionDates.length).fill(NaN);
     let previousInventory = NaN; let previousDemand = 0;
     projectionDates.forEach((date, index) => {
       if (index < todayIndex) return;
@@ -1153,16 +1106,14 @@ function V19TrendChart({ row, changes, role, poApproved, orderWeek, channelOptio
       } else {
         inventory = previousInventory - previousDemand + add;
       }
-      invArr[index] = inventory; demArr[index] = demand;
+      invArr[index] = inventory;
       previousInventory = inventory; previousDemand = demand;
     });
-    const previewCover = v19CoverSeries(projectionDates, invArr, demArr, N);
+    const previewValues = v19StockDaysSeries(invArr, weightedSalesValues, N);
     return {
-      values: previewCover.values,
-      lowerBounds: previewCover.lowerBounds,
+      values: previewValues,
       inventories: invArr,
-      demands: demArr,
-      nodes: nodes.map((node) => ({ ...node, dayValue: Math.max(0, nearestValue(previewCover.values, node.pointIndex)) })),
+      nodes: nodes.map((node) => ({ ...node, dayValue: Math.max(0, nearestValue(previewValues, node.pointIndex)) })),
     };
   };
   const systemChart = buildPreview({});
@@ -1328,14 +1279,15 @@ function V19TrendChart({ row, changes, role, poApproved, orderWeek, channelOptio
   const hoverDaily = hoverIndex == null ? null : dailyMap.get(dates[hoverIndex]);
   const hover = dragging || hoveredBatch || hoverIndex == null ? null : {
     x: px(hoverIndex), date: dates[hoverIndex],
-    sys: sysValues[hoverIndex], sysLowerBound: systemChart.lowerBounds[hoverIndex],
-    existing: existingValues[hoverIndex], existingLowerBound: saleCover.lowerBounds[hoverIndex],
-    sysDetail: v19CoverDetail(projectionDates, systemChart.inventories, systemChart.demands, hoverIndex),
-    existingDetail: v19CoverDetail(projectionDates, saleInventoryValues, saleDemandValues, hoverIndex),
+    sys: sysValues[hoverIndex],
+    existing: existingValues[hoverIndex],
+    sysInventory: systemChart.inventories[hoverIndex],
+    existingInventory: hoverDaily?.sale_inventory,
+    weightedSales: hoverDaily?.weighted_sales,
     daily: hoverDaily,
   };
-  const hoverSystemLines = hover ? v19CoverDetailLines(hover.sysDetail, hover.sys, hover.sysLowerBound, '预估销量') : [];
-  const hoverSaleLines = hover ? v19CoverDetailLines(hover.existingDetail, hover.existing, hover.existingLowerBound, '销售预估销量') : [];
+  const hoverSystemLines = hover ? v19StockDaysDetailLines('系统库存', hover.sysInventory, hover.weightedSales, hover.sys) : [];
+  const hoverSaleLines = hover ? v19StockDaysDetailLines('销售预估库存', hover.existingInventory, hover.weightedSales, hover.existing) : [];
   const ticks = Array.from(new Set(
     Array.from({ length: 5 }, (_, index) => indexOfDate(addCalendarMonths(startDate, index))),
   )).filter((index) => index >= 0 && index < N).sort((a, b) => a - b);
@@ -1440,7 +1392,7 @@ function V19TrendChart({ row, changes, role, poApproved, orderWeek, channelOptio
       const type = channelChanged ? 'air' : numberValue(mod.qty, base.baseQty) > base.baseQty ? 'up' : numberValue(mod.qty, base.baseQty) < base.baseQty ? 'down' : numberValue(mod.shift, base.baseShift) < base.baseShift ? 'advance' : 'delay';
       return { weekIndex: index, from: base.baseQty, to: numberValue(mod.qty, base.baseQty), shift: numberValue(mod.shift), channel: mod.channel || base.channel, type, quantityChanged, dateChanged, channelChanged, arrival: formatDate(built.arrival), sellable: formatDate(built.sellable) };
     });
-    const evidence = `基于 daily_sales.inventory、maybe_sales 与系统建议入库逐日计算真实可撑天数，预览 ${bundle.length} 处调整：当前系统建议曲线超上限 ${baseMetric.over} 天、最低 ${fmt(baseMetric.min, 1)} 天。最终安全区间结果以提交工作流服务端重算为准。`;
+    const evidence = `基于 daily_sales.inventory、真实在途、系统建议和 maybe_sales 逐日推演系统库存，再除以 weighted_sales 计算安全库存天数；预览 ${bundle.length} 处调整：当前系统建议曲线超上限 ${baseMetric.over} 天、最低 ${fmt(baseMetric.min, 1)} 天。最终安全区间结果以提交工作流服务端重算为准。`;
     onApply(row, bundle, evidence);
   }
 
@@ -1465,11 +1417,11 @@ function V19TrendChart({ row, changes, role, poApproved, orderWeek, channelOptio
     style: { position: 'relative', width: '100%', maxWidth: 2200, minWidth: 0, margin: '0 auto', padding: '12px 12px 16px', background: '#fbfcfe', boxSizing: 'border-box', whiteSpace: 'normal' },
   },
     h('div', { style: { display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', fontSize: 13.5, fontWeight: 700, marginBottom: 8 } },
-      '📈 到货 & 真实可撑天数趋势（未来 4 个月） · ', h('span', { style: { color: '#3370ff' } }, `${row.product.model || '-'} · ${row.product.country || '-'}`),
+      '📈 到货 & 安全库存天数趋势（库存 ÷ 加权基准销量） · ', h('span', { style: { color: '#3370ff' } }, `${row.product.model || '-'} · ${row.product.country || '-'}`),
       h(Button, { size: 'small', onClick: toggleSimulation, style: { borderColor: '#8b6cf0', background: simOn ? '#8b6cf0' : '#f6f3ff', color: simOn ? '#fff' : '#5b3fc4', borderRadius: 6, fontSize: 12, fontWeight: 700 } }, '🧪 模拟演算'),
       h('span', { style: { fontWeight: 400, fontSize: 11.5, color: '#8a9099' } }, '节点 = 未来批次（W1–W7）· 点看详情 / 改渠道 · 拖改量与时间 · 拖后确认才保留')),
     h('div', { style: { margin: '2px 0 6px', fontSize: 13, color: '#5a6169', background: '#f7f9fc', border: '1px solid #e6ebf2', borderRadius: 7, padding: '6px 12px' } },
-      '📦 当前在库 ', h('b', null, fmt(stock)), '（FBA · 0:00 快照）　·　在途 ', h('b', null, fmt(transit)), '（= 发货 − 已签收，已计入曲线起点）　·　未交货订单 ', h('b', null, fmt(receive)), '　·　预计断货日 ', h('b', { style: { color: stockoutDate === '3 个月内无' ? '#147a43' : '#c0392b' } }, stockoutDate), '　·　入仓时效 ', h('b', null, '见节点'), '（悬停查看物流到达、入仓天数和预计入库）'),
+      '📦 当前在库 ', h('b', null, fmt(stock)), '（FBA · 0:00 快照）　·　在途 ', h('b', null, fmt(transit)), '（= 发货 − 已签收，按预计入库日计入曲线）　·　未交货订单 ', h('b', null, fmt(receive)), '　·　预计断货日 ', h('b', { style: { color: stockoutDate === '3 个月内无' ? '#147a43' : '#c0392b' } }, stockoutDate), '　·　入仓时效 ', h('b', null, '见节点'), '（悬停查看物流到达、入仓天数和预计入库）'),
     !futureInventoryReady ? h('div', { style: { margin: '5px 0 7px', padding: '6px 10px', borderRadius: 6, background: '#fff8e6', border: '1px solid #f0c36d', color: '#7a4d00', fontSize: 12 } }, '未来普通水位尚未计算；当前仅展示已有历史，提交前需先运行水位表更新。') : null,
     simOn && (changedKeys.length || draft?.pending) ? h('div', { style: { margin: '6px 0 8px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 12, fontWeight: 700, color: '#4b2fb0', background: '#f6f3ff', border: '1px dashed #8b6cf0', borderRadius: 8, padding: '6px 11px' } },
       `🧪 拖动预览 · ${changedKeys.length + (draft?.pending && !changedKeys.includes(String(draft.index)) ? 1 : 0)} 处改动 · 当前系统建议曲线：超上限 ${baseMetric.over} 天、最低 ${fmt(baseMetric.min, 1)} 天 · 调整后预览：超上限 ${simMetric.over} 天、最低 ${fmt(simMetric.min, 1)} 天`,
@@ -1530,7 +1482,7 @@ function V19TrendChart({ row, changes, role, poApproved, orderWeek, channelOptio
         h('span', { style: { position: 'absolute', left: xPercent(hover.x), top: yPercent(T), bottom: yPercent(B), zIndex: 3, borderLeft: '1px dashed #98a1ad', pointerEvents: 'none' } }),
         h('div', { style: { position: 'absolute', ...(hover.x / W > 0.72 ? { right: 12 } : { left: `calc(${xPercent(hover.x)} + 9px)` }), top: 32, zIndex: 6, width: 390, maxWidth: 'calc(100% - 24px)', boxSizing: 'border-box', whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word', borderRadius: 6, padding: '9px 11px', background: 'rgba(31,35,41,.92)', color: '#fff', fontSize: 12, lineHeight: 1.55, pointerEvents: 'none', boxShadow: '0 5px 16px rgba(0,0,0,.18)' } },
           h('div', { style: { fontWeight: 800 } }, shortDate(hover.date)),
-          h('div', { style: { color: '#dce6ff' } }, `水位表可撑 ${v19CoverText(hover.sys, hover.sysLowerBound)} 天 · 销售可撑 ${v19CoverText(hover.existing, hover.existingLowerBound)} 天`),
+          h('div', { style: { color: '#dce6ff' } }, `系统安全库存 ${v19StockDaysText(hover.sys)} 天 · 销售安全库存 ${v19StockDaysText(hover.existing)} 天`),
           h('div', { style: { marginTop: 6, color: '#9db7ff', fontWeight: 800 } }, '蓝线 · 系统曲线'),
           ...hoverSystemLines.map((line, index) => h('div', { key: `sys-calc-${index}`, style: { color: '#dce6ff' } }, line)),
           h('div', { style: { marginTop: 6, color: '#f4cf8a', fontWeight: 800 } }, '黄线 · 销售曲线'),
@@ -1540,8 +1492,8 @@ function V19TrendChart({ row, changes, role, poApproved, orderWeek, channelOptio
         ...renderBatchBase(hoveredBatchInfo, { dark: true }),
         renderBatchState(hoveredBatchInfo, { dark: true })) : null),
     h('div', { style: { margin: '6px 0 0 40px', display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 11, color: '#5a6169' } },
-      h('span', null, h('i', { style: { display: 'inline-block', width: 18, borderTop: '2px solid #5b7cfa', marginRight: 5, verticalAlign: 'middle' } }), '水位表库存 + 系统建议入库 + 预估销量·真实可撑天数'),
-      h('span', null, h('i', { style: { display: 'inline-block', width: 18, borderTop: '2px solid #e0a53a', marginRight: 5, verticalAlign: 'middle' } }), hasSaleForecastLine ? '销售预估库存 + 销售预估销量·真实可撑天数' : '销售预估库存 + 销售预估销量·真实可撑天数(未填,黄线不显示)'),
+      h('span', null, h('i', { style: { display: 'inline-block', width: 18, borderTop: '2px solid #5b7cfa', marginRight: 5, verticalAlign: 'middle' } }), '系统库存曲线 ÷ 加权基准销量·安全库存天数'),
+      h('span', null, h('i', { style: { display: 'inline-block', width: 18, borderTop: '2px solid #e0a53a', marginRight: 5, verticalAlign: 'middle' } }), hasSaleForecastLine ? '销售预估库存 ÷ 加权基准销量·安全库存天数' : '销售预估库存或加权基准销量未就绪(黄线不显示)'),
       h('span', null, h('i', { style: { display: 'inline-block', width: 18, borderTop: '2px dashed #c0392b', marginRight: 5, verticalAlign: 'middle' } }), '7/14 天安全线'),
       h('span', null, h('b', { style: { color: '#1a5fb4' } }, '✈'), '=活动前置建议(悬停看详情)'),
         h('span', null, '◌ W节点=到货日期 · 模拟货量从到货日影响曲线'),
@@ -2091,7 +2043,7 @@ function ShipmentEvolutionBlockV19() {
       guideOpen ? h(React.Fragment, null,
         h('div', { style: { fontSize: 12.5, color: '#5a6169', lineHeight: 1.7, marginBottom: 10 } }, '系统每周滚动算好发货计划，', h('b', { style: { color: '#1f2329' } }, '你只确认「够不够、覆盖到哪周」，不用自己算'), '。表头三行：', h('b', { style: { color: '#1f2329' } }, '周次 / 发货日期 / 覆盖售卖期'), '。', h('b', { style: { color: '#1f2329' } }, '基准 7/6 备货周'), '（周一确认 · 7/7 周二下厂）：', h('b', { style: { color: '#1f2329' } }, '备货当周不进表，W1 从下一周 7/13 起算'), '；+45 天交期 → 8/21 出厂落 ', h('b', { style: { color: '#1f2329' } }, '8/18 那一周（W6）'), ' → ', h('b', { style: { color: '#1f2329' } }, '本期下单批 = W6 + W7 = 前沿'), '，发货计划排到 W7 为止。格子 = 该周应发量；', h('b', { style: { color: '#1f2329' } }, '需下单（净额）= W6+W7 应发相加 − 未交货订单余量'), '，采购按净额下 PO。节奏：', h('b', { style: { color: '#1f2329' } }, '每周新排一周（逐周滚动）'), '——非下单周排 W6，确认即承诺——', h('b', { style: { color: '#1f2329' } }, '承诺 = 系统不重算'), '（铁律①修订）；下单周排 W7，漂移全由 W7 吸收（铁律②）；', h('b', { style: { color: '#1f2329' } }, '周二 PO 落地前 W6 仍可提下单异议'), '（改即申请 → 采购 → 终审），PO 通过后 W6+W7 真锁死（决策 19 不可取消）。', h('span', { style: { color: '#8a9099' } }, '发货 = 出货 / 出厂轴，W1 = 下周；各站点周次一致，时效差异只改覆盖售卖期与在途量。')),
         h('div', { style: { display: 'flex', gap: 10, marginBottom: 11, flexWrap: 'wrap' } }, h('div', { style: { flex: 1, minWidth: 260, background: '#f6f9ff', border: '1px solid #d6e4fb', borderRadius: 7, padding: '9px 13px', fontSize: 12.5, color: '#26405f', lineHeight: 1.6 } }, h('b', { style: { color: '#1a5fb4' } }, '① 确认发货计划　'), '常规行顶栏「一键通过（例外除外）」；', h('b', null, '要改 → 展开趋势图直接拖节点'), '（上下 = 数量、左右 = 时间按周、点渠道名切换），曲线即时变，满意再「转修改申请」（模拟证据自动带入 + 补充说明必填）。闸：', h('b', null, 'W1 已锁定'), ' · ', h('b', null, 'W2–W5 按修改后 7–14 天或不劣于系统建议判闸'), ' · ', h('b', null, 'W6–W7 = 下单异议'), '（W6 已承诺可议至 PO）。'), h('div', { style: { flex: 1, minWidth: 260, background: '#f6f9ff', border: '1px solid #d6e4fb', borderRadius: 7, padding: '9px 13px', fontSize: 12.5, color: '#26405f', lineHeight: 1.6 } }, h('b', { style: { color: '#1a5fb4' } }, '② 看覆盖前沿　'), '第三行「覆盖售卖期」= 这批发出去补的是哪段可售；点开行看测算（时效 / 安全库存 / 淡旺季）验系统算得对不对。')),
-        h('div', { style: { fontSize: 12, color: '#36507e', background: '#eef4ff', borderLeft: '3px solid #3370ff', borderRadius: 5, padding: '9px 12px', lineHeight: 1.7, marginBottom: 12 } }, '数据口径：蓝线从 daily_sales.inventory 起算，在每条系统建议的 add_date 加入 simulate_shipment.number，再按 maybe_sales 逐日计算；黄线按 sale_inventory + sale_maybe_sales 逐日计算。实际计划只读取发货日期从当前 W1 起、数量大于 0 的旧 simulate_shipment 记录，不以是否生成货件编号判断；系统建议读取 simulate_shipment.plan_source=shipment_plan_v2。当前 W1 之前的计划视为已经发走并转为在途，不再单独展示。', h('b', { style: { color: '#1f2329' } }, '格子主数、图表节点和蓝线使用同一套系统建议；紫线只显示拖动调整后的结果，黄线不叠加系统建议。拖动和审批只改系统建议，不改实际计划。净额列 = 只读结果 = W6+W7 建议量 − 未交货余量（2.5.2）。'), '净额 = 0 时本批不下新单。周二采购在净额区「生成下单计划」→ 下单执行看板（工厂×规格 · 调拨在看板算）→ 终审。')) : null,
+        h('div', { style: { fontSize: 12, color: '#36507e', background: '#eef4ff', borderLeft: '3px solid #3370ff', borderRadius: 5, padding: '9px 12px', lineHeight: 1.7, marginBottom: 12 } }, '数据口径：蓝线从 daily_sales.inventory 剥离当日 add 后起算，按 expected_inventory 真实在途和 shipment_plan_v2 系统建议的预计入库日加入库存，逐日扣减 maybe_sales，再以系统库存 ÷ weighted_sales 计算安全库存天数；黄线按 sale_inventory ÷ weighted_sales 计算。实际计划只读取发货日期从当前 W1 起、数量大于 0 的旧 simulate_shipment 记录，不以是否生成货件编号判断；系统建议读取 simulate_shipment.plan_source=shipment_plan_v2。当前 W1 之前的计划视为已经发走并转为在途，不再单独展示。', h('b', { style: { color: '#1f2329' } }, '格子主数、图表节点和蓝线使用同一套系统建议；紫线只显示拖动调整后的结果，黄线不叠加系统建议。拖动和审批只改系统建议，不改实际计划。净额列 = 只读结果 = W6+W7 建议量 − 未交货余量（2.5.2）。'), '净额 = 0 时本批不下新单。周二采购在净额区「生成下单计划」→ 下单执行看板（工厂×规格 · 调拨在看板算）→ 终审。')) : null,
       h(V19RoleBar, { role, mine, counts, batchSigned, poGenerated, orderWeek, onRole: setRole, onMine: setMine, onBatch: () => setBatchOpen(true), onGeneratePO: generatePO, onAllPass: allPass }),
       role === 'final' && (orderWeek || Object.values(changes).some((change) => change.status === 'fin')) ? h(V19FinalPanel, { rows: productViews, changes, signed: batchSigned, poGenerated, approved: poApproved, onApprove: approvePO, onOpenDetail: (row, weekIndex) => setDetail({ row, weekIndex }) }) : null,
       inflight ? h('div', { style: { margin: '8px 0', padding: '8px 12px', border: '1px solid #f0c36d', background: '#fff8e6', borderRadius: 8, fontSize: 12.5, color: '#7a4d00' } }, '⚠ ', h('b', null, '销售提交的修改需求进入审核流'), '；当前 ', h('b', null, inflight), ' 条在途。', h('span', { style: { color: '#8a9099' } }, '（原型：提交即计入状态机）')) : null,

@@ -354,45 +354,10 @@ function v19CoverSeries(dateValues, inventories, demands, outputCount = dateValu
 function v19CoverText(value, lowerBound) {
   return Number.isFinite(value) ? `${lowerBound ? '≥' : ''}${fmt(value, 1)}` : '-';
 }
-function v19CoverDetail(dateValues, inventories, demands, start) {
-  const inventory = optionalNumber(inventories[start]);
-  const firstDemand = optionalNumber(demands[start]);
-  if (!Number.isFinite(inventory) || !Number.isFinite(firstDemand)) return null;
-  if (inventory <= 0) return { inventory, cumulativeDemand: 0, startDate: dateValues[start], endDate: dateValues[start], depleted: true };
-  let cumulativeDemand = 0;
-  let lastAvailable = start - 1;
-  for (let index = start; index < dateValues.length; index += 1) {
-    const demand = optionalNumber(demands[index]);
-    if (!Number.isFinite(demand)) break;
-    cumulativeDemand += Math.max(0, demand);
-    lastAvailable = index;
-    if (cumulativeDemand > inventory) {
-      return { inventory, cumulativeDemand, startDate: dateValues[start], endDate: dateValues[index], depleted: true };
-    }
-  }
-  return lastAvailable >= start
-    ? { inventory, cumulativeDemand, startDate: dateValues[start], endDate: dateValues[lastAvailable], depleted: false }
-    : null;
-}
 function fmt(value, digits = 0) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return '-';
   return parsed.toLocaleString('zh-CN', { minimumFractionDigits: digits, maximumFractionDigits: digits });
-}
-function v19CoverDetailLines(detail, value, lowerBound, demandName) {
-  if (!detail || !Number.isFinite(value)) return ['库存或销量预测数据不足，无法计算'];
-  if (detail.inventory <= 0) return [`起始库存 ${fmt(detail.inventory, 2)} 台 ≤ 0`, '可撑天数 = 0 天'];
-  const range = `${shortDate(detail.startDate)}～${shortDate(detail.endDate)}`;
-  if (detail.depleted) return [
-    `起始库存：${fmt(detail.inventory, 2)} 台`,
-    `${range} 累计 ${demandName}：${fmt(detail.cumulativeDemand, 2)} 台，首次超过库存`,
-    `可撑天数 = ${shortDate(detail.endDate)} − ${shortDate(detail.startDate)} = ${fmt(value, 1)} 天`,
-  ];
-  return [
-    `起始库存：${fmt(detail.inventory, 2)} 台`,
-    `${range} 累计 ${demandName}：${fmt(detail.cumulativeDemand, 2)} 台，库存尚未耗尽`,
-    `预测范围内至少可撑 ${lowerBound ? '≥' : ''}${fmt(value, 1)} 天`,
-  ];
 }
 function inRange(value, start, end) {
   const text = dateText(value);
@@ -1056,9 +1021,12 @@ function V19TrendChart({ row, changes, role, poApproved, orderWeek, channelOptio
   const projectionEnd = lastForecastDate > endDate ? lastForecastDate : endDate;
   const projectionLength = Math.max(N, Math.round((projectionEnd - startDate) / 86400000) + 1);
   const projectionDates = Array.from({ length: projectionLength }, (_, index) => formatDate(addDays(startDate, index)));
-  const saleInventoryValues = projectionDates.map((date) => dailyMap.get(date)?.sale_inventory);
-  const saleDemandValues = projectionDates.map((date) => dailyMap.get(date)?.sale_maybe_sales);
-  const saleCover = v19CoverSeries(projectionDates, saleInventoryValues, saleDemandValues, N);
+  const saleCover = v19CoverSeries(
+    projectionDates,
+    projectionDates.map((date) => dailyMap.get(date)?.sale_inventory),
+    projectionDates.map((date) => dailyMap.get(date)?.sale_maybe_sales),
+    N,
+  );
   const existingValues = saleCover.values.map((value, index) => index <= todayIndex ? null : value);
   const hasSaleForecastLine = existingValues.some(Number.isFinite);
   function nearestValue(values, index, fallback = 0) {
@@ -1160,8 +1128,6 @@ function V19TrendChart({ row, changes, role, poApproved, orderWeek, channelOptio
     return {
       values: previewCover.values,
       lowerBounds: previewCover.lowerBounds,
-      inventories: invArr,
-      demands: demArr,
       nodes: nodes.map((node) => ({ ...node, dayValue: Math.max(0, nearestValue(previewCover.values, node.pointIndex)) })),
     };
   };
@@ -1330,12 +1296,8 @@ function V19TrendChart({ row, changes, role, poApproved, orderWeek, channelOptio
     x: px(hoverIndex), date: dates[hoverIndex],
     sys: sysValues[hoverIndex], sysLowerBound: systemChart.lowerBounds[hoverIndex],
     existing: existingValues[hoverIndex], existingLowerBound: saleCover.lowerBounds[hoverIndex],
-    sysDetail: v19CoverDetail(projectionDates, systemChart.inventories, systemChart.demands, hoverIndex),
-    existingDetail: v19CoverDetail(projectionDates, saleInventoryValues, saleDemandValues, hoverIndex),
     daily: hoverDaily,
   };
-  const hoverSystemLines = hover ? v19CoverDetailLines(hover.sysDetail, hover.sys, hover.sysLowerBound, '预估销量') : [];
-  const hoverSaleLines = hover ? v19CoverDetailLines(hover.existingDetail, hover.existing, hover.existingLowerBound, '销售预估销量') : [];
   const ticks = Array.from(new Set(
     Array.from({ length: 5 }, (_, index) => indexOfDate(addCalendarMonths(startDate, index))),
   )).filter((index) => index >= 0 && index < N).sort((a, b) => a - b);
@@ -1528,13 +1490,10 @@ function V19TrendChart({ row, changes, role, poApproved, orderWeek, channelOptio
       }),
       hover ? h(React.Fragment, null,
         h('span', { style: { position: 'absolute', left: xPercent(hover.x), top: yPercent(T), bottom: yPercent(B), zIndex: 3, borderLeft: '1px dashed #98a1ad', pointerEvents: 'none' } }),
-        h('div', { style: { position: 'absolute', ...(hover.x / W > 0.72 ? { right: 12 } : { left: `calc(${xPercent(hover.x)} + 9px)` }), top: 32, zIndex: 6, width: 390, maxWidth: 'calc(100% - 24px)', boxSizing: 'border-box', whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word', borderRadius: 6, padding: '9px 11px', background: 'rgba(31,35,41,.92)', color: '#fff', fontSize: 12, lineHeight: 1.55, pointerEvents: 'none', boxShadow: '0 5px 16px rgba(0,0,0,.18)' } },
+        h('div', { style: { position: 'absolute', ...(hover.x / W > 0.76 ? { right: 12 } : { left: `calc(${xPercent(hover.x)} + 9px)` }), top: 32, zIndex: 6, width: 248, maxWidth: 'calc(100% - 24px)', boxSizing: 'border-box', whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word', borderRadius: 6, padding: '8px 10px', background: 'rgba(31,35,41,.92)', color: '#fff', fontSize: 12, lineHeight: 1.55, pointerEvents: 'none', boxShadow: '0 5px 16px rgba(0,0,0,.18)' } },
           h('div', { style: { fontWeight: 800 } }, shortDate(hover.date)),
           h('div', { style: { color: '#dce6ff' } }, `水位表可撑 ${v19CoverText(hover.sys, hover.sysLowerBound)} 天 · 销售可撑 ${v19CoverText(hover.existing, hover.existingLowerBound)} 天`),
-          h('div', { style: { marginTop: 6, color: '#9db7ff', fontWeight: 800 } }, '蓝线 · 系统曲线'),
-          ...hoverSystemLines.map((line, index) => h('div', { key: `sys-calc-${index}`, style: { color: '#dce6ff' } }, line)),
-          h('div', { style: { marginTop: 6, color: '#f4cf8a', fontWeight: 800 } }, '黄线 · 销售曲线'),
-          ...hoverSaleLines.map((line, index) => h('div', { key: `sale-calc-${index}`, style: { color: '#f7dfb2' } }, line)))) : null,
+          hover.daily ? h('div', { style: { color: '#f4cf8a' } }, `当天日均预估 ${fmt(numberValue(hover.daily.weighted_sales, hover.daily.maybe_sales))} 台/天`) : null)) : null,
       hoveredBatch ? h('div', { style: { position: 'absolute', ...(hoveredBatch.x / W > 0.76 ? { right: 12 } : { left: `calc(${xPercent(hoveredBatch.x)} + 12px)` }), ...(hoveredBatch.y / H > 0.52 ? { bottom: `calc(${Math.max(5, 100 - hoveredBatch.y / H * 100)}% + 14px)` } : { top: `calc(${Math.max(5, hoveredBatch.y / H * 100)}% + 14px)` }), zIndex: 6, width: 330, maxWidth: 'calc(100% - 24px)', maxHeight: 'calc(100% - 20px)', overflowY: 'auto', boxSizing: 'border-box', whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word', padding: '9px 11px', borderRadius: 7, background: 'rgba(31,35,41,0.94)', color: '#fff', fontSize: 12, lineHeight: 1.55, pointerEvents: 'none', boxShadow: '0 6px 22px rgba(0,0,0,.28)' } },
         h('b', null, `W${hoveredBatch.index + 1} · ${shortDate(hoveredBatch.week.start)}~${shortDate(hoveredBatch.week.end)}${hoveredBatch.index === 0 ? ' 🔒' : ''}`),
         ...renderBatchBase(hoveredBatchInfo, { dark: true }),
