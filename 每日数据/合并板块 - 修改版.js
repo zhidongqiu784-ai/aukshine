@@ -292,6 +292,7 @@
     { label: '今天',      value: 'today'      },
     { label: '昨天',      value: 'yesterday'  },
     { label: '近 7 天',   value: '7d'         },
+    { label: '近 14 天',  value: '14d'        },
     { label: '近 30 天',  value: '30d'        },
     { label: '近 90 天',  value: '90d'        },
     { label: '本月',      value: 'this_month' },
@@ -4703,6 +4704,7 @@
         case 'today':      range = [todayStr, todayStr]; break;
         case 'yesterday':  { const d = new Date(now); d.setDate(d.getDate() - 1); range = [fmt(d), fmt(d)]; break; }
         case '7d':         { const d = new Date(now); d.setDate(d.getDate() - 6); range = [fmt(d), todayStr]; break; }
+        case '14d':        { const d = new Date(now); d.setDate(d.getDate() - 13); range = [fmt(d), todayStr]; break; }
         case '30d':        { const d = new Date(now); d.setDate(d.getDate() - 29); range = [fmt(d), todayStr]; break; }
         case '90d':        { const d = new Date(now); d.setDate(d.getDate() - 89); range = [fmt(d), todayStr]; break; }
         case 'this_month': { const d = new Date(now.getFullYear(), now.getMonth(), 1); range = [fmt(d), todayStr]; break; }
