@@ -2434,7 +2434,7 @@
         formulae: [new Date(2000, 0, 1)],
         showErrorMessage: true,
         errorTitle: '日期错误',
-        error: '请选择有效日期',
+        error: '请输入有效日期',
       };
     });
     sheet.mergeCells(`D1:${lastColumn}4`);
