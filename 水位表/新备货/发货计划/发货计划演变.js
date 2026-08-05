@@ -20,6 +20,7 @@ const {
   CalendarOutlined,
   DownOutlined,
   GlobalOutlined,
+  LinkOutlined,
   ReloadOutlined,
   RightOutlined,
   ShopOutlined,
@@ -27,6 +28,7 @@ const {
 const h = React.createElement;
 
 const TOTAL_SHOP = '合计';
+const WATER_DETAIL_ROUTE = 'https://erp.aukshine.com/admin/20gdqvf4dzm/tab/tkgsjefv7hm';
 const PLAN_SOURCE = 'shipment_plan_v2';
 const WEEKLY_SNAPSHOT_SOURCE = 'shipment_plan_weekly_snapshot_v2';
 const ENABLE_WEEKLY_SNAPSHOT_BASELINE = true;
@@ -1030,6 +1032,9 @@ function v19BatchDates(row, week, channelValue, shiftWeeks = 0) {
 }
 
 function V19TrendChart({ row, changes, role, poApproved, orderWeek, channelOptions, onApply, onSandbox }) {
+  const waterDetailUrl = row.product.asin && row.product.country
+    ? `${WATER_DETAIL_ROUTE}${buildSearch({ asin: row.product.asin, country: row.product.country, shop: TOTAL_SHOP })}`
+    : '';
   const [simOn, setSimOn] = useState(false);
   const [mods, setMods] = useState({});
   const [draft, setDraft] = useState(null);
@@ -1465,11 +1470,19 @@ function V19TrendChart({ row, changes, role, poApproved, orderWeek, channelOptio
     style: { position: 'relative', width: '100%', maxWidth: 2200, minWidth: 0, margin: '0 auto', padding: '12px 12px 16px', background: '#fbfcfe', boxSizing: 'border-box', whiteSpace: 'normal' },
   },
     h('div', { style: { display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', fontSize: 13.5, fontWeight: 700, marginBottom: 8 } },
-      '📈 到货 & 真实可撑天数趋势（未来 4 个月） · ', h('span', { style: { color: '#3370ff' } }, `${row.product.model || '-'} · ${row.product.country || '-'}`),
+      '📈 到货 & 真实可撑天数趋势（未来 4 个月） | ', h('span', { style: { color: '#3370ff' } }, `${row.product.model || '-'} | ${row.product.country || '-'}`),
       h(Button, { size: 'small', onClick: toggleSimulation, style: { borderColor: '#8b6cf0', background: simOn ? '#8b6cf0' : '#f6f3ff', color: simOn ? '#fff' : '#5b3fc4', borderRadius: 6, fontSize: 12, fontWeight: 700 } }, '🧪 模拟演算'),
-      h('span', { style: { fontWeight: 400, fontSize: 11.5, color: '#8a9099' } }, '节点 = 未来批次（W1–W7）· 点看详情 / 改渠道 · 拖改量与时间 · 拖后确认才保留')),
+      h(Button, {
+        size: 'small',
+        icon: h(LinkOutlined || 'span'),
+        href: waterDetailUrl || undefined,
+        target: '_blank',
+        rel: 'noreferrer',
+        disabled: !waterDetailUrl,
+        style: { marginLeft: 'auto', borderColor: '#b9d4f5', background: '#f6f9ff', color: '#1a5fb4', borderRadius: 6, fontSize: 12, fontWeight: 700 },
+      }, '水位表详情')),
     h('div', { style: { margin: '2px 0 6px', fontSize: 13, color: '#5a6169', background: '#f7f9fc', border: '1px solid #e6ebf2', borderRadius: 7, padding: '6px 12px' } },
-      '📦 当前在库 ', h('b', null, fmt(stock)), '（FBA · 0:00 快照）　·　在途 ', h('b', null, fmt(transit)), '（= 发货 − 已签收，已计入曲线起点）　·　未交货订单 ', h('b', null, fmt(receive)), '　·　预计断货日 ', h('b', { style: { color: stockoutDate === '3 个月内无' ? '#147a43' : '#c0392b' } }, stockoutDate), '　·　入仓时效 ', h('b', null, '见节点'), '（悬停查看物流到达、入仓天数和预计入库）'),
+      '📦 当前在库 ', h('b', null, fmt(stock)), '（FBA | 0:00 快照） | 在途 ', h('b', null, fmt(transit)), '（= 发货 − 已签收，已计入曲线起点） | 未交货订单 ', h('b', null, fmt(receive)), ' | 预计断货日 ', h('b', { style: { color: stockoutDate === '3 个月内无' ? '#147a43' : '#c0392b' } }, stockoutDate)),
     !futureInventoryReady ? h('div', { style: { margin: '5px 0 7px', padding: '6px 10px', borderRadius: 6, background: '#fff8e6', border: '1px solid #f0c36d', color: '#7a4d00', fontSize: 12 } }, '未来普通水位尚未计算；当前仅展示已有历史，提交前需先运行水位表更新。') : null,
     simOn && (changedKeys.length || draft?.pending) ? h('div', { style: { margin: '6px 0 8px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 12, fontWeight: 700, color: '#4b2fb0', background: '#f6f3ff', border: '1px dashed #8b6cf0', borderRadius: 8, padding: '6px 11px' } },
       `🧪 拖动预览 · ${changedKeys.length + (draft?.pending && !changedKeys.includes(String(draft.index)) ? 1 : 0)} 处改动 · 当前系统建议曲线：超上限 ${baseMetric.over} 天、最低 ${fmt(baseMetric.min, 1)} 天 · 调整后预览：超上限 ${simMetric.over} 天、最低 ${fmt(simMetric.min, 1)} 天`,
@@ -1843,11 +1856,17 @@ function V19Table({ rows, allScopeRows, changes, confirmedRows, role, orderWeek,
         h('span', { style: { color: '#5b3fc4', fontWeight: 800 } }, '→'),
         h('b', { style: { color: '#5b3fc4' } }, fmt(simulatedSuggest)))
       : (Number.isFinite(Number(suggest)) ? fmt(suggest) : '—');
+    const compareQty = baseline?.hasApproved ? numberValue(baseline.approvedQty) : numberValue(baseline?.systemSuggestQty);
+    const delta = numberValue(suggest) - compareQty;
+    const compareLabel = baseline?.hasApproved ? '上周人工确认' : '上周建议';
+    const deltaLabel = baseline?.hasApproved
+      ? `差额 ${delta > 0 ? '+' : ''}${fmt(delta)}`
+      : delta > 0 ? `增加 ${fmt(delta)}` : delta < 0 ? `减少 ${fmt(Math.abs(delta))}` : '持平';
+    const deltaColor = baseline?.hasApproved ? '#7c3aed' : delta > 0 ? '#147a43' : delta < 0 ? '#c0392b' : '#8a9099';
     return h(React.Fragment, null,
       quantityNode,
-      h('span', { style: { display: 'block', marginTop: 2, fontSize: 9.5, color: '#7c3aed', fontWeight: 700 } }, simulation?.active ? '系统建议 · 模拟中' : '系统建议'),
-      baseline ? h('span', { style: { display: 'block', marginTop: 1, fontSize: 9.5, color: '#6a7280', fontWeight: 700 } }, `上周建议 ${fmt(baseline.systemSuggestQty)}`) : h('span', { style: { display: 'block', marginTop: 1, fontSize: 9.5, color: '#a5acb8', fontWeight: 600 } }, '上周暂无'),
-      baseline?.hasApproved ? h('span', { style: { display: 'block', marginTop: 1, fontSize: 9.5, color: '#b06a00', fontWeight: 700 } }, `上周人工 ${fmt(baseline.approvedQty)}`) : null,
+      h('span', { style: { display: 'block', marginTop: 2, fontSize: 9.5, color: '#667085', fontWeight: 700 } }, simulation?.active ? '系统建议 · 模拟中' : '系统建议'),
+      baseline ? h('span', { style: { display: 'block', marginTop: 1, fontSize: 9.5, color: '#6a7280', fontWeight: 700 } }, `${compareLabel} ${fmt(compareQty)} `, h('span', { style: { color: deltaColor } }, `| ${deltaLabel}`)) : h('span', { style: { display: 'block', marginTop: 1, fontSize: 9.5, color: '#a5acb8', fontWeight: 600 } }, '上周暂无'),
       state ? h('span', { style: { display: 'block', marginTop: 1, fontSize: 9.5, color: '#1a6d49', fontWeight: 700 } }, `${state.label} ${fmt(state.qty)}${state.locked ? ' 🔒' : ''}`) : null);
   };
   const sandboxHintOf = (row, week, change, value, sandbox, state) => {
@@ -1884,7 +1903,7 @@ function V19Table({ rows, allScopeRows, changes, confirmedRows, role, orderWeek,
             const baselineHint = week.baseline ? `；上周建议 ${fmt(week.baseline.systemSuggestQty)} 台${week.baseline.hasApproved ? `，上周人工 ${fmt(week.baseline.approvedQty)} 台` : '，上周未人工改动'}` : '；无上周基线';
             const interactionHint = sandbox ? sandboxHintOf(row, week, change, value, sandbox, state) : change ? `${V19_CHANGE_MARK[change.type]} ${V19_CHANGE_LABEL[change.type]}：系统建议 ${fmt(change.from)} → ${fmt(change.to)} 台 · ${V19_STATUS_TEXT[status]} · ${change.reason}${stateHint}${baselineHint}` : hasPlan ? `点击查看：系统建议 ${week.rows.length} 条${stateHint}${baselineHint}` : `该周尚未生成系统计划${baselineHint}`;
             const leadHint = week.eventLead ? `｜✈ 活动前置建议：${week.eventLead.eventStart || ''} 活动前到不了，改「${week.eventLead.fastChannel || '快渠道'}」可提前 ${fmt(week.eventLead.daysGain)} 天（到货 ${week.eventLead.fastAddDate || '-'}）；换渠道多付运费，由采购决定` : '';
-            return h(Tooltip, { key: index, title: interactionHint + leadHint }, h('td', { onClick: hasPlan ? () => onOpenDetail(row, index) : undefined, style: { position: 'relative', minWidth: 116, padding: '8px 7px', textAlign: 'center', borderBottom: border, borderRight: border, cursor: hasPlan ? 'pointer' : 'default', fontWeight: change || displayValue ? 800 : 500, color: sandbox ? '#5b3fc4' : change ? statusStyle.color : displayValue ? '#1f2329' : '#c2c8d0', background: sandbox ? '#f2edff' : actualPresent ? '#f3fbf6' : index >= 5 ? '#f6f3ff' : index === 0 ? '#ededf0' : statusStyle.bg, boxShadow: sandbox ? 'inset 0 0 0 2px #8b6cf0' : change && status !== 'ok' ? `inset 0 0 0 2px ${statusStyle.border}` : index >= 5 ? 'inset 0 2px 0 #8b6cf0, inset 0 -2px 0 #8b6cf0' : 'none' } }, sandbox ? h('span', { style: { position: 'absolute', top: 1, right: 3, fontSize: 9.5, color: '#6b4fd0', fontWeight: 900 } }, '沙盘') : change ? h('span', { style: { position: 'absolute', top: 2, right: 3, fontSize: 10.5, fontWeight: 900, color: statusStyle.color } }, V19_CHANGE_MARK[change.type]) : newAlgorithm ? h('span', { style: { position: 'absolute', top: 2, right: 3, color: '#7c3aed', fontSize: 10.5 } }, '⟳') : actualPresent ? h('span', { style: { position: 'absolute', top: 2, right: 3, color: '#1a6d49', fontSize: 10.5 } }, '◆') : null, change && status !== 'ok' ? h('span', { style: { position: 'absolute', top: 1, left: 3, fontSize: 10 } }, status === 'rej' ? '⛔' : '⏳') : null, week.eventLead ? h('span', { style: { position: 'absolute', bottom: 1, right: 3, fontSize: 9.5, color: '#1a5fb4', fontWeight: 800 } }, '✈') : null, hasPlan ? weekCellBody(value, state, { active: Boolean(sandbox), suggest: simulatedSuggest }, week.baseline) : h(React.Fragment, null, h('span', { style: { display: 'block', fontSize: 15, color: '#a5acb8' } }, '—'), h('span', { style: { display: 'block', marginTop: 2, fontSize: 9.5, color: '#a5acb8', fontWeight: 600 } }, '尚未生成'))));
+            return h(Tooltip, { key: index, title: interactionHint + leadHint }, h('td', { onClick: hasPlan ? () => onOpenDetail(row, index) : undefined, style: { position: 'relative', minWidth: 116, padding: '8px 7px', textAlign: 'center', borderBottom: border, borderRight: border, cursor: hasPlan ? 'pointer' : 'default', fontWeight: change || displayValue ? 800 : 500, color: sandbox ? '#5b3fc4' : change ? statusStyle.color : displayValue ? '#1f2329' : '#c2c8d0', background: sandbox ? '#f2edff' : actualPresent ? '#f3fbf6' : index >= 5 ? '#f6f3ff' : index === 0 ? '#ededf0' : statusStyle.bg, boxShadow: sandbox ? 'inset 0 0 0 2px #8b6cf0' : change && status !== 'ok' ? `inset 0 0 0 2px ${statusStyle.border}` : index >= 5 ? 'inset 0 2px 0 #8b6cf0, inset 0 -2px 0 #8b6cf0' : 'none' } }, sandbox ? h('span', { style: { position: 'absolute', top: 1, right: 3, fontSize: 9.5, color: '#6b4fd0', fontWeight: 900 } }, '沙盘') : change ? h('span', { style: { position: 'absolute', top: 2, right: 3, fontSize: 10.5, fontWeight: 900, color: statusStyle.color } }, V19_CHANGE_MARK[change.type]) : newAlgorithm ? h('span', { style: { position: 'absolute', top: 2, right: 3, color: '#8a9099', fontSize: 10.5 } }, '⟳') : actualPresent ? h('span', { style: { position: 'absolute', top: 2, right: 3, color: '#1a6d49', fontSize: 10.5 } }, '◆') : null, change && status !== 'ok' ? h('span', { style: { position: 'absolute', top: 1, left: 3, fontSize: 10 } }, status === 'rej' ? '⛔' : '⏳') : null, week.eventLead ? h('span', { style: { position: 'absolute', bottom: 1, right: 3, fontSize: 9.5, color: '#1a5fb4', fontWeight: 800 } }, '✈') : null, hasPlan ? weekCellBody(value, state, { active: Boolean(sandbox), suggest: simulatedSuggest }, week.baseline) : h(React.Fragment, null, h('span', { style: { display: 'block', fontSize: 15, color: '#a5acb8' } }, '—'), h('span', { style: { display: 'block', marginTop: 2, fontSize: 9.5, color: '#a5acb8', fontWeight: 600 } }, '尚未生成'))));
           });
           return [h('tr', { key: row.key, style: { background: open ? '#f7faff' : rowIndex % 2 ? '#fafbfc' : '#fff', boxShadow: open ? 'inset 0 2px 0 #8fb1ff' : 'none' } },
             h('td', { onClick: () => setExpanded((current) => ({ ...current, [row.key]: !current[row.key] })), style: { width: 32, cursor: 'pointer', color: open ? '#3370ff' : '#8a929c', borderBottom: border, borderRight: border, textAlign: 'center', padding: '8px 6px' } }, open ? '▼' : '▶'),
