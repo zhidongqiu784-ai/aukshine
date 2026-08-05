@@ -2,7 +2,7 @@
   const React = ctx.libs.React;
   const { useState, useRef, useMemo, useCallback, useEffect, useSyncExternalStore } = React;
   const { Pagination, Input, InputNumber, Select, DatePicker, Drawer, Table, Button, Popconfirm, ConfigProvider, Tooltip, Modal, Upload } = ctx.libs.antd;
-  const { DeleteOutlined, SaveOutlined, UploadOutlined, DownloadOutlined } = ctx.libs.antdIcons || {};
+  const { DeleteOutlined, SaveOutlined, UploadOutlined, DownloadOutlined, StarFilled } = ctx.libs.antdIcons || {};
 
   const currentUserId    = await ctx.getVar('ctx.user.id') || null;
   const currentUserName  = await ctx.getVar('ctx.user.username') || 'guest';
@@ -11,6 +11,7 @@
   const COLUMN_VIEW_SETTING_KEY = `${BLOCK_UID}__column_view_setting`;
   const DEFAULT_COLUMN_VIEWS_KEY = `${BLOCK_UID}__default_column_views`;
   const CHART_QUICK_SETTING_KEY = `${BLOCK_UID}__chart_quick_groups`;
+  const IMPORTANT_CELL_SETTING_KEY = `${BLOCK_UID}__important_cells`;
   const BLOCK_NAME       = '合并板块';
   const BLOCK_NAME_SETTING_KEY = `${BLOCK_UID}__block_name`;
   const COLUMN_GROUP_ORDER_KEY = '__column_group_order';
@@ -503,6 +504,47 @@
     { value:'custom',    label:'自定义日期' },
   ];
   const TREND_CHART_FIELD_KEY_SET = new Set(TREND_CHART_FIELDS.map((field) => field.key));
+  const IMPORTANT_CELL_BACKGROUND = '#FFF1F0';
+  const IMPORTANT_CELL_COLOR = '#CF1322';
+  const IMPORTANT_CELL_BORDER = '#FF7875';
+  const normalizeImportantCellKeys = (value) => {
+    const rawKeys = Array.isArray(value?.keys) ? value.keys : (Array.isArray(value) ? value : []);
+    return Array.from(new Set(rawKeys.map((key) => String(key || '').trim()).filter(Boolean)));
+  };
+  const getImportantCellRowKey = (row) => {
+    if (!row) return null;
+    const rowType = row.__rowType || 'data';
+    const rawKey = row.country_asin_date || row.country_asin_week_range || row.id;
+    return rawKey == null || rawKey === '' ? null : `${rowType}:${String(rawKey)}`;
+  };
+  const getImportantCellKey = (row, col) => {
+    const rowKey = getImportantCellRowKey(row);
+    const columnKey = String(col?.key || '').trim();
+    return rowKey && columnKey ? JSON.stringify([rowKey, columnKey]) : null;
+  };
+  const loadImportantCellKeysFromUser = async () => {
+    if (!currentUserId) return [];
+    const userRes = await ctx.request({ url: 'users:get', method: 'get', params: { filterByTk: currentUserId } });
+    return normalizeImportantCellKeys(userRes?.data?.data?.setting?.[IMPORTANT_CELL_SETTING_KEY]);
+  };
+  const saveImportantCellKeysToUser = async (keys) => {
+    if (!currentUserId) throw new Error('未识别到当前用户');
+    const userRes = await ctx.request({ url: 'users:get', method: 'get', params: { filterByTk: currentUserId } });
+    const existingSetting = userRes?.data?.data?.setting || {};
+    await ctx.request({
+      url: 'users:update',
+      method: 'post',
+      params: { filterByTk: currentUserId },
+      data: {
+        setting: {
+          ...existingSetting,
+          [IMPORTANT_CELL_SETTING_KEY]: { keys: normalizeImportantCellKeys(keys) },
+          [BLOCK_NAME_SETTING_KEY]: BLOCK_NAME,
+        },
+      },
+    });
+    return true;
+  };
   const normalizeTrendChartQuickGroups = (groups) => {
     if (!Array.isArray(groups)) return [];
     const seenIds = new Set();
@@ -3443,6 +3485,27 @@
     });
   });
 
+  const ImportantCellMarker = React.memo(({ visible }) => {
+    if (!visible) return null;
+    return React.createElement('span', {
+      title: '重点单元格',
+      'aria-label': '重点单元格',
+      style: {
+        position: 'absolute',
+        top: '2px',
+        right: '3px',
+        zIndex: 4,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: IMPORTANT_CELL_COLOR,
+        fontSize: '11px',
+        lineHeight: 1,
+        pointerEvents: 'none',
+      },
+    }, StarFilled ? React.createElement(StarFilled) : '★');
+  });
+
   // 推送配置面板
   // 推送配置面板
   // 推送配置面板
@@ -4681,6 +4744,7 @@
     const [crossHighlightEnabled, setCrossHighlightEnabled] = useState(false);
     const [crossHighlightColor, setCrossHighlightColor] = useState(DEFAULT_ACTIVE_CROSS_HIGHLIGHT_COLOR);
     const [showCrossHighlightPanel, setShowCrossHighlightPanel] = useState(false);
+    const [importantCellKeys, setImportantCellKeys] = useState([]);
     // 日期筛选状态
     const [dateFilterType, setDateFilterType]   = useState('recent_future');
     const [customDateRange, setCustomDateRange] = useState(null);
@@ -4706,6 +4770,12 @@
     const selectionStoreRef = useRef(null);
     if (!selectionStoreRef.current) selectionStoreRef.current = createSelectionStore();
     const selectionStore = selectionStoreRef.current;
+    const importantCellKeysRef = useRef([]);
+    const importantCellsLoadedRef = useRef(false);
+    const importantCellPendingOperationsRef = useRef([]);
+    const importantCellSaveStateRef = useRef({ timer: null, running: false, dirty: false, retryCount: 0 });
+    const importantCellFlushSaveRef = useRef(null);
+    const importantCellAltPressRef = useRef(null);
     const undoStackRef = useRef([]);
     const columnHighlightTimerRef = useRef(null);
     const columnViewSwitchSeqRef = useRef(0);
@@ -4729,6 +4799,53 @@
     const filterModel   = urlParams?.model   || null;
     const filterSaleOwner = urlParams?.saleOwner || urlParams?.sale_owner || null;
     const hasRequiredUrlParams = !!(filterModel && filterCountry && filterAsin && filterSaleOwner);
+
+    useEffect(() => {
+      let cancelled = false;
+      let hasPendingChanges = false;
+      loadImportantCellKeysFromUser()
+        .then((keys) => {
+          if (cancelled) return;
+          const nextKeySet = new Set(keys);
+          const pendingOperations = importantCellPendingOperationsRef.current;
+          pendingOperations.forEach((operation) => {
+            operation.keys.forEach((key) => {
+              if (operation.mode === 'add') nextKeySet.add(key);
+              else if (operation.mode === 'remove') nextKeySet.delete(key);
+              else if (nextKeySet.has(key)) nextKeySet.delete(key);
+              else nextKeySet.add(key);
+            });
+          });
+          hasPendingChanges = pendingOperations.length > 0;
+          importantCellPendingOperationsRef.current = [];
+          const nextKeys = Array.from(nextKeySet);
+          importantCellKeysRef.current = nextKeys;
+          setImportantCellKeys(nextKeys);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          hasPendingChanges = importantCellPendingOperationsRef.current.length > 0;
+          importantCellPendingOperationsRef.current = [];
+        })
+        .finally(() => {
+          if (cancelled) return;
+          importantCellsLoadedRef.current = true;
+          if (hasPendingChanges) {
+            const saveState = importantCellSaveStateRef.current;
+            saveState.dirty = true;
+            if (saveState.timer) clearTimeout(saveState.timer);
+            saveState.timer = setTimeout(() => {
+              saveState.timer = null;
+              importantCellFlushSaveRef.current?.();
+            }, 250);
+          }
+        });
+      return () => {
+        cancelled = true;
+        const saveState = importantCellSaveStateRef.current;
+        if (saveState.timer) clearTimeout(saveState.timer);
+      };
+    }, []);
 
     useEffect(function() {
       function setResolvedParams(search) {
@@ -8970,6 +9087,101 @@
       return r % 2 === 0 ? '#fff' : '#fafafa';
     }, [crossHighlightColor, isActiveCrossCell]);
 
+    const importantCellKeySet = useMemo(
+      () => new Set(importantCellKeys),
+      [importantCellKeys]
+    );
+
+    const flushImportantCellSave = useCallback(async () => {
+      const saveState = importantCellSaveStateRef.current;
+      if (saveState.running || !saveState.dirty || !importantCellsLoadedRef.current) return;
+
+      saveState.running = true;
+      saveState.dirty = false;
+      const keysToSave = [...importantCellKeysRef.current];
+      try {
+        await saveImportantCellKeysToUser(keysToSave);
+        saveState.retryCount = 0;
+      } catch (_) {
+        saveState.dirty = true;
+        saveState.retryCount += 1;
+      } finally {
+        saveState.running = false;
+        if (saveState.dirty && saveState.retryCount <= 3) {
+          if (saveState.timer) clearTimeout(saveState.timer);
+          saveState.timer = setTimeout(() => {
+            saveState.timer = null;
+            importantCellFlushSaveRef.current?.();
+          }, saveState.retryCount > 0 ? 1000 : 250);
+        }
+      }
+    }, []);
+    importantCellFlushSaveRef.current = flushImportantCellSave;
+
+    const scheduleImportantCellSave = useCallback(() => {
+      const saveState = importantCellSaveStateRef.current;
+      saveState.dirty = true;
+      saveState.retryCount = 0;
+      if (saveState.timer) clearTimeout(saveState.timer);
+      if (!importantCellsLoadedRef.current) {
+        saveState.timer = null;
+        return;
+      }
+      saveState.timer = setTimeout(() => {
+        saveState.timer = null;
+        importantCellFlushSaveRef.current?.();
+      }, 250);
+    }, []);
+
+    const applyImportantCellOperation = useCallback((keys, mode) => {
+      const validKeys = Array.from(new Set(keys.filter(Boolean)));
+      if (!validKeys.length) return;
+      if (!importantCellsLoadedRef.current) {
+        importantCellPendingOperationsRef.current.push({ keys: validKeys, mode });
+      }
+
+      const nextKeySet = new Set(importantCellKeysRef.current);
+      validKeys.forEach((key) => {
+        if (mode === 'add') nextKeySet.add(key);
+        else if (mode === 'remove') nextKeySet.delete(key);
+        else if (nextKeySet.has(key)) nextKeySet.delete(key);
+        else nextKeySet.add(key);
+      });
+      const nextKeys = Array.from(nextKeySet);
+      importantCellKeysRef.current = nextKeys;
+      setImportantCellKeys(nextKeys);
+      scheduleImportantCellSave();
+    }, [scheduleImportantCellSave]);
+
+    const toggleImportantCell = useCallback((row, col) => {
+      const cellKey = getImportantCellKey(row, col);
+      if (!cellKey) return;
+      applyImportantCellOperation([cellKey], 'toggle');
+    }, [applyImportantCellOperation]);
+
+    const toggleSelectedImportantCells = useCallback((rect) => {
+      if (!rect) return;
+      const keys = [];
+      for (let r = rect.r1; r <= rect.r2; r += 1) {
+        const row = pagedData[r];
+        if (!row) continue;
+        const rowId = row.country_asin_date || row.id;
+        for (let c = rect.c1; c <= rect.c2; c += 1) {
+          const col = visibleCols[c];
+          if (!col) continue;
+          const mergedCell = rowId ? weeklyMergedCellMap[rowId]?.[col.key] : null;
+          if (mergedCell?.rowSpan === 0) continue;
+          const cellKey = getImportantCellKey(row, col);
+          if (cellKey) keys.push(cellKey);
+        }
+      }
+      const validKeys = Array.from(new Set(keys));
+      if (!validKeys.length) return;
+      const currentKeys = new Set(importantCellKeysRef.current);
+      const mode = validKeys.every((key) => currentKeys.has(key)) ? 'remove' : 'add';
+      applyImportantCellOperation(validKeys, mode);
+    }, [applyImportantCellOperation, pagedData, visibleCols, weeklyMergedCellMap]);
+
     const getClipboardValue = useCallback((col, row) => {
       const formatted = formatCell(col, row);
       return formatted === '—' ? '' : String(formatted ?? '');
@@ -9017,12 +9229,21 @@
       return target === clipboardRef.current || target === tableWrapRef.current;
     }, []);
 
-    const handleCellMouseDown = useCallback((e, r, c) => {
+    const handleCellMouseDown = useCallback((e, r, c, row, col) => {
       if (e.button !== 0 || isResizing) return;
 
       const tag = String(e.target?.tagName || '').toLowerCase();
       const closestEl = e.target?.closest?.('.ant-picker, .ant-select, .ant-input-number');
       if (['input', 'textarea', 'select', 'button'].includes(tag) || closestEl) return;
+
+      if (e.altKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (importantCellAltPressRef.current) importantCellAltPressRef.current.usedAsModifier = true;
+        toggleImportantCell(row, col);
+        return;
+      }
+
       if (editingCell) {
         pendingCellInteractionRef.current = { r, c, openEditor: false };
         return;
@@ -9037,7 +9258,7 @@
       setSelectionInputValue('');
       focusClipboardWithoutScroll();
       e.preventDefault();
-    }, [editingCell, focusClipboardWithoutScroll, isResizing, selectionStore]);
+    }, [editingCell, focusClipboardWithoutScroll, isResizing, selectionStore, toggleImportantCell]);
 
     const commitSelectionDraft = useCallback(() => {
       const draft = selectionDraftRef.current;
@@ -9723,12 +9944,20 @@
           target?.closest?.('[contenteditable="true"], .ant-input, .ant-input-number, .ant-select, .ant-picker'))
       ) return;
       const rect = normalizeSelection(selectedRange);
+      if (e.key !== 'Alt' && importantCellAltPressRef.current) {
+        importantCellAltPressRef.current.usedAsModifier = true;
+      }
       if ((e.ctrlKey || e.metaKey) && String(e.key || '').toLowerCase() === 'z') {
         e.preventDefault();
         undoLastEdit();
         return;
       }
       if (!rect) return;
+      if (e.key === 'Alt') {
+        e.preventDefault();
+        if (!e.repeat) importantCellAltPressRef.current = { usedAsModifier: false };
+        return;
+      }
       if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
         setSelectionInputValue((prev) => `${prev || ''}${e.key}`);
@@ -9755,6 +9984,17 @@
       e.preventDefault();
       clearSelectedCells();
     }, [clearSelectedCells, editingCell, fillSelectedCells, normalizeSelection, saving, selectedRange, selectionInputValue, undoLastEdit]);
+
+    const handleKeyUp = useCallback((e) => {
+      if (e.key !== 'Alt') return;
+      const altPress = importantCellAltPressRef.current;
+      importantCellAltPressRef.current = null;
+      if (!altPress) return;
+      e.preventDefault();
+      if (altPress.usedAsModifier || editingCell || saving) return;
+      const rect = normalizeSelection(selectedRange);
+      if (rect) toggleSelectedImportantCells(rect);
+    }, [editingCell, normalizeSelection, saving, selectedRange, toggleSelectedImportantCells]);
 
     const startEdit = useCallback((rowId, col, currentValue) => {
       if (saving) return;
@@ -11446,6 +11686,7 @@
         onCopy: handleCopy,
         onPaste: handlePaste,
         onKeyDown: handleKeyDown,
+        onKeyUp: handleKeyUp,
         tabIndex: -1,
         'aria-hidden': true,
         style: {
@@ -11467,6 +11708,7 @@
         onCopy: handleCopy,
         onPaste: handlePaste,
         onKeyDown: handleKeyDown,
+        onKeyUp: handleKeyUp,
         onDragOver: onTableDragOver,
         onMouseUp: stopSelecting,
         onMouseLeave: stopSelecting,
@@ -11668,8 +11910,24 @@
                         const selected  = isCellSelected(rIdx, cIdx);
                         const isSelectionInputCell = selectionInputValue !== '' && selected && canEdit;
                         const isHighlighted = highlightColumnKey === col.key;
+                        const isCrossHighlighted = isActiveCrossCell(rIdx, cIdx);
+                        const importantCellKey = getImportantCellKey(row, col);
+                        const isImportantCell = !!importantCellKey && importantCellKeySet.has(importantCellKey);
                         const bodyCellBackground = getBodyCellBackground(rIdx, cIdx, selected, col);
-                        const cellBackground = isSummaryRow ? WEEKLY_SUMMARY_BG : (isHighlighted ? '#FFF7D6' : bodyCellBackground);
+                        const cellBackground = isSummaryRow
+                          ? WEEKLY_SUMMARY_BG
+                          : (isHighlighted
+                            ? '#FFF7D6'
+                            : ((selected || isCrossHighlighted) ? bodyCellBackground : (isImportantCell ? IMPORTANT_CELL_BACKGROUND : bodyCellBackground)));
+                        const cellBoxShadow = selected
+                          ? 'inset 0 0 0 2px #1677ff'
+                          : (isHighlighted
+                            ? 'inset 0 0 0 2px #faad14'
+                            : (isCrossHighlighted
+                              ? (isPinned ? '1px 0 0 rgba(0,0,0,0.05)' : undefined)
+                              : (isImportantCell
+                                ? `inset 0 0 0 2px ${IMPORTANT_CELL_BORDER}`
+                                : (isPinned ? '1px 0 0 rgba(0,0,0,0.05)' : undefined))));
                         const weeklyMergedCell = !isSummaryRow && MERGED_WEEKLY_DISPLAY_FIELDS.has(col.field)
                           ? weeklyMergedCellMap[rowId]?.[col.key]
                           : null;
@@ -11710,7 +11968,7 @@
                           return React.createElement('td', {
                             key: col.key,
                             rowSpan: weeklyMergedCell?.rowSpan || undefined,
-                            onMouseDown: (e) => handleCellMouseDown(e, rIdx, cIdx),
+                            onMouseDown: (e) => handleCellMouseDown(e, rIdx, cIdx, row, col),
                             onDoubleClickCapture: openRichEditorFromCell,
                             onMouseEnter: (e) => handleCellMouseEnter(e, rIdx, cIdx),
                             style: {
@@ -11725,7 +11983,7 @@
                               verticalAlign: 'middle',
                               boxSizing: 'border-box',
                               userSelect: 'none',
-                              boxShadow: selected ? 'inset 0 0 0 2px #1677ff' : (isHighlighted ? 'inset 0 0 0 2px #faad14' : (isPinned ? '1px 0 0 rgba(0,0,0,0.05)' : undefined)),
+                              boxShadow: cellBoxShadow,
                             },
                           },
                             React.createElement(RichTextImageCell, {
@@ -11737,6 +11995,7 @@
                               cellBackground,
                               onAfterSaveExit: focusClipboardWithoutScroll,
                             }),
+                            React.createElement(ImportantCellMarker, { visible: isImportantCell }),
                             React.createElement(SelectionOverlay, {
                               store: selectionStore,
                               rowIndex: rIdx,
@@ -11757,7 +12016,7 @@
                           key: col.key,
                           rowSpan: weeklyMergedCell?.rowSpan || undefined,
                           title: typeof renderedContent === 'string' ? renderedContent : (typeof displayContent === 'string' ? displayContent : undefined),
-                          onMouseDown: (e) => handleCellMouseDown(e, rIdx, cIdx),
+                          onMouseDown: (e) => handleCellMouseDown(e, rIdx, cIdx, row, col),
                           onDoubleClick: () => {
                             if (!canEdit || isEditing) return;
                             const currentValue = getCellValue(col, row);
@@ -11788,7 +12047,7 @@
                             userSelect: 'none',
                             cursor: canEdit && !isEditing ? 'cell' : 'default',
                             outline: canEdit && !isEditing ? '1px dashed transparent' : undefined,
-                            boxShadow: selected ? 'inset 0 0 0 2px #1677ff' : (isHighlighted ? 'inset 0 0 0 2px #faad14' : (isPinned ? '1px 0 0 rgba(0,0,0,0.05)' : undefined)),
+                            boxShadow: cellBoxShadow,
                           },
                           onMouseEnter: (e) => {
                             handleCellMouseEnter(e, rIdx, cIdx);
@@ -11797,6 +12056,7 @@
                           onMouseLeave: canEdit && !isEditing ? (e) => { e.currentTarget.style.outline = '1px dashed transparent'; } : undefined,
                         },
                           isEditing ? renderEditInput(col) : renderedContent,
+                          React.createElement(ImportantCellMarker, { visible: isImportantCell }),
                           React.createElement(SelectionOverlay, {
                             store: selectionStore,
                             rowIndex: rIdx,
@@ -11812,7 +12072,13 @@
       ),
 
       // 分页
-      React.createElement('div', { style: { marginTop: '6px', padding: '0 2px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center' } },
+      React.createElement('div', { style: { marginTop: '6px', padding: '0 2px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' } },
+        React.createElement('div', {
+          style: { flex: '1 1 420px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: '2px', color: '#64748B', fontSize: '12px', lineHeight: '20px' },
+        },
+          React.createElement('span', null, '① 标注重点：选中单元格（支持多选）后按 Alt 键标注，再按Alt 键取消标注；'),
+          React.createElement('span', null, '② 快捷写入：单击选中单元格 直接输入数字后，按 Enter 写入。'),
+        ),
         React.createElement(Pagination, {
           current: curPage, pageSize, total,
           locale: PAGINATION_LOCALE,
@@ -11822,7 +12088,8 @@
           showTotal: (t, range) => `第 ${range[0]}-${range[1]} 条，共 ${t} 条`,
           onChange: onPageChange,
           onShowSizeChange: onPageChange,
-          disabled: loading
+          disabled: loading,
+          style: { marginLeft: 'auto' },
         })
       ),
     );
