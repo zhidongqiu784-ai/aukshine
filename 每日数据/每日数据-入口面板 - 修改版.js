@@ -119,17 +119,32 @@ function buildScope(users, currentUser) {
 
   const currentNameSet = new Set(getUserAliases(userRecord).concat(getUserAliases(currentUser)).filter(Boolean));
   const managedUsers = users.filter((user) => currentNameSet.has(normalizeText(user?.department_manager)));
-  if (managedUsers.length) {
+  const departmentManagerNames = new Set(
+    users.map((user) => normalizeText(user?.department_manager)).filter(Boolean)
+  );
+  const directDepartmentManagers = users.filter((user) => (
+    currentNameSet.has(normalizeText(user?.manager))
+    && getUserAliases(user).some((name) => departmentManagerNames.has(name))
+  ));
+  const directDepartmentManagerNames = new Set(
+    directDepartmentManagers.flatMap(getUserAliases)
+  );
+  const supervisedDepartmentUsers = users.filter((user) => (
+    directDepartmentManagerNames.has(normalizeText(user?.department_manager))
+  ));
+  if (managedUsers.length || directDepartmentManagers.length) {
     const names = new Set();
-    managedUsers.forEach((user) => getUserAliases(user).forEach((name) => names.add(name)));
+    const visibleUsers = managedUsers.concat(directDepartmentManagers, supervisedDepartmentUsers);
+    visibleUsers.forEach((user) => getUserAliases(user).forEach((name) => names.add(name)));
     getUserAliases(userRecord).forEach((name) => names.add(name));
-    const managedDepartments = Array.from(new Set(managedUsers.flatMap(getUserDepartments)));
+    const managedDepartments = Array.from(new Set(visibleUsers.flatMap(getUserDepartments)));
+    const isDirectSupervisor = directDepartmentManagers.length > 0;
     return {
       mode: 'manager',
-      label: '部门主管视图',
+      label: isDirectSupervisor ? '直属主管视图' : '部门主管视图',
       helper: managedDepartments.length
-        ? `显示 ${managedDepartments.join(' / ')} 部门销售数据`
-        : '显示部门主管负责的销售数据',
+        ? `显示 ${managedDepartments.join(' / ')} ${isDirectSupervisor ? '所辖部门' : '部门'}销售数据`
+        : isDirectSupervisor ? '显示直属主管所辖部门销售数据' : '显示部门主管负责的销售数据',
       allowedSaleNames: names,
     };
   }
@@ -443,6 +458,7 @@ function renderSourceTooltip() {
     renderTooltipSection('人员', [
       ['销售身份', 'users.username'],
       ['部门主管', 'users.department_manager'],
+      ['直属主管', 'users.manager'],
     ]),
     renderTooltipSection('筛选', [
       ['状态', '重点 / 普通 / 新品'],
@@ -450,7 +466,8 @@ function renderSourceTooltip() {
     ]),
     renderTooltipSection('权限', [
       ['管理员', '全部数据'],
-      ['主管', '本部门数据'],
+      ['直属主管', '下属部门数据'],
+      ['部门主管', '本部门数据'],
       ['销售', '本人数据'],
     ])
   );
