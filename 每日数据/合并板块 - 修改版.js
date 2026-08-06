@@ -28,6 +28,7 @@
   const FONT_SIZE    = 15;
   const FONT_SIZE_SM = FONT_SIZE - 1;
   const FONT_SIZE_XS = FONT_SIZE - 2;
+  const SAFE_WRITE_BATCH_SIZE = 10;
   const normalizeSearchText = (text) => String(text || '').trim().toLowerCase();
 
   const DATE_PICKER_LOCALE = {
@@ -3213,17 +3214,26 @@
   ]);
   const FORMULA_INPUT_FIELDS = new Set([
     'date',
+    'activity_annotation',
     'list_price',
     'daily_price',
     'price_after_discount',
     'promotion_days',
+    'number_of_comments',
+    'rsg_number',
     'target_order_qty',
+    'target_subcategory_rank',
     'review_discounted_price',
     'sales',
     'guanggaodan',
+    'guanggaodianji',
     'zongliuliang',
     'page_views_total',
     'guanggaohuafei',
+    'ranking',
+    'guanggaocvr',
+    'cpa',
+    'cpu',
     'flash_sale_qty',
     'flash_sale_price',
     'flash_sale_days',
@@ -4762,6 +4772,22 @@
     const weeklySummaryMapRef = useRef({});
     const pendingFormulaAsinCountriesRef = useRef(new Set());
     const backgroundFormulaTimerRef = useRef(null);
+    const formulaExecutionTailRef = useRef(Promise.resolve());
+    const summaryExecutionTailRef = useRef(Promise.resolve());
+    const formulaRevisionRef = useRef(0);
+    const editSessionSequenceRef = useRef(0);
+    const submittedEditSessionRef = useRef(null);
+    const cellSaveStateRef = useRef({
+      sequence: 0,
+      latestVersionByCell: new Map(),
+      committedValueByCell: new Map(),
+      tailsByCell: new Map(),
+      pendingPromises: new Set(),
+      overlays: new Map(),
+      pendingFormulaCount: 0,
+      formulaRowsByKey: new Map(),
+      formulaTimer: null,
+    });
     const backgroundMergeSummaryRef = useRef({ timer: null, running: false, pendingForce: false });
     const currentPageMergeSummaryRef = useRef({ timer: null, running: false, pendingKeys: new Set() });
     const selectingRef = useRef(false);
@@ -4792,6 +4818,20 @@
     const panelPos    = useFloatPos(panelBtnRef, showPanel);
     const pushPos     = useFloatPos(pushBtnRef, showPush);
     const crossHighlightPos = useFloatPos(crossHighlightBtnRef, showCrossHighlightPanel);
+
+    const enqueueSerialTask = useCallback((tailRef, task) => {
+      const taskPromise = tailRef.current.catch(() => undefined).then(task);
+      tailRef.current = taskPromise.catch(() => undefined);
+      return taskPromise;
+    }, []);
+    const runCoreFormulaTask = useCallback(
+      (task) => enqueueSerialTask(formulaExecutionTailRef, task),
+      [enqueueSerialTask]
+    );
+    const runFullSummaryTask = useCallback(
+      (task) => enqueueSerialTask(summaryExecutionTailRef, task),
+      [enqueueSerialTask]
+    );
 
     const [urlParams, setUrlParams] = useState(() => loadUrlParams());
     const filterAsin    = urlParams?.asin    || null;
@@ -5205,8 +5245,8 @@
       }
       let updateCount = 0;
       let failCount = 0;
-      for (let i = 0; i < updateJobs.length; i += 100) {
-        const batch = updateJobs.slice(i, i + 100);
+      for (let i = 0; i < updateJobs.length; i += SAFE_WRITE_BATCH_SIZE) {
+        const batch = updateJobs.slice(i, i + SAFE_WRITE_BATCH_SIZE);
         const results = await Promise.allSettled(
           batch.map((job) => ctx.request({
             url: 'daily_asins:update',
@@ -5379,7 +5419,7 @@
       return { country, asin, start, end };
     }
 
-    async function loadDailyRowsForSummaryKeys(summaryKeys) {
+    const loadDailyRowsForSummaryKeys = useCallback(async (summaryKeys) => {
       const groups = {};
       (Array.isArray(summaryKeys) ? summaryKeys : []).forEach((key) => {
         const parts = parseWeeklySummaryKeyParts(key);
@@ -5405,18 +5445,7 @@
         if (row?.country_asin_date) rowMap[row.country_asin_date] = row;
       });
       return Object.values(rowMap);
-    }
-
-    async function refreshFullWeeklySummariesForKeys(summaryKeys, options = {}) {
-      const keys = [...new Set((Array.isArray(summaryKeys) ? summaryKeys : []).filter(Boolean))];
-      if (!keys.length) return {};
-      const rows = await loadDailyRowsForSummaryKeys(keys);
-      if (!rows.length) return {};
-      const { mergedRows, summaryCols } = await mergeDailyRowsForWeeklySummary(rows, {
-        updateDynamicColumns: options.updateDynamicColumns === true,
-      });
-      return refreshWeeklySummariesFromRows(mergedRows, summaryCols, { summaryKeys: keys });
-    }
+    }, [fetchAllList]);
 
     function scheduleCurrentPageMergeSummaryRefresh(summaryKeys, options = {}) {
       const keys = [...new Set((Array.isArray(summaryKeys) ? summaryKeys : []).filter(Boolean))];
@@ -5436,7 +5465,7 @@
         state.running = true;
         try {
           showFormulaProgress({ label: '更新本页汇总...', percent: 18 });
-          await refreshFullWeeklySummariesForKeys(keysToRefresh);
+          await runFullSummaryTask(() => refreshFullWeeklySummariesForKeys(keysToRefresh));
           if (options.keepProgressForBackground) {
             showFormulaProgress({ label: '本页已更新，全量排队...', percent: 35 });
           } else {
@@ -5451,29 +5480,6 @@
         }
       }, Number(options.delay) || 120);
     }
-
-    const updateDataAndRefreshWeekly = useCallback((updater, cols = INITIAL_COLUMNS) => {
-      const prevRows = Array.isArray(dataRef.current) ? dataRef.current : [];
-      const nextRows = typeof updater === 'function' ? updater(prevRows) : updater;
-      const safeNextRows = Array.isArray(nextRows) ? nextRows : [];
-      const affectedKeys = new Set();
-      const maxLen = Math.max(prevRows.length, safeNextRows.length);
-      for (let i = 0; i < maxLen; i += 1) {
-        if (prevRows[i] === safeNextRows[i]) continue;
-        const prevKey = getSummaryKeyForRow(prevRows[i]);
-        const nextKey = getSummaryKeyForRow(safeNextRows[i]);
-        if (prevKey) affectedKeys.add(prevKey);
-        if (nextKey) affectedKeys.add(nextKey);
-      }
-      dataRef.current = safeNextRows;
-      setData(safeNextRows);
-      setTimeout(() => {
-        if (!affectedKeys.size) return;
-        refreshFullWeeklySummariesForKeys([...affectedKeys])
-          .catch((err) => ctx.message.warning(`周汇总刷新失败：${err?.message || ''}`));
-      }, 0);
-      return safeNextRows;
-    }, [getSummaryKeyForRow, refreshWeeklySummariesFromRows]);
 
     const updateDataLocalOnly = useCallback((updater) => {
       const prevRows = Array.isArray(dataRef.current) ? dataRef.current : [];
@@ -5501,26 +5507,17 @@
             .filter(Boolean)
         )
       ];
-      const weeklyParams = dailyKeys.length ? { filter: JSON.stringify({ country_asin_week: { $in: dailyKeys } }) } : {};
-      const profitParams = dailyKeys.length ? { filter: JSON.stringify({ country_asin_date: { $in: dailyKeys } }) } : {};
-      const targetParams = dailyKeys.length ? { filter: JSON.stringify({ country_asin_date: { $in: dailyKeys } }) } : {};
-      const countryAsinParams = countryAsinKeys.length ? { filter: JSON.stringify({ country_asin: { $in: countryAsinKeys } }) } : {};
-      const targetDefaultParams = countryAsinKeys.length ? { filter: JSON.stringify({ country_asin: { $in: countryAsinKeys } }) } : {};
-      const dailyKeyParams = dailyKeys.length ? { filter: JSON.stringify({ country_asin_date: { $in: dailyKeys } }) } : {};
-      const productConfigParams = productConfigAsinCountries.length ? { filter: JSON.stringify({ asin_country: { $in: productConfigAsinCountries } }) } : {};
-      const optionalFetchAll = (url, params, batchSize) => fetchAllList(url, params, batchSize).catch(() => []);
-
       const [weeklyRecords, targetRecords, targetDefaultRecords, profitRecords, orderLinkRecords, productConfigRecords, sqpKeywordRecords, sqpKeywordPositionRecords, competitorRecords, competitorDailyRecords] = await Promise.all([
-        dailyKeys.length ? fetchAllList('weekly_performance:list', weeklyParams, Math.max(100, dailyKeys.length * 2)) : [],
-        dailyKeys.length ? fetchAllList('target_management:list', targetParams, Math.max(100, dailyKeys.length * 2)) : [],
-        countryAsinKeys.length ? optionalFetchAll('target_default:list', targetDefaultParams, Math.max(100, countryAsinKeys.length * 2)) : [],
-        dailyKeys.length ? fetchAllList('daily_profit:list', profitParams, Math.max(100, dailyKeys.length * 2)) : [],
-        dailyKeys.length ? optionalFetchAll('daily_order_link_tracking:list', dailyKeyParams, Math.max(100, dailyKeys.length * 2)) : [],
-        productConfigAsinCountries.length ? optionalFetchAll('product_config:list', productConfigParams, Math.max(100, productConfigAsinCountries.length * 2)) : [],
-        countryAsinKeys.length ? optionalFetchAll('sqp_keywords:list', { ...countryAsinParams, sort: ['id'] }, Math.max(100, countryAsinKeys.length * 20)) : [],
-        dailyKeys.length ? optionalFetchAll('sqp_keyword_daily_positions:list', dailyKeyParams, Math.max(1000, dailyKeys.length * 20)) : [],
-        countryAsinKeys.length ? optionalFetchAll('order_link_competitor_asins:list', countryAsinParams, Math.max(100, countryAsinKeys.length * 5)) : [],
-        dailyKeys.length ? optionalFetchAll('order_link_competitor_asins_daily:list', dailyKeyParams, Math.max(100, dailyKeys.length * 5)) : [],
+        fetchAllByIn('weekly_performance:list', 'country_asin_week', dailyKeys, { chunkSize: 40, pageSize: 500 }),
+        fetchAllByIn('target_management:list', 'country_asin_date', dailyKeys, { chunkSize: 40, pageSize: 500 }),
+        fetchAllByIn('target_default:list', 'country_asin', countryAsinKeys, { chunkSize: 40, pageSize: 500 }).catch(() => []),
+        fetchAllByIn('daily_profit:list', 'country_asin_date', dailyKeys, { chunkSize: 40, pageSize: 500 }),
+        fetchAllByIn('daily_order_link_tracking:list', 'country_asin_date', dailyKeys, { chunkSize: 40, pageSize: 500 }).catch(() => []),
+        fetchAllByIn('product_config:list', 'asin_country', productConfigAsinCountries, { chunkSize: 40, pageSize: 500 }).catch(() => []),
+        fetchAllByIn('sqp_keywords:list', 'country_asin', countryAsinKeys, { chunkSize: 40, pageSize: 500, params: { sort: ['id'] } }).catch(() => []),
+        fetchAllByIn('sqp_keyword_daily_positions:list', 'country_asin_date', dailyKeys, { chunkSize: 40, pageSize: 500 }).catch(() => []),
+        fetchAllByIn('order_link_competitor_asins:list', 'country_asin', countryAsinKeys, { chunkSize: 40, pageSize: 500 }).catch(() => []),
+        fetchAllByIn('order_link_competitor_asins_daily:list', 'country_asin_date', dailyKeys, { chunkSize: 40, pageSize: 500 }).catch(() => []),
       ]);
 
       const keywordCols = buildDynamicKeywordCols(sqpKeywordRecords);
@@ -5609,7 +5606,41 @@
       });
 
       return { mergedRows, summaryCols: [...INITIAL_COLUMNS, ...keywordCols, ...competitorCols] };
-    }, [fetchAllList, syncDailyRsgNumbersFromOrders]);
+    }, [fetchAllByIn, syncDailyRsgNumbersFromOrders]);
+
+    const refreshFullWeeklySummariesForKeys = useCallback(async (summaryKeys, options = {}) => {
+      const keys = [...new Set((Array.isArray(summaryKeys) ? summaryKeys : []).filter(Boolean))];
+      if (!keys.length) return {};
+      const rows = await loadDailyRowsForSummaryKeys(keys);
+      if (!rows.length) return {};
+      const { mergedRows, summaryCols } = await mergeDailyRowsForWeeklySummary(rows, {
+        updateDynamicColumns: options.updateDynamicColumns === true,
+      });
+      return refreshWeeklySummariesFromRows(mergedRows, summaryCols, { summaryKeys: keys });
+    }, [loadDailyRowsForSummaryKeys, mergeDailyRowsForWeeklySummary, refreshWeeklySummariesFromRows]);
+
+    const updateDataAndRefreshWeekly = useCallback((updater, cols = INITIAL_COLUMNS) => {
+      const prevRows = Array.isArray(dataRef.current) ? dataRef.current : [];
+      const nextRows = typeof updater === 'function' ? updater(prevRows) : updater;
+      const safeNextRows = Array.isArray(nextRows) ? nextRows : [];
+      const affectedKeys = new Set();
+      const maxLen = Math.max(prevRows.length, safeNextRows.length);
+      for (let i = 0; i < maxLen; i += 1) {
+        if (prevRows[i] === safeNextRows[i]) continue;
+        const prevKey = getSummaryKeyForRow(prevRows[i]);
+        const nextKey = getSummaryKeyForRow(safeNextRows[i]);
+        if (prevKey) affectedKeys.add(prevKey);
+        if (nextKey) affectedKeys.add(nextKey);
+      }
+      dataRef.current = safeNextRows;
+      setData(safeNextRows);
+      setTimeout(() => {
+        if (!affectedKeys.size) return;
+        runFullSummaryTask(() => refreshFullWeeklySummariesForKeys([...affectedKeys]))
+          .catch((err) => ctx.message.warning(`周汇总刷新失败：${err?.message || ''}`));
+      }, 0);
+      return safeNextRows;
+    }, [getSummaryKeyForRow, refreshFullWeeklySummariesForKeys, runFullSummaryTask]);
 
     const estimateTextWidth = (text, fontSize) => String(text ?? '').length * fontSize * 0.62;
     const calcKeywordColWidth = (label) => Math.max(200, Math.min(360, Math.ceil(estimateTextWidth(label, FONT_SIZE_SM) + 48)));
@@ -5770,11 +5801,17 @@
       const silent = options.silent === true;
       const onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
       const preloadedDailyRows = Array.isArray(options.preloadedDailyRows) ? options.preloadedDailyRows.filter(Boolean) : [];
+      const requestedSummaryKeys = Array.isArray(options.summaryKeys) ? options.summaryKeys.filter(Boolean) : [];
+      const skipSummaryRefresh = options.skipSummaryRefresh === true;
+      const expectedFormulaRevision = Number.isFinite(Number(options.expectedFormulaRevision))
+        ? Number(options.expectedFormulaRevision)
+        : null;
+      const isStaleFormulaRun = () => expectedFormulaRevision != null && expectedFormulaRevision !== formulaRevisionRef.current;
       const rows = Array.isArray(sourceRows) ? sourceRows : [];
       const keys = [...new Set(rows.map((r) => r.country_asin_date || r.id).filter(Boolean))];
       if (!keys.length) {
         if (!silent) ctx.message.warning('当前没有可计算的数据');
-        return { total: 0, success: 0, skipped: 0 };
+        return { total: 0, success: 0, failCount: 0, skipped: 0 };
       }
 
         const asinCountries = [
@@ -5794,7 +5831,7 @@
 
       if (!asinCountries.length) {
         if (!silent) ctx.message.warning('当前数据缺少 ASIN/国家信息，无法计算公式');
-        return { total: 0, success: 0, skipped: keys.length };
+        return { total: 0, success: 0, failCount: 0, skipped: keys.length };
       }
 
       if (!silent) {
@@ -5842,37 +5879,39 @@
           if (!silent) ctx.message.warning(`活动标注匹配失败，已跳过：${err?.message || ''}`);
         }
         reportProgress(allDailyRows && allDailyRows.length <= rows.length ? '正在读取当前行关联数据...' : '正在读取试算与关联数据...', 22);
-        const pricingScenarioRows = await fetchAllByIn('pricing_scenarios:list', 'asin_country', asinCountries, {
-          chunkSize: 80,
-          pageSize: 500,
-        }).catch(() => []);
-        const pricingScenarioMap = buildPricingScenarioLookupMap(pricingScenarioRows);
         const allDailyKeys = [...new Set(dailyRowsForFormula.map((row) => row?.country_asin_date).filter(Boolean))];
-        const existingProfitRows = await fetchAllByIn('daily_profit:list', 'country_asin_date', allDailyKeys.length ? allDailyKeys : keys, {
-          chunkSize: 80,
-          pageSize: 500,
-        });
-        const existingOrderLinkRows = await fetchAllByIn('daily_order_link_tracking:list', 'country_asin_date', keys, {
-          chunkSize: 80,
-          pageSize: 500,
-        });
-        const existingTargetRows = await fetchAllByIn('target_management:list', 'country_asin_date', keys, {
-          chunkSize: 80,
-          pageSize: 500,
-        });
         const weeklyKeyCandidates = [...new Set(keys)];
-        const existingWeeklyRows = await fetchAllByIn('weekly_performance:list', 'country_asin_week', weeklyKeyCandidates, {
-          chunkSize: 80,
-          pageSize: 500,
-        }).catch(() => []);
-        const productConfigRows = await fetchAllByIn('product_config:list', 'asin_country', asinCountries, {
-          chunkSize: 80,
-          pageSize: 500,
-        }).catch(() => []);
-        const targetDefaultRows = await fetchAllByIn('target_default:list', 'country_asin', countryAsinKeys, {
-          chunkSize: 80,
-          pageSize: 500,
-        }).catch(() => []);
+        const [pricingScenarioRows, existingProfitRows, existingOrderLinkRows, existingTargetRows, existingWeeklyRows, productConfigRows, targetDefaultRows] = await Promise.all([
+          fetchAllByIn('pricing_scenarios:list', 'asin_country', asinCountries, {
+            chunkSize: 80,
+            pageSize: 500,
+          }).catch(() => []),
+          fetchAllByIn('daily_profit:list', 'country_asin_date', allDailyKeys.length ? allDailyKeys : keys, {
+            chunkSize: 80,
+            pageSize: 500,
+          }),
+          fetchAllByIn('daily_order_link_tracking:list', 'country_asin_date', keys, {
+            chunkSize: 80,
+            pageSize: 500,
+          }),
+          fetchAllByIn('target_management:list', 'country_asin_date', keys, {
+            chunkSize: 80,
+            pageSize: 500,
+          }),
+          fetchAllByIn('weekly_performance:list', 'country_asin_week', weeklyKeyCandidates, {
+            chunkSize: 80,
+            pageSize: 500,
+          }).catch(() => []),
+          fetchAllByIn('product_config:list', 'asin_country', asinCountries, {
+            chunkSize: 80,
+            pageSize: 500,
+          }).catch(() => []),
+          fetchAllByIn('target_default:list', 'country_asin', countryAsinKeys, {
+            chunkSize: 80,
+            pageSize: 500,
+          }).catch(() => []),
+        ]);
+        const pricingScenarioMap = buildPricingScenarioLookupMap(pricingScenarioRows);
         reportProgress(`正在计算 ${keys.length} 条公式...`, 42);
         const existingProfitMap = {};
         existingProfitRows.forEach((row) => {
@@ -6424,12 +6463,26 @@
         const stripWriteMeta = (updates) => Object.fromEntries(
           Object.entries(updates || {}).filter(([field]) => !writeMetaFields.has(field))
         );
+        const persistedPatchMap = {};
+        const recordPersistedPatch = (job, collection) => {
+          if (!job?.key) return;
+          const persistedUpdates = stripWriteMeta(job.updates);
+          if (collection === 'daily_order_link_tracking' && Object.prototype.hasOwnProperty.call(persistedUpdates, 'real_session_conversion_rate')) {
+            persistedUpdates.order_link_real_session_conversion_rate = persistedUpdates.real_session_conversion_rate;
+          }
+          persistedPatchMap[job.key] = { ...(persistedPatchMap[job.key] || {}), ...persistedUpdates };
+        };
+        const recordFulfilledPatches = (batch, results, collection) => {
+          results.forEach((result, index) => {
+            if (result.status === 'fulfilled') recordPersistedPatch(batch[index], collection);
+          });
+        };
 
         reportProgress(`准备写回 ${updateJobs.length + weeklyUpdateJobs.length + targetFormulaUpdateJobs.length + orderLinkUpdateJobs.length + profitUpdateJobs.length} 条...`, 55);
         let successCount = 0;
         let failCount = 0;
-        for (let i = 0; i < updateJobs.length; i += 100) {
-          const batch = updateJobs.slice(i, i + 100);
+        for (let i = 0; i < updateJobs.length && !isStaleFormulaRun(); i += SAFE_WRITE_BATCH_SIZE) {
+          const batch = updateJobs.slice(i, i + SAFE_WRITE_BATCH_SIZE);
           const results = await Promise.allSettled(
             batch.map((job) => ctx.request({
               url: 'daily_asins:update',
@@ -6440,13 +6493,14 @@
           );
           successCount += results.filter((r) => r.status === 'fulfilled').length;
           failCount += results.filter((r) => r.status === 'rejected').length;
+          recordFulfilledPatches(batch, results, 'daily_asins');
           const done = Math.min(i + batch.length, updateJobs.length);
           const percent = updateJobs.length ? 55 + (done / updateJobs.length) * 15 : 70;
           reportProgress(`正在写回日表 ${done}/${updateJobs.length}...`, percent);
         }
 
-        for (let i = 0; i < weeklyUpdateJobs.length; i += 100) {
-          const batch = weeklyUpdateJobs.slice(i, i + 100);
+        for (let i = 0; i < weeklyUpdateJobs.length && !isStaleFormulaRun(); i += SAFE_WRITE_BATCH_SIZE) {
+          const batch = weeklyUpdateJobs.slice(i, i + SAFE_WRITE_BATCH_SIZE);
           const results = await Promise.allSettled(
             batch.map((job) => ctx.request({
               url: 'weekly_performance:update',
@@ -6457,6 +6511,7 @@
           );
           successCount += results.filter((r) => r.status === 'fulfilled').length;
           failCount += results.filter((r) => r.status === 'rejected').length;
+          recordFulfilledPatches(batch, results, 'weekly_performance');
           const done = Math.min(i + batch.length, weeklyUpdateJobs.length);
           const percent = weeklyUpdateJobs.length ? 70 + (done / weeklyUpdateJobs.length) * 5 : 75;
           reportProgress(`正在写回周表现 ${done}/${weeklyUpdateJobs.length}...`, percent);
@@ -6492,37 +6547,40 @@
           }
         };
 
-        for (let i = 0; i < targetFormulaUpdateJobs.length; i += 100) {
-          const batch = targetFormulaUpdateJobs.slice(i, i + 100);
+        for (let i = 0; i < targetFormulaUpdateJobs.length && !isStaleFormulaRun(); i += SAFE_WRITE_BATCH_SIZE) {
+          const batch = targetFormulaUpdateJobs.slice(i, i + SAFE_WRITE_BATCH_SIZE);
           const results = await Promise.allSettled(
             batch.map((job) => persistFormulaRecord('target_management', job))
           );
           successCount += results.filter((r) => r.status === 'fulfilled').length;
           failCount += results.filter((r) => r.status === 'rejected').length;
+          recordFulfilledPatches(batch, results, 'target_management');
           const done = Math.min(i + batch.length, targetFormulaUpdateJobs.length);
           const percent = targetFormulaUpdateJobs.length ? 75 + (done / targetFormulaUpdateJobs.length) * 5 : 80;
           reportProgress(`正在写回目标公式 ${done}/${targetFormulaUpdateJobs.length}...`, percent);
         }
 
-        for (let i = 0; i < orderLinkUpdateJobs.length; i += 100) {
-          const batch = orderLinkUpdateJobs.slice(i, i + 100);
+        for (let i = 0; i < orderLinkUpdateJobs.length && !isStaleFormulaRun(); i += SAFE_WRITE_BATCH_SIZE) {
+          const batch = orderLinkUpdateJobs.slice(i, i + SAFE_WRITE_BATCH_SIZE);
           const results = await Promise.allSettled(
             batch.map((job) => persistFormulaRecord('daily_order_link_tracking', job))
           );
           successCount += results.filter((r) => r.status === 'fulfilled').length;
           failCount += results.filter((r) => r.status === 'rejected').length;
+          recordFulfilledPatches(batch, results, 'daily_order_link_tracking');
           const done = Math.min(i + batch.length, orderLinkUpdateJobs.length);
           const percent = orderLinkUpdateJobs.length ? 80 + (done / orderLinkUpdateJobs.length) * 5 : 85;
           reportProgress(`正在写回订单链接 ${done}/${orderLinkUpdateJobs.length}...`, percent);
         }
 
-        for (let i = 0; i < profitUpdateJobs.length; i += 100) {
-          const batch = profitUpdateJobs.slice(i, i + 100);
+        for (let i = 0; i < profitUpdateJobs.length && !isStaleFormulaRun(); i += SAFE_WRITE_BATCH_SIZE) {
+          const batch = profitUpdateJobs.slice(i, i + SAFE_WRITE_BATCH_SIZE);
           const results = await Promise.allSettled(
             batch.map((job) => persistFormulaRecord('daily_profit', job))
           );
           successCount += results.filter((r) => r.status === 'fulfilled').length;
           failCount += results.filter((r) => r.status === 'rejected').length;
+          recordFulfilledPatches(batch, results, 'daily_profit');
           const done = Math.min(i + batch.length, profitUpdateJobs.length);
           const percent = profitUpdateJobs.length ? 85 + (done / profitUpdateJobs.length) * 10 : 95;
           reportProgress(`正在写回利润 ${done}/${profitUpdateJobs.length}...`, percent);
@@ -6532,41 +6590,55 @@
         const summaryBaseRows = currentDataRows.length ? currentDataRows : rows;
         const patchedDataRows = summaryBaseRows.map((item) => {
           const itemKey = item.country_asin_date || item.id;
-          return patchMap[itemKey] ? mergeFormulaPatch(item, patchMap[itemKey]) : item;
+          return persistedPatchMap[itemKey] ? mergeFormulaPatch(item, persistedPatchMap[itemKey]) : item;
         });
-        let patchedSummaryKeys = patchedDataRows
-          .filter((item) => {
-            const itemKey = item.country_asin_date || item.id;
-            return !!patchMap[itemKey];
-          })
-          .map((item) => getSummaryKeyForRow(item))
-          .filter(Boolean);
-        if (!patchedSummaryKeys.length) {
-          patchedSummaryKeys = patchedDataRows.map((item) => getSummaryKeyForRow(item)).filter(Boolean);
-        }
+        const formulaRowsByKey = {};
+        rows.forEach((item) => {
+          const itemKey = item?.country_asin_date || item?.id;
+          if (itemKey) formulaRowsByKey[itemKey] = item;
+        });
+        const patchedSummaryKeys = [
+          ...requestedSummaryKeys,
+          ...Object.keys(persistedPatchMap)
+            .map((itemKey) => getSummaryKeyForRow(formulaRowsByKey[itemKey]))
+            .filter(Boolean),
+        ];
 
         let refreshedSummaryMap = {};
-        try {
-          refreshedSummaryMap = await refreshWeeklySummariesFromRows(patchedDataRows, INITIAL_COLUMNS, { summaryKeys: [...new Set(patchedSummaryKeys)] });
-        } catch (summaryErr) {
-          if (!silent) ctx.message.warning(`周汇总同步失败：${summaryErr?.message || ''}`);
+        let summaryFailCount = 0;
+        const uniqueSummaryKeys = [...new Set(patchedSummaryKeys)];
+        let staleFormulaRun = isStaleFormulaRun();
+        if (uniqueSummaryKeys.length && !skipSummaryRefresh && !staleFormulaRun) {
+          try {
+            refreshedSummaryMap = await runFullSummaryTask(() => refreshFullWeeklySummariesForKeys(uniqueSummaryKeys));
+          } catch (summaryErr) {
+            summaryFailCount = 1;
+            if (!silent) ctx.message.warning(`周汇总同步失败：${summaryErr?.message || ''}`);
+          }
+          staleFormulaRun = isStaleFormulaRun();
         }
-        const nextSummaryMap = { ...(weeklySummaryMapRef.current || {}), ...(refreshedSummaryMap || {}) };
-        const displayPatchedRows = attachWeeklySummaryDataToRows(patchedDataRows, nextSummaryMap);
-        dataRef.current = displayPatchedRows;
-        setData(displayPatchedRows);
+        const totalFailCount = failCount + summaryFailCount;
+        if (!staleFormulaRun) {
+          const nextSummaryMap = { ...(weeklySummaryMapRef.current || {}), ...(refreshedSummaryMap || {}) };
+          const displayPatchedRows = attachWeeklySummaryDataToRows(patchedDataRows, nextSummaryMap);
+          dataRef.current = displayPatchedRows;
+          setData(displayPatchedRows);
+        }
 
         if (!silent) {
-          if (!updateJobs.length && !weeklyUpdateJobs.length && !targetFormulaUpdateJobs.length && !profitUpdateJobs.length && !orderLinkUpdateJobs.length && !Object.keys(refreshedSummaryMap || {}).length) {
+          if (totalFailCount) ctx.message.warning(`公式计算完成：成功 ${successCount} 条，失败 ${totalFailCount} 条`);
+          else if (!updateJobs.length && !weeklyUpdateJobs.length && !targetFormulaUpdateJobs.length && !profitUpdateJobs.length && !orderLinkUpdateJobs.length && !Object.keys(refreshedSummaryMap || {}).length) {
             ctx.message.success('所有公式已是最新');
-          } else if (failCount) ctx.message.warning(`公式计算完成：成功 ${successCount} 条，失败 ${failCount} 条`);
-          else ctx.message.success(`公式计算完成：成功 ${successCount} 条`);
+          } else ctx.message.success(`公式计算完成：成功 ${successCount} 条`);
         }
-        reportProgress(`公式计算完成：成功 ${successCount} 条`, 100);
+        reportProgress(totalFailCount ? `公式计算存在 ${totalFailCount} 条失败` : `公式计算完成：成功 ${successCount} 条`, 100);
         return {
           total: updateJobs.length + weeklyUpdateJobs.length + targetFormulaUpdateJobs.length + orderLinkUpdateJobs.length + profitUpdateJobs.length,
           success: successCount,
+          failCount: totalFailCount,
           skipped: keys.length - Math.max(updateJobs.length, weeklyUpdateJobs.length, targetFormulaUpdateJobs.length, orderLinkUpdateJobs.length, profitUpdateJobs.length),
+          summaryKeys: uniqueSummaryKeys,
+          stale: staleFormulaRun,
         };
       } catch (err) {
         if (!silent) ctx.message.error(`公式计算失败：${err?.message || '未知错误'}`);
@@ -6577,7 +6649,7 @@
           setCalcProgress('');
         }
       }
-    }, [attachWeeklySummaryDataToRows, buildActivityAnnotationMatchMap, fetchAllByIn, getSummaryKeyForRow, refreshWeeklySummariesFromRows, syncDailyRsgNumbersFromOrders]);
+    }, [attachWeeklySummaryDataToRows, buildActivityAnnotationMatchMap, fetchAllByIn, getSummaryKeyForRow, refreshFullWeeklySummariesForKeys, runFullSummaryTask, syncDailyRsgNumbersFromOrders]);
 
     async function loadAllDailyRowsForCurrentCountryAsin() {
       if (!filterCountry || !filterAsin) return [];
@@ -6608,34 +6680,59 @@
         return key && keySet.has(key);
       });
       if (!rowsToRefresh.length) return {};
+      if (options.recalcFormulas !== false && cellSaveStateRef.current.pendingFormulaCount > 0) {
+        return { __stale: true };
+      }
 
+      let formulaFailCount = 0;
+      let formulaWasStale = false;
       if (options.recalcFormulas !== false) {
         reportProgress?.({ label: '计算日公式...', percent: 18 });
-        await recalcAllCoreFormulas(rowsToRefresh, {
-          silent: true,
-          preloadedDailyRows: rows,
-          onProgress: (progress) => {
-            if (!reportProgress) return;
-            const label = typeof progress === 'string' ? progress : (progress?.label || '正在计算日公式...');
-            const rawPercent = typeof progress === 'object' ? Number(progress?.percent) : null;
-            const percent = Number.isFinite(rawPercent) ? 18 + rawPercent * 0.55 : 45;
-            reportProgress({ label, percent });
-          },
+        const expectedFormulaRevision = formulaRevisionRef.current;
+        const formulaResult = await runCoreFormulaTask(async () => {
+          const latestRows = await loadAllDailyRowsForCurrentCountryAsin();
+          const latestRowsToRefresh = latestRows.filter((row) => {
+            const key = getSummaryKeyForRow(row);
+            return key && keySet.has(key);
+          });
+          rows = latestRows;
+          rowsToRefresh = latestRowsToRefresh;
+          return recalcAllCoreFormulas(latestRowsToRefresh, {
+            silent: true,
+            preloadedDailyRows: latestRows,
+            skipSummaryRefresh: true,
+            expectedFormulaRevision,
+            onProgress: (progress) => {
+              if (!reportProgress) return;
+              const label = typeof progress === 'string' ? progress : (progress?.label || '正在计算日公式...');
+              const rawPercent = typeof progress === 'object' ? Number(progress?.percent) : null;
+              const percent = Number.isFinite(rawPercent) ? 18 + rawPercent * 0.55 : 45;
+              reportProgress({ label, percent });
+            },
+          });
         });
+        formulaFailCount = Number(formulaResult?.failCount) || 0;
+        formulaWasStale = formulaResult?.stale === true;
+      }
+
+      if (formulaWasStale) return { __stale: true };
+
+      const summaryResult = await runFullSummaryTask(async () => {
         reportProgress?.({ label: '读取最新数据...', percent: 76 });
         rows = await loadAllDailyRowsForCurrentCountryAsin();
         rowsToRefresh = rows.filter((row) => {
           const key = getSummaryKeyForRow(row);
           return key && keySet.has(key);
         });
-      }
-
-      reportProgress?.({ label: '汇总周数据...', percent: 86 });
-      const { mergedRows, summaryCols } = await mergeDailyRowsForWeeklySummary(rowsToRefresh, {
-        updateDynamicColumns: options.updateDynamicColumns === true,
+        reportProgress?.({ label: '汇总周数据...', percent: 86 });
+        const { mergedRows, summaryCols } = await mergeDailyRowsForWeeklySummary(rowsToRefresh, {
+          updateDynamicColumns: options.updateDynamicColumns === true,
+        });
+        reportProgress?.({ label: '写入周汇总...', percent: 94 });
+        return refreshWeeklySummariesFromRows(mergedRows, summaryCols, { summaryKeys: keysToRefresh });
       });
-      reportProgress?.({ label: '写入周汇总...', percent: 94 });
-      return refreshWeeklySummariesFromRows(mergedRows, summaryCols, { summaryKeys: keysToRefresh });
+      if (formulaFailCount) throw new Error(`公式写回失败 ${formulaFailCount} 条`);
+      return summaryResult;
     }
 
     function scheduleCurrentCountryAsinMergeSummarySync(options = {}) {
@@ -6649,16 +6746,26 @@
       state.timer = setTimeout(async () => {
         state.timer = null;
         if (state.running) return;
+        const currentPageState = currentPageMergeSummaryRef.current;
+        if (currentPageState.running || currentPageState.timer) {
+          scheduleCurrentCountryAsinMergeSummarySync({
+            force: state.pendingForce,
+            recalcFormulas: options.recalcFormulas,
+            delay: 300,
+          });
+          return;
+        }
         state.running = true;
         const force = state.pendingForce;
         state.pendingForce = false;
         try {
           showFormulaProgress({ label: '同步全量汇总...', percent: 5 });
-          await ensureCurrentCountryAsinMergeSummaries({
+          const syncResult = await ensureCurrentCountryAsinMergeSummaries({
             force,
             recalcFormulas: options.recalcFormulas !== false,
             onProgress: showFormulaProgress,
           });
+          if (syncResult?.__stale) return;
           finishFormulaProgress('全量同步完成');
         } catch (err) {
           resetFormulaProgress();
@@ -6670,10 +6777,33 @@
       }, Number(options.delay) || 800);
     }
 
+    const applyPendingCellOverlays = useCallback((rows, loadStartedAt) => {
+      const state = cellSaveStateRef.current;
+      let nextRows = Array.isArray(rows) ? rows : [];
+      state.overlays.forEach((overlay, cellKey) => {
+        if (overlay.status === 'saved' && overlay.savedAt > 0 && overlay.savedAt <= loadStartedAt) {
+          state.overlays.delete(cellKey);
+          state.committedValueByCell.delete(cellKey);
+          state.latestVersionByCell.delete(cellKey);
+          return;
+        }
+        if (typeof overlay.applyToRow !== 'function') return;
+        nextRows = nextRows.map((row) => (
+          (typeof overlay.matchesRow === 'function'
+            ? overlay.matchesRow(row)
+            : (row.country_asin_date || row.id) === overlay.rowId)
+            ? overlay.applyToRow(row)
+            : row
+        ));
+      });
+      return nextRows;
+    }, []);
+
     const loadData = useCallback(async (options = {}) => {
       const page = options.page ?? curPageRef.current;
       const size = options.size ?? pageSizeRef.current;
       const skipFormula = options.skipFormula === true;
+      const loadStartedAt = Date.now();
       try {
         setLoading(true);
         if (!hasRequiredUrlParams) {
@@ -6761,40 +6891,17 @@
         const dailyKeys = [...new Set(relatedDailyRecords.map((d) => d.country_asin_date).filter(Boolean))];
         const weeklyKeyCandidates = [...new Set(dailyKeys)];
         const countryAsinKeys = [...new Set(relatedDailyRecords.map((d) => toCountryAsinKey(d.country, d.asin)).filter(Boolean))];
-        const weeklyParams = dailyKeys.length
-          ? { filter: JSON.stringify({ country_asin_week: { $in: weeklyKeyCandidates } }) }
-          : {};
-        const profitParams = dailyKeys.length
-          ? { filter: JSON.stringify({ country_asin_date: { $in: dailyKeys } }) }
-          : {};
-        const targetParams = dailyKeys.length
-          ? { filter: JSON.stringify({ country_asin_date: { $in: dailyKeys } }) }
-          : {};
-        const countryAsinParams = countryAsinKeys.length
-          ? { filter: JSON.stringify({ country_asin: { $in: countryAsinKeys } }) }
-          : {};
-        const targetDefaultParams = countryAsinKeys.length
-          ? { filter: JSON.stringify({ country_asin: { $in: countryAsinKeys } }) }
-          : {};
-        const dailyKeyParams = dailyKeys.length
-          ? { filter: JSON.stringify({ country_asin_date: { $in: dailyKeys } }) }
-          : {};
-        const productConfigParams = productConfigAsinCountries.length
-          ? { filter: JSON.stringify({ asin_country: { $in: productConfigAsinCountries } }) }
-          : {};
-
-        const optionalFetchAll = (url, params, batchSize) => fetchAllList(url, params, batchSize).catch(() => []);
         const [weeklyRecords, targetRecords, targetDefaultRecords, profitRecords, orderLinkRecords, productConfigRecords, sqpKeywordRecords, sqpKeywordPositionRecords, competitorRecords, competitorDailyRecords] = await Promise.all([
-          dailyKeys.length ? fetchAllList('weekly_performance:list', weeklyParams, Math.max(100, dailyKeys.length * 2)) : [],
-          dailyKeys.length ? fetchAllList('target_management:list', targetParams, Math.max(100, dailyKeys.length * 2)) : [],
-          countryAsinKeys.length ? optionalFetchAll('target_default:list', targetDefaultParams, Math.max(100, countryAsinKeys.length * 2)) : [],
-          dailyKeys.length ? fetchAllList('daily_profit:list', profitParams, Math.max(100, dailyKeys.length * 2)) : [],
-          dailyKeys.length ? optionalFetchAll('daily_order_link_tracking:list', dailyKeyParams, Math.max(100, dailyKeys.length * 2)) : [],
-          productConfigAsinCountries.length ? optionalFetchAll('product_config:list', productConfigParams, Math.max(100, productConfigAsinCountries.length * 2)) : [],
-          countryAsinKeys.length ? optionalFetchAll('sqp_keywords:list', { ...countryAsinParams, sort: ['id'] }, Math.max(100, countryAsinKeys.length * 20)) : [],
-          dailyKeys.length ? optionalFetchAll('sqp_keyword_daily_positions:list', dailyKeyParams, Math.max(1000, dailyKeys.length * 20)) : [],
-          countryAsinKeys.length ? optionalFetchAll('order_link_competitor_asins:list', countryAsinParams, Math.max(100, countryAsinKeys.length * 5)) : [],
-          dailyKeys.length ? optionalFetchAll('order_link_competitor_asins_daily:list', dailyKeyParams, Math.max(100, dailyKeys.length * 5)) : [],
+          fetchAllByIn('weekly_performance:list', 'country_asin_week', weeklyKeyCandidates, { chunkSize: 40, pageSize: 500 }),
+          fetchAllByIn('target_management:list', 'country_asin_date', dailyKeys, { chunkSize: 40, pageSize: 500 }),
+          fetchAllByIn('target_default:list', 'country_asin', countryAsinKeys, { chunkSize: 40, pageSize: 500 }).catch(() => []),
+          fetchAllByIn('daily_profit:list', 'country_asin_date', dailyKeys, { chunkSize: 40, pageSize: 500 }),
+          fetchAllByIn('daily_order_link_tracking:list', 'country_asin_date', dailyKeys, { chunkSize: 40, pageSize: 500 }).catch(() => []),
+          fetchAllByIn('product_config:list', 'asin_country', productConfigAsinCountries, { chunkSize: 40, pageSize: 500 }).catch(() => []),
+          fetchAllByIn('sqp_keywords:list', 'country_asin', countryAsinKeys, { chunkSize: 40, pageSize: 500, params: { sort: ['id'] } }).catch(() => []),
+          fetchAllByIn('sqp_keyword_daily_positions:list', 'country_asin_date', dailyKeys, { chunkSize: 40, pageSize: 500 }).catch(() => []),
+          fetchAllByIn('order_link_competitor_asins:list', 'country_asin', countryAsinKeys, { chunkSize: 40, pageSize: 500 }).catch(() => []),
+          fetchAllByIn('order_link_competitor_asins_daily:list', 'country_asin_date', dailyKeys, { chunkSize: 40, pageSize: 500 }).catch(() => []),
         ]);
 
         const keywordCols = buildDynamicKeywordCols(sqpKeywordRecords);
@@ -6900,7 +7007,7 @@
         const summaryCols = [...INITIAL_COLUMNS, ...keywordCols, ...competitorCols];
         const existingWeeklySummaryMap = {};
         const refreshedWeeklySummaryMap = candidateSummaryKeys.length
-          ? await refreshWeeklySummariesFromRows(summaryMergedData, summaryCols, { summaryKeys: candidateSummaryKeys }).catch(() => ({}))
+          ? await runFullSummaryTask(() => refreshWeeklySummariesFromRows(summaryMergedData, summaryCols, { summaryKeys: candidateSummaryKeys })).catch(() => ({}))
           : {};
         Object.assign(existingWeeklySummaryMap, refreshedWeeklySummaryMap || {});
         if (candidateSummaryKeys.length && !Object.keys(existingWeeklySummaryMap).length) {
@@ -6915,29 +7022,31 @@
         }
         setWeeklySummaryMap(existingWeeklySummaryMap);
 
-        const missingSummaryKeySet = new Set(candidateSummaryKeys.filter((key) => !existingWeeklySummaryMap[key]));
-        const displayMergedData = attachWeeklySummaryDataToRows(mergedData, existingWeeklySummaryMap);
+        const loadedDisplayMergedData = attachWeeklySummaryDataToRows(mergedData, existingWeeklySummaryMap);
+        const displayMergedData = applyPendingCellOverlays(loadedDisplayMergedData, loadStartedAt);
 
         dataRef.current = displayMergedData;
         setData(displayMergedData);
         setTotal(totalCount || displayMergedData.length);
         const shouldRunBackgroundSummary = !options.skipBackgroundSummary && filterCountry && filterAsin;
-        if (!options.skipCurrentPageSummaryRefresh && candidateSummaryKeys.length) {
+        if (!shouldRunBackgroundSummary && !options.skipCurrentPageSummaryRefresh && candidateSummaryKeys.length) {
           scheduleCurrentPageMergeSummaryRefresh(candidateSummaryKeys, {
-            delay: (!skipFormula || missingSummaryKeySet.size) ? 80 : 180,
+            delay: !skipFormula ? 80 : 180,
             keepProgressForBackground: shouldRunBackgroundSummary,
           });
         }
         if (shouldRunBackgroundSummary) {
           scheduleCurrentCountryAsinMergeSummarySync({
             force: true,
-            showQueuedProgress: !candidateSummaryKeys.length || options.skipCurrentPageSummaryRefresh,
-            delay: candidateSummaryKeys.length ? 1000 : ((!skipFormula || missingSummaryKeySet.size) ? 200 : 900),
+            showQueuedProgress: true,
+            delay: candidateSummaryKeys.length ? 300 : (!skipFormula ? 200 : 900),
           });
         }
         return displayMergedData;
       } catch (err) {
         ctx.message.error(`加载失败：${err?.message || ''}`);
+        const currentRows = Array.isArray(dataRef.current) ? dataRef.current : [];
+        if (currentRows.length) return currentRows;
         dataRef.current = [];
         setData([]);
         setTotal(0);
@@ -6945,7 +7054,7 @@
       } finally {
         setLoading(false);
       }
-    }, [filterAsin, filterCountry, hasRequiredUrlParams, dateFilterType, getDateRange, getDailySort, fetchAllList, fetchAllByIn, buildDynamicKeywordCols, buildDynamicCompetitorCols, normalizeWeeklySummaryRecord, getSummaryKeyForRow, attachWeeklySummaryDataToRows, refreshWeeklySummariesFromRows, recalcAllCoreFormulas, showFormulaProgress, finishFormulaProgress, resetFormulaProgress, syncDailyRsgNumbersFromOrders]);
+    }, [filterAsin, filterCountry, hasRequiredUrlParams, dateFilterType, getDateRange, getDailySort, fetchAllList, fetchAllByIn, buildDynamicKeywordCols, buildDynamicCompetitorCols, normalizeWeeklySummaryRecord, getSummaryKeyForRow, attachWeeklySummaryDataToRows, applyPendingCellOverlays, refreshWeeklySummariesFromRows, recalcAllCoreFormulas, runFullSummaryTask, showFormulaProgress, finishFormulaProgress, resetFormulaProgress, syncDailyRsgNumbersFromOrders]);
 
     const openWeeklyImport = useCallback(() => {
       setWeeklyImportVisible(true);
@@ -7392,29 +7501,42 @@
       if (backgroundFormulaTimerRef.current) clearTimeout(backgroundFormulaTimerRef.current);
       backgroundFormulaTimerRef.current = setTimeout(async () => {
         const pending = [...pendingFormulaAsinCountriesRef.current].filter(Boolean);
+        const scheduledRevision = formulaRevisionRef.current;
         pendingFormulaAsinCountriesRef.current.clear();
         backgroundFormulaTimerRef.current = null;
         if (!pending.length) return;
+        if (cellSaveStateRef.current.pendingFormulaCount > 0) return;
         try {
-          const rows = await fetchAllByIn('daily_asins:list', 'asin_country', pending, {
-            params: { sort: 'date' },
-            chunkSize: 50,
-            pageSize: 500,
+          const result = await runCoreFormulaTask(async () => {
+            const rows = await fetchAllByIn('daily_asins:list', 'asin_country', pending, {
+              params: { sort: 'date' },
+              chunkSize: 50,
+              pageSize: 500,
+            });
+            if (!rows.length) return { total: 0, success: 0, failCount: 0, skipped: 0 };
+            return recalcAllCoreFormulas(rows, {
+              silent: true,
+              preloadedDailyRows: rows,
+              expectedFormulaRevision: scheduledRevision,
+            });
           });
-          if (rows.length) {
-            await recalcAllCoreFormulas(rows, { silent: true, preloadedDailyRows: rows });
+          if (result?.failCount) throw new Error(`公式写回失败 ${result.failCount} 条`);
+          if (scheduledRevision === formulaRevisionRef.current) {
+            finishFormulaProgress('公式全量校准完成');
           }
         } catch (err) {
+          resetFormulaProgress();
           ctx.message.warning(`后台公式校准失败：${err?.message || ''}`);
         }
       }, 1800);
-    }, [fetchAllByIn, recalcAllCoreFormulas]);
+    }, [fetchAllByIn, finishFormulaProgress, recalcAllCoreFormulas, resetFormulaProgress, runCoreFormulaTask]);
 
     useEffect(() => () => {
       if (formulaProgressFinishTimerRef.current) clearTimeout(formulaProgressFinishTimerRef.current);
       if (backgroundFormulaTimerRef.current) clearTimeout(backgroundFormulaTimerRef.current);
       if (backgroundMergeSummaryRef.current?.timer) clearTimeout(backgroundMergeSummaryRef.current.timer);
       if (currentPageMergeSummaryRef.current?.timer) clearTimeout(currentPageMergeSummaryRef.current.timer);
+      if (cellSaveStateRef.current?.formulaTimer) clearTimeout(cellSaveStateRef.current.formulaTimer);
     }, []);
 
     const syncCoreFormulasForRows = useCallback(async (changedRows = [], options = {}) => {
@@ -7427,21 +7549,67 @@
         )
       ];
       if (!asinCountries.length || !targetRows.length) return;
-      const contextRows = await fetchAllByIn('daily_asins:list', 'asin_country', asinCountries, {
-        params: { sort: 'date' },
-        chunkSize: 50,
-        pageSize: 500,
-      });
-      const rowsToRecalc = contextRows.length ? contextRows : targetRows;
-      await recalcAllCoreFormulas(rowsToRecalc, { silent: true, preloadedDailyRows: rowsToRecalc, onProgress: options.onProgress });
-      if (options.scheduleBackground !== false) scheduleBackgroundFormulaSync(targetRows);
-    }, [fetchAllByIn, recalcAllCoreFormulas, scheduleBackgroundFormulaSync]);
+      const requestedFormulaRevision = Number.isFinite(Number(options.expectedFormulaRevision))
+        ? Number(options.expectedFormulaRevision)
+        : formulaRevisionRef.current + 1;
+      if (requestedFormulaRevision > formulaRevisionRef.current) formulaRevisionRef.current = requestedFormulaRevision;
+      const changedSummaryKeys = [...new Set(targetRows.map((row) => getSummaryKeyForRow(row)).filter(Boolean))];
+      try {
+        const result = await runCoreFormulaTask(async () => {
+          const contextRows = await fetchAllByIn('daily_asins:list', 'asin_country', asinCountries, {
+            params: { sort: 'date' },
+            chunkSize: 50,
+            pageSize: 500,
+          });
+          const fullContextRows = contextRows.length ? contextRows : targetRows;
+          const earliestDateByAsinCountry = {};
+          targetRows.forEach((row) => {
+            const asinCountry = row?.asin_country || (row?.asin && row?.country ? `${row.asin}_${row.country}` : '');
+            if (!asinCountry) return;
+            if (row?.__formulaFromStart) {
+              earliestDateByAsinCountry[asinCountry] = '';
+              return;
+            }
+            const dateKey = toDateKey(row?.date);
+            if (!dateKey) {
+              earliestDateByAsinCountry[asinCountry] = '';
+              return;
+            }
+            const currentEarliest = earliestDateByAsinCountry[asinCountry];
+            if (currentEarliest === undefined || (currentEarliest && dateKey < currentEarliest)) {
+              earliestDateByAsinCountry[asinCountry] = dateKey;
+            }
+          });
+          const rowsToRecalc = fullContextRows.filter((row) => {
+            const asinCountry = row?.asin_country || (row?.asin && row?.country ? `${row.asin}_${row.country}` : '');
+            if (!Object.prototype.hasOwnProperty.call(earliestDateByAsinCountry, asinCountry)) return false;
+            const earliestDate = earliestDateByAsinCountry[asinCountry];
+            return !earliestDate || toDateKey(row?.date) >= earliestDate;
+          });
+          return recalcAllCoreFormulas(rowsToRecalc.length ? rowsToRecalc : targetRows, {
+            silent: true,
+            preloadedDailyRows: fullContextRows,
+            summaryKeys: changedSummaryKeys,
+            onProgress: options.onProgress,
+            expectedFormulaRevision: requestedFormulaRevision,
+          });
+        });
+        if (result?.failCount) throw new Error(`公式写回失败 ${result.failCount} 条`);
+        return result;
+      } finally {
+        if (options.scheduleBackground !== false) scheduleBackgroundFormulaSync(targetRows);
+      }
+    }, [fetchAllByIn, getSummaryKeyForRow, recalcAllCoreFormulas, runCoreFormulaTask, scheduleBackgroundFormulaSync]);
 
     const syncFormulasForChangedRows = useCallback(async (changedRows = [], options = {}) => {
       const targetRows = Array.isArray(changedRows) ? changedRows.filter(Boolean) : [];
       if (!targetRows.length) return;
       const onProgress = options.onProgress;
-      await syncCoreFormulasForRows(targetRows, { onProgress, scheduleBackground: false });
+      return syncCoreFormulasForRows(targetRows, {
+        onProgress,
+        scheduleBackground: true,
+        expectedFormulaRevision: options.expectedFormulaRevision,
+      });
     }, [syncCoreFormulasForRows]);
 
     const enqueueCellFormulaSync = useCallback((changedRows = []) => {
@@ -7455,6 +7623,7 @@
       queue.running = true;
       (async () => {
         let failed = false;
+        let completedRevision = null;
         try {
           while (queue.pendingRowsByKey.size) {
             const pendingRows = [...queue.pendingRowsByKey.values()];
@@ -7464,23 +7633,139 @@
               const key = queuedRow.country_asin_date || queuedRow.id;
               return currentRows.find((row) => (row.country_asin_date || row.id) === key) || queuedRow;
             });
+            const syncRevision = formulaRevisionRef.current;
 
             showFormulaProgress({ label: '保存成功，正在同步公式...', percent: 8 });
             try {
-              await syncFormulasForChangedRows(latestRows, { onProgress: showFormulaProgress });
+              const syncResult = await syncFormulasForChangedRows(latestRows, {
+                onProgress: showFormulaProgress,
+                expectedFormulaRevision: syncRevision,
+              });
+              if (!syncResult?.stale) completedRevision = syncRevision;
             } catch (formulaErr) {
               failed = true;
               ctx.message.warning(`保存成功，但公式同步失败：${formulaErr?.message || '未知错误'}`);
             }
           }
 
+          const cellSaveState = cellSaveStateRef.current;
+          const hasNewerFormulaWork = completedRevision !== formulaRevisionRef.current
+            || cellSaveState.pendingFormulaCount > 0
+            || cellSaveState.formulaRowsByKey.size > 0;
           if (failed) resetFormulaProgress();
-          else finishFormulaProgress('公式同步完成');
+          else if (!hasNewerFormulaWork) finishFormulaProgress('快速公式已更新，等待全量校准');
         } finally {
           queue.running = false;
         }
       })();
     }, [finishFormulaProgress, resetFormulaProgress, showFormulaProgress, syncFormulasForChangedRows]);
+
+    const scheduleQueuedCellFormulaSync = useCallback(() => {
+      const state = cellSaveStateRef.current;
+      if (state.formulaTimer) clearTimeout(state.formulaTimer);
+      const armTimer = () => {
+        state.formulaTimer = setTimeout(() => {
+          state.formulaTimer = null;
+          if (state.pendingFormulaCount > 0) {
+            armTimer();
+            return;
+          }
+          const currentRows = Array.isArray(dataRef.current) ? dataRef.current : [];
+          const rows = [...state.formulaRowsByKey.entries()].map(([rowKey, fallbackRow]) => {
+            const currentRow = currentRows.find((row) => (row.country_asin_date || row.id) === rowKey) || fallbackRow;
+            return currentRow && fallbackRow?.__formulaFromStart
+              ? { ...currentRow, __formulaFromStart: true }
+              : currentRow;
+          }).filter(Boolean);
+          state.formulaRowsByKey.clear();
+          if (rows.length) enqueueCellFormulaSync(rows);
+        }, 320);
+      };
+      armTimer();
+    }, [enqueueCellFormulaSync]);
+
+    const queueCellSaveOperation = useCallback((options) => {
+      const state = cellSaveStateRef.current;
+      const cellKey = String(options?.cellKey || '');
+      if (!cellKey || typeof options?.execute !== 'function') return null;
+      const version = state.sequence + 1;
+      state.sequence = version;
+      state.latestVersionByCell.set(cellKey, version);
+      if (!state.committedValueByCell.has(cellKey) && Object.prototype.hasOwnProperty.call(options, 'initialCommittedValue')) {
+        state.committedValueByCell.set(cellKey, options.initialCommittedValue);
+      }
+      if (options.overlay) {
+        state.overlays.set(cellKey, {
+          ...options.overlay,
+          version,
+          status: 'pending',
+          savedAt: 0,
+        });
+      }
+      if (options.formulaSensitive) {
+        formulaRevisionRef.current += 1;
+        state.pendingFormulaCount += 1;
+        if (state.formulaTimer) {
+          clearTimeout(state.formulaTimer);
+          state.formulaTimer = null;
+        }
+      }
+
+      const previousTail = state.tailsByCell.get(cellKey) || Promise.resolve();
+      const execution = previousTail.catch(() => undefined).then(options.execute);
+      const settled = execution.then((result) => {
+        if (Object.prototype.hasOwnProperty.call(options, 'savedValue')) {
+          state.committedValueByCell.set(cellKey, options.savedValue);
+        }
+        const isLatest = state.latestVersionByCell.get(cellKey) === version;
+        options.onPersisted?.(result, { isLatest });
+        if (isLatest) {
+          const currentOverlay = state.overlays.get(cellKey);
+          if (currentOverlay?.version === version) {
+            state.overlays.set(cellKey, { ...currentOverlay, status: 'saved', savedAt: Date.now() });
+          }
+          options.onSuccess?.(result);
+        }
+        if (options.formulaSensitive && options.rowId) {
+          const currentRow = (Array.isArray(dataRef.current) ? dataRef.current : []).find(
+            (row) => (row.country_asin_date || row.id) === options.rowId
+          );
+          const formulaRow = currentRow || options.fallbackRow || null;
+          state.formulaRowsByKey.set(
+            options.rowId,
+            formulaRow && options.formulaFromStart ? { ...formulaRow, __formulaFromStart: true } : formulaRow
+          );
+        }
+        if (isLatest && options.successMessage) ctx.message.success(options.successMessage);
+        return result;
+      }).catch((err) => {
+        const isLatest = state.latestVersionByCell.get(cellKey) === version;
+        if (isLatest) {
+          const currentOverlay = state.overlays.get(cellKey);
+          if (currentOverlay?.version === version) state.overlays.delete(cellKey);
+          options.onRollback?.(state.committedValueByCell.get(cellKey));
+          ctx.message.error(`${options.errorMessage || '保存失败'}：${err?.message || '未知错误'}`);
+        }
+        return null;
+      }).finally(() => {
+        state.pendingPromises.delete(settled);
+        if (options.formulaSensitive) {
+          state.pendingFormulaCount = Math.max(0, state.pendingFormulaCount - 1);
+          if (state.pendingFormulaCount === 0 && state.formulaRowsByKey.size === 0) resetFormulaProgress();
+          else scheduleQueuedCellFormulaSync();
+        }
+      });
+      state.tailsByCell.set(cellKey, settled);
+      state.pendingPromises.add(settled);
+      return { version, promise: settled };
+    }, [resetFormulaProgress, scheduleQueuedCellFormulaSync]);
+
+    const waitForPendingCellSaves = useCallback(async () => {
+      const state = cellSaveStateRef.current;
+      while (state.pendingPromises.size) {
+        await Promise.allSettled([...state.pendingPromises]);
+      }
+    }, []);
 
     const pushUndoEntry = useCallback((entry) => {
       const items = Array.isArray(entry?.items) ? entry.items.filter(Boolean) : [];
@@ -7552,7 +7837,7 @@
         try {
           await loadData({ page: curPageRef.current, size: pageSizeRef.current });
           await loadCouponConfig();
-          ctx.message.success('Coupon 预估比例已保存，公式已同步');
+          ctx.message.success('Coupon 预估比例已保存，后台公式校准中');
         } catch (formulaErr) {
           ctx.message.warning(`Coupon 预估比例已保存，公式同步或刷新失败：${formulaErr?.message || '未知错误'}`);
         }
@@ -9481,7 +9766,8 @@
             newValue: p.newValue ?? null,
           }));
           pushUndoEntry({ label: '粘贴', items: [...undoItems, ...richUndoItems] });
-          updateDataLocalOnly((prev) => prev.map((row) => {
+          const updatePastedRows = changedRowsMap.size ? updateDataLocalOnly : updateDataAndRefreshWeekly;
+          updatePastedRows((prev) => prev.map((row) => {
             const rowId = row.country_asin_date || row.id;
             const patch = patches.get(rowId);
             const rowSourcePatches = sourcePatches.get(rowId) || {};
@@ -9507,10 +9793,10 @@
           if (changedRows.length) {
             showFormulaProgress({ label: '粘贴已保存，正在同步公式...', percent: 8 });
             await syncFormulasForChangedRows(changedRows, { onProgress: showFormulaProgress });
-            finishFormulaProgress('粘贴公式同步完成');
+            finishFormulaProgress('粘贴快速公式已更新，等待全量校准');
           }
           ctx.message.success(changedRows.length
-            ? `粘贴成功，已更新 ${undoItems.length + richOps.length} 个单元格，公式已同步`
+            ? `粘贴成功，已更新 ${undoItems.length + richOps.length} 个单元格，后台公式校准中`
             : `粘贴成功，已更新 ${undoItems.length + richOps.length} 个单元格`);
         } else {
           ctx.message.warning(`部分粘贴失败：${failCount}/${groupedRequests.length + richOps.length} 个请求`);
@@ -9522,7 +9808,7 @@
       } finally {
         setSaving(false);
       }
-    }, [canPastePlainTextAsSingleValue, finishFormulaProgress, getCellValue, isCellEditable, isTableClipboardEvent, loadData, normalizeSelection, pagedData, parsePastedValue, pushUndoEntry, resetFormulaProgress, saving, selectedRange, showFormulaProgress, syncFormulasForChangedRows, updateDataLocalOnly, visibleCols]);
+    }, [canPastePlainTextAsSingleValue, finishFormulaProgress, getCellValue, isCellEditable, isTableClipboardEvent, loadData, normalizeSelection, pagedData, parsePastedValue, pushUndoEntry, resetFormulaProgress, saving, selectedRange, showFormulaProgress, syncFormulasForChangedRows, updateDataAndRefreshWeekly, updateDataLocalOnly, visibleCols]);
 
     const fillSelectedCells = useCallback(async (rawValue) => {
       const rect = normalizeSelection(selectedRange);
@@ -9665,7 +9951,8 @@
           newValue: p.newValue ?? null,
         }));
         pushUndoEntry({ label: '填充', items: [...undoItems, ...richUndoItems] });
-        updateDataAndRefreshWeekly((prev) => prev.map((row) => {
+        const updateFilledRows = changedRowsMap.size ? updateDataLocalOnly : updateDataAndRefreshWeekly;
+        updateFilledRows((prev) => prev.map((row) => {
           const rowId = row.country_asin_date || row.id;
           const patch = patches.get(rowId);
           const rowSourcePatches = sourcePatches.get(rowId) || {};
@@ -9692,7 +9979,7 @@
           } else {
             showFormulaProgress({ label: '选区已填充，正在同步公式...', percent: 8 });
             await syncFormulasForChangedRows(changedRows, { onProgress: showFormulaProgress });
-            finishFormulaProgress('填充公式同步完成');
+            finishFormulaProgress('填充快速公式已更新，等待全量校准');
           }
         }
         ctx.message.success(`已填充 ${requests.length + richOps.length} 个单元格`);
@@ -9702,7 +9989,7 @@
       } finally {
         setSaving(false);
       }
-    }, [enqueueCellFormulaSync, finishFormulaProgress, getCellValue, isCellEditable, loadData, normalizeSelection, pagedData, parsePastedValue, pushUndoEntry, resetFormulaProgress, saving, selectedRange, showFormulaProgress, syncFormulasForChangedRows, updateDataAndRefreshWeekly, visibleCols]);
+    }, [enqueueCellFormulaSync, finishFormulaProgress, getCellValue, isCellEditable, loadData, normalizeSelection, pagedData, parsePastedValue, pushUndoEntry, resetFormulaProgress, saving, selectedRange, showFormulaProgress, syncFormulasForChangedRows, updateDataAndRefreshWeekly, updateDataLocalOnly, visibleCols]);
 
     const clearSelectedCells = useCallback(async () => {
       const rect = normalizeSelection(selectedRange);
@@ -9794,7 +10081,8 @@
         const failCount = results.filter((r) => r.status === 'rejected').length;
         if (failCount === 0) {
           pushUndoEntry({ label: '清空', items: undoItems });
-          updateDataAndRefreshWeekly((prev) => prev.map((row) => {
+          const updateClearedRows = changedRowsMap.size ? updateDataLocalOnly : updateDataAndRefreshWeekly;
+          updateClearedRows((prev) => prev.map((row) => {
             const rowId = row.country_asin_date || row.id;
             const patch = patches.get(rowId);
             const rowSourcePatches = sourcePatches.get(rowId) || {};
@@ -9823,7 +10111,7 @@
           if (changedRows.length) {
             showFormulaProgress({ label: '选区已清空，正在同步公式...', percent: 8 });
             await syncFormulasForChangedRows(changedRows, { onProgress: showFormulaProgress });
-            finishFormulaProgress('清空后公式同步完成');
+            finishFormulaProgress('清空后快速公式已更新，等待全量校准');
           }
           ctx.message.success(changedRows.length
             ? `\u5df2\u6e05\u7a7a ${requests.length} \u4e2a\u5355\u5143\u683c\uff0c\u516c\u5f0f\u5df2\u540c\u6b65`
@@ -9838,7 +10126,7 @@
       } finally {
         setSaving(false);
       }
-    }, [finishFormulaProgress, getCellValue, isCellEditable, loadData, normalizeSelection, pagedData, pushUndoEntry, resetFormulaProgress, saving, selectedRange, showFormulaProgress, syncFormulasForChangedRows, updateDataAndRefreshWeekly, visibleCols]);
+    }, [finishFormulaProgress, getCellValue, isCellEditable, loadData, normalizeSelection, pagedData, pushUndoEntry, resetFormulaProgress, saving, selectedRange, showFormulaProgress, syncFormulasForChangedRows, updateDataAndRefreshWeekly, updateDataLocalOnly, visibleCols]);
 
     const undoLastEdit = useCallback(async () => {
       if (saving) return;
@@ -9888,7 +10176,8 @@
           }
         }));
 
-        updateDataAndRefreshWeekly((prev) => prev.map((row) => {
+        const updateUndoneRows = changedRowsMap.size ? updateDataLocalOnly : updateDataAndRefreshWeekly;
+        updateUndoneRows((prev) => prev.map((row) => {
           const rowId = row.country_asin_date || row.id;
           const rowItems = entry.items.filter((item) => item.rowId === rowId);
           if (!rowItems.length) return row;
@@ -9920,7 +10209,7 @@
         if (changedRows.length) {
           showFormulaProgress({ label: '已撤回，正在同步公式...', percent: 8 });
           await syncFormulasForChangedRows(changedRows, { onProgress: showFormulaProgress });
-          finishFormulaProgress('撤回后公式同步完成');
+          finishFormulaProgress('撤回后快速公式已更新，等待全量校准');
         }
         ctx.message.success('已撤回上一步编辑');
       } catch (err) {
@@ -9930,7 +10219,7 @@
       } finally {
         setSaving(false);
       }
-    }, [finishFormulaProgress, resetFormulaProgress, saving, showFormulaProgress, syncFormulasForChangedRows, updateDataAndRefreshWeekly]);
+    }, [finishFormulaProgress, resetFormulaProgress, saving, showFormulaProgress, syncFormulasForChangedRows, updateDataAndRefreshWeekly, updateDataLocalOnly]);
 
     const handleKeyDown = useCallback((e) => {
       if (editingCell || saving) return;
@@ -9998,12 +10287,14 @@
 
     const startEdit = useCallback((rowId, col, currentValue) => {
       if (saving) return;
+      editSessionSequenceRef.current += 1;
+      const sessionId = editSessionSequenceRef.current;
       selectingRef.current = false;
       selectionDraftRef.current = null;
       selectionStore.setRange(null);
       setSelectedRange(null);
       setSelectionInputValue('');
-      setEditingCell({ rowId, colKey: col.key, field: col.field, src: col.src });
+      setEditingCell({ rowId, colKey: col.key, field: col.field, src: col.src, sessionId });
       if (col._dynamicKind === 'keyword') {
         const value = currentValue?.daily?.actual_rank;
         setEditValue(value != null && value !== '' ? value : '');
@@ -10022,7 +10313,11 @@
       if (!pending) return;
 
       if (pending.openEditor && pending.rowId && pending.col) {
-        startEdit(pending.rowId, pending.col, pending.currentValue);
+        const latestRow = (Array.isArray(dataRef.current) ? dataRef.current : []).find(
+          (row) => (row.country_asin_date || row.id) === pending.rowId
+        );
+        const latestValue = latestRow ? getCellValue(pending.col, latestRow) : pending.currentValue;
+        startEdit(pending.rowId, pending.col, latestValue);
         return;
       }
 
@@ -10039,142 +10334,239 @@
 
     const cancelEdit = useCallback(() => { setEditingCell(null); setEditValue(null); }, []);
 
-    const saveEdit = useCallback(async () => {
-      if (!editingCell || saving) return;
+    const saveEdit = useCallback((valueOverride) => {
+      if (!editingCell) return;
+      const sessionId = editingCell.sessionId;
+      if (sessionId && submittedEditSessionRef.current === sessionId) return;
+      if (sessionId) submittedEditSessionRef.current = sessionId;
+
       const { rowId, field, src } = editingCell;
-      const row = data.find((r) => (r.country_asin_date || r.id) === rowId);
+      const currentEditValue = valueOverride !== undefined ? valueOverride : editValue;
+      const row = (Array.isArray(dataRef.current) ? dataRef.current : []).find(
+        (item) => (item.country_asin_date || item.id) === rowId
+      );
       if (!row) { pendingCellInteractionRef.current = null; return; }
-      const dynamicKeywordCol = dynamicKeywordCols.find((c) => c.key === editingCell.colKey);
+
+      const finishOptimisticEdit = () => {
+        setEditingCell(null);
+        setEditValue(null);
+        resumePendingCellInteraction();
+      };
+      const updateNestedDailyValue = (colField, dailyField, value, useWeeklyRefresh = false) => {
+        const updater = useWeeklyRefresh ? updateDataAndRefreshWeekly : updateDataLocalOnly;
+        updater((prev) => prev.map((item) => {
+          if ((item.country_asin_date || item.id) !== rowId) return item;
+          const currentPayload = item[colField] || {};
+          return {
+            ...item,
+            [colField]: {
+              ...currentPayload,
+              daily: { ...(currentPayload.daily || {}), [dailyField]: value },
+            },
+          };
+        }));
+      };
+
+      const dynamicKeywordCol = dynamicKeywordCols.find((col) => col.key === editingCell.colKey);
       if (dynamicKeywordCol?._dynamicKind === 'keyword') {
         const payload = row[dynamicKeywordCol.field];
         const kw = payload?.kw;
         const daily = payload?.daily || {};
         if (!kw?.id) { pendingCellInteractionRef.current = null; ctx.message.error('无法找到 SQP 关键词记录'); cancelEdit(); return; }
-        const normalizedEditValue = editValue && typeof editValue === 'object' ? editValue?.daily?.actual_rank : editValue;
+        const normalizedEditValue = currentEditValue && typeof currentEditValue === 'object' ? currentEditValue?.daily?.actual_rank : currentEditValue;
         const valueToSave = normalizedEditValue !== '' && normalizedEditValue != null ? String(normalizedEditValue).trim() || null : null;
         const oldValue = daily.actual_rank ?? null;
-        let savedCell = false;
-        try {
-          setSaving(true);
-          const nextDaily = await saveKeywordDailyRecord({
+        const cellKey = `keyword:${kw.id}:${rowId}:actual_rank`;
+        updateNestedDailyValue(dynamicKeywordCol.field, 'actual_rank', valueToSave);
+        queueCellSaveOperation({
+          cellKey,
+          rowId,
+          initialCommittedValue: oldValue,
+          savedValue: valueToSave,
+          fallbackRow: row,
+          overlay: {
             rowId,
-            keywordId: kw.id,
-            countryAsin: row.country && row.asin ? `${row.country}_${row.asin}` : null,
-            country: row.country || null,
-            asin: row.asin || null,
-            date: row.date ? String(row.date).slice(0, 10) : null,
-            value: valueToSave,
-            daily,
-          });
-          updateDataAndRefreshWeekly((prev) => prev.map((r) => {
-            if ((r.country_asin_date || r.id) !== rowId) return r;
-            const currentPayload = r[dynamicKeywordCol.field] || payload || {};
-            return { ...r, [dynamicKeywordCol.field]: { ...currentPayload, daily: nextDaily } };
-          }));
-          setEditingCell(null);
-          setEditValue(null);
-          savedCell = true;
-          pushUndoEntry({ label: '编辑单元格', items: [{ kind: 'keyword', rowId, colField: dynamicKeywordCol.field, dailyId: nextDaily.id, oldValue, newValue: valueToSave }] });
-          setSaving(false);
-          resumePendingCellInteraction();
-          ctx.message.success('保存成功');
-        } catch (err) {
-          pendingCellInteractionRef.current = null;
-          ctx.message.error(`保存 SQP 关键词自然位失败：${err?.message || '未知错误'}`);
-        } finally {
-          if (!savedCell) setSaving(false);
-        }
+            applyToRow: (currentRow) => {
+              const currentPayload = currentRow[dynamicKeywordCol.field] || {};
+              const latestLocalRow = (Array.isArray(dataRef.current) ? dataRef.current : []).find(
+                (item) => (item.country_asin_date || item.id) === rowId
+              );
+              const latestLocalDaily = latestLocalRow?.[dynamicKeywordCol.field]?.daily || {};
+              return { ...currentRow, [dynamicKeywordCol.field]: { ...currentPayload, daily: { ...(currentPayload.daily || {}), ...latestLocalDaily, actual_rank: valueToSave } } };
+            },
+          },
+          execute: () => {
+            const latestRow = (Array.isArray(dataRef.current) ? dataRef.current : []).find(
+              (item) => (item.country_asin_date || item.id) === rowId
+            );
+            const latestDaily = latestRow?.[dynamicKeywordCol.field]?.daily || daily;
+            return saveKeywordDailyRecord({
+              rowId,
+              keywordId: kw.id,
+              countryAsin: row.country && row.asin ? `${row.country}_${row.asin}` : null,
+              country: row.country || null,
+              asin: row.asin || null,
+              date: row.date ? String(row.date).slice(0, 10) : null,
+              value: valueToSave,
+              daily: latestDaily,
+            });
+          },
+          onPersisted: (nextDaily) => {
+            updateDataLocalOnly((prev) => prev.map((item) => {
+              if ((item.country_asin_date || item.id) !== rowId) return item;
+              const currentPayload = item[dynamicKeywordCol.field] || payload || {};
+              const currentValue = currentPayload?.daily?.actual_rank ?? null;
+              return { ...item, [dynamicKeywordCol.field]: { ...currentPayload, daily: { ...nextDaily, actual_rank: currentValue } } };
+            }));
+            pushUndoEntry({ label: '编辑单元格', items: [{ kind: 'keyword', rowId, colField: dynamicKeywordCol.field, dailyId: nextDaily.id, oldValue, newValue: valueToSave }] });
+          },
+          onSuccess: () => updateDataAndRefreshWeekly((prev) => prev.map((item) => (
+            (item.country_asin_date || item.id) === rowId ? { ...item } : item
+          ))),
+          onRollback: (committedValue) => updateNestedDailyValue(dynamicKeywordCol.field, 'actual_rank', committedValue ?? null, true),
+          successMessage: '保存成功',
+          errorMessage: '保存 SQP 关键词自然位失败',
+        });
+        finishOptimisticEdit();
         return;
       }
-      const dynamicCompetitorCol = dynamicCompetitorCols.find((c) => c.key === editingCell.colKey);
+
+      const dynamicCompetitorCol = dynamicCompetitorCols.find((col) => col.key === editingCell.colKey);
       if (dynamicCompetitorCol?._dynamicKind === 'competitor') {
         const payload = row[dynamicCompetitorCol.field];
         const competitor = payload?.competitor;
         const daily = payload?.daily || {};
         const fieldName = dynamicCompetitorCol._competitorField || 'notes';
         if (!competitor?.id) { pendingCellInteractionRef.current = null; ctx.message.error('无法找到竞对记录'); cancelEdit(); return; }
-        const normalizedEditValue = editValue && typeof editValue === 'object' ? editValue?.daily?.[fieldName] : editValue;
+        const normalizedEditValue = currentEditValue && typeof currentEditValue === 'object' ? currentEditValue?.daily?.[fieldName] : currentEditValue;
         const valueToSave = normalizedEditValue !== '' && normalizedEditValue != null ? normalizedEditValue : null;
         const oldValue = daily[fieldName] ?? null;
-        let savedCell = false;
-        try {
-          setSaving(true);
-          const nextDaily = await saveCompetitorDailyRecord({
+        const cellKey = `competitor:${competitor.id}:${rowId}:${fieldName}`;
+        updateNestedDailyValue(dynamicCompetitorCol.field, fieldName, valueToSave);
+        queueCellSaveOperation({
+          cellKey,
+          rowId,
+          initialCommittedValue: oldValue,
+          savedValue: valueToSave,
+          fallbackRow: row,
+          overlay: {
             rowId,
-            competitorId: competitor.id,
-            date: row.date ? String(row.date).slice(0, 10) : null,
-            field: fieldName,
-            value: valueToSave,
-            daily,
-          });
-          updateDataAndRefreshWeekly((prev) => prev.map((r) => {
-            if ((r.country_asin_date || r.id) !== rowId) return r;
-            const currentPayload = r[dynamicCompetitorCol.field] || payload || {};
-            return { ...r, [dynamicCompetitorCol.field]: { ...currentPayload, daily: nextDaily } };
-          }));
-          setEditingCell(null);
-          setEditValue(null);
-          savedCell = true;
-          pushUndoEntry({ label: '编辑单元格', items: [{ kind: 'competitor', rowId, colField: dynamicCompetitorCol.field, dailyId: nextDaily.id, field: fieldName, oldValue, newValue: valueToSave }] });
-          setSaving(false);
-          resumePendingCellInteraction();
-          ctx.message.success('保存成功');
-        } catch (err) {
-          pendingCellInteractionRef.current = null;
-          ctx.message.error(`保存竞对失败：${err?.message || '未知错误'}`);
-        } finally {
-          if (!savedCell) setSaving(false);
-        }
+            applyToRow: (currentRow) => {
+              const currentPayload = currentRow[dynamicCompetitorCol.field] || {};
+              const latestLocalRow = (Array.isArray(dataRef.current) ? dataRef.current : []).find(
+                (item) => (item.country_asin_date || item.id) === rowId
+              );
+              const latestLocalDaily = latestLocalRow?.[dynamicCompetitorCol.field]?.daily || {};
+              return { ...currentRow, [dynamicCompetitorCol.field]: { ...currentPayload, daily: { ...(currentPayload.daily || {}), ...latestLocalDaily, [fieldName]: valueToSave } } };
+            },
+          },
+          execute: () => {
+            const latestRow = (Array.isArray(dataRef.current) ? dataRef.current : []).find(
+              (item) => (item.country_asin_date || item.id) === rowId
+            );
+            const latestDaily = latestRow?.[dynamicCompetitorCol.field]?.daily || daily;
+            return saveCompetitorDailyRecord({
+              rowId,
+              competitorId: competitor.id,
+              date: row.date ? String(row.date).slice(0, 10) : null,
+              field: fieldName,
+              value: valueToSave,
+              daily: latestDaily,
+            });
+          },
+          onPersisted: (nextDaily) => {
+            updateDataLocalOnly((prev) => prev.map((item) => {
+              if ((item.country_asin_date || item.id) !== rowId) return item;
+              const currentPayload = item[dynamicCompetitorCol.field] || payload || {};
+              const currentValue = currentPayload?.daily?.[fieldName] ?? null;
+              return { ...item, [dynamicCompetitorCol.field]: { ...currentPayload, daily: { ...nextDaily, [fieldName]: currentValue } } };
+            }));
+            pushUndoEntry({ label: '编辑单元格', items: [{ kind: 'competitor', rowId, colField: dynamicCompetitorCol.field, dailyId: nextDaily.id, field: fieldName, oldValue, newValue: valueToSave }] });
+          },
+          onSuccess: () => updateDataAndRefreshWeekly((prev) => prev.map((item) => (
+            (item.country_asin_date || item.id) === rowId ? { ...item } : item
+          ))),
+          onRollback: (committedValue) => updateNestedDailyValue(dynamicCompetitorCol.field, fieldName, committedValue ?? null, true),
+          successMessage: '保存成功',
+          errorMessage: '保存竞对失败',
+        });
+        finishOptimisticEdit();
         return;
       }
+
       const updateConfig = SRC_UPDATE_CONFIG[src];
       if (!updateConfig) { pendingCellInteractionRef.current = null; ctx.message.error(`字段来源 "${src}" 暂不支持编辑`); return; }
       const pkValue = row[updateConfig.pkField];
       if (!pkValue) { pendingCellInteractionRef.current = null; ctx.message.error(`无法找到记录主键：${updateConfig.pkField}`); cancelEdit(); return; }
-      let valueToSave = editValue;
-      if (field === 'promo_day') valueToSave = editValue;
-      else if (field === 'order_structure_diagnostic') valueToSave = editValue || null;
-      else if (RATE_FIELDS.has(field)) valueToSave = (editValue !== '' && editValue !== null) ? Number(editValue) / 100 : null;
-      else if (MONEY_FIELDS.has(field) || NUM_FIELDS.has(field)) valueToSave = (editValue !== '' && editValue !== null) ? Number(editValue) : null;
-      else if (DATE_FIELDS.has(field)) valueToSave = editValue || null;
-      else valueToSave = editValue || null;
+      let valueToSave = currentEditValue;
+      if (field === 'promo_day') valueToSave = currentEditValue;
+      else if (field === 'order_structure_diagnostic') valueToSave = currentEditValue || null;
+      else if (RATE_FIELDS.has(field)) valueToSave = (currentEditValue !== '' && currentEditValue !== null) ? Number(currentEditValue) / 100 : null;
+      else if (MONEY_FIELDS.has(field) || NUM_FIELDS.has(field)) valueToSave = (currentEditValue !== '' && currentEditValue !== null) ? Number(currentEditValue) : null;
+      else if (DATE_FIELDS.has(field)) valueToSave = currentEditValue || null;
+      else valueToSave = currentEditValue || null;
       const oldValue = getCellValue({ field, src }, row) ?? null;
-      let savedCell = false;
-      try {
-        setSaving(true);
-        await ctx.request({
+      const formulaSensitive = isFormulaSensitiveField(field);
+      const cellKey = `static:${updateConfig.url}:${pkValue}:${field}`;
+      const applyStaticValue = (currentRow, value) => mergeSourcePatch(currentRow, src, { [field]: value });
+      const matchesStaticRow = (currentRow) => (
+        src === 'product_config'
+          ? currentRow?.[updateConfig.pkField] === pkValue
+          : (currentRow.country_asin_date || currentRow.id) === rowId
+      );
+      updateDataLocalOnly((prev) => prev.map((item) => (
+        matchesStaticRow(item) ? applyStaticValue(item, valueToSave) : item
+      )));
+      queueCellSaveOperation({
+        cellKey,
+        rowId,
+        formulaSensitive,
+        formulaFromStart: src === 'product_config',
+        initialCommittedValue: oldValue,
+        savedValue: valueToSave,
+        fallbackRow: applyStaticValue(row, valueToSave),
+        overlay: { rowId, matchesRow: matchesStaticRow, applyToRow: (currentRow) => applyStaticValue(currentRow, valueToSave) },
+        execute: () => ctx.request({
           url: updateConfig.url,
           method: 'post',
           params: { filterByTk: pkValue },
           data: { [field]: valueToSave },
-        });
-
-        const nextRow = mergeSourcePatch(row, src, { [field]: valueToSave });
-
-        updateDataAndRefreshWeekly((prev) => prev.map((r) => (r.country_asin_date || r.id) === rowId ? mergeSourcePatch(r, src, { [field]: valueToSave }) : r));
-        setEditingCell(null);
-        setEditValue(null);
-        savedCell = true;
-        pushUndoEntry({ label: '编辑单元格', items: [{ kind: 'static', rowId, src, field, pkValue, oldValue, newValue: valueToSave }] });
-        setSaving(false);
-        resumePendingCellInteraction();
-        if (isFormulaSensitiveField(field)) {
-          enqueueCellFormulaSync([nextRow]);
-        } else {
-          ctx.message.success('保存成功');
-        }
-      } catch (err) {
-        pendingCellInteractionRef.current = null;
-        ctx.message.error(`保存失败：${err?.message || '未知错误'}`);
-      } finally {
-        if (!savedCell) setSaving(false);
-      }
-    }, [editingCell, editValue, data, dynamicKeywordCols, dynamicCompetitorCols, saving, cancelEdit, enqueueCellFormulaSync, pushUndoEntry, resumePendingCellInteraction, updateDataAndRefreshWeekly]);
+        }),
+        onPersisted: () => {
+          pushUndoEntry({ label: '编辑单元格', items: [{ kind: 'static', rowId, src, field, pkValue, oldValue, newValue: valueToSave }] });
+        },
+        onSuccess: () => {
+          if (!formulaSensitive) {
+            updateDataAndRefreshWeekly((prev) => prev.map((item) => (
+              matchesStaticRow(item) ? { ...item } : item
+            )));
+          }
+        },
+        onRollback: (committedValue) => {
+          const updater = formulaSensitive ? updateDataLocalOnly : updateDataAndRefreshWeekly;
+          updater((prev) => prev.map((item) => (
+            matchesStaticRow(item) ? applyStaticValue(item, committedValue ?? null) : item
+          )));
+        },
+        successMessage: formulaSensitive ? '' : '保存成功',
+        errorMessage: '保存失败',
+      });
+      finishOptimisticEdit();
+    }, [cancelEdit, dynamicCompetitorCols, dynamicKeywordCols, editValue, editingCell, pushUndoEntry, queueCellSaveOperation, resumePendingCellInteraction, updateDataAndRefreshWeekly, updateDataLocalOnly]);
 
     const refreshData  = useCallback(async () => {
       if (refreshingData || calcLoading || loading) return;
       try {
         setRefreshingData(true);
+        setRefreshProgress('正在完成待保存单元格...');
+        showFormulaProgress({ label: '正在完成待保存单元格...', percent: 3 });
+        await waitForPendingCellSaves();
+        const cellSaveState = cellSaveStateRef.current;
+        if (cellSaveState.formulaTimer) {
+          clearTimeout(cellSaveState.formulaTimer);
+          cellSaveState.formulaTimer = null;
+        }
+        cellSaveState.formulaRowsByKey.clear();
         setRefreshProgress('正在刷新数据...');
         showFormulaProgress({ label: '正在刷新数据...', percent: 5 });
         await loadData({ page: curPageRef.current, size: pageSizeRef.current, skipFormula: true, skipBackgroundSummary: true, skipCurrentPageSummaryRefresh: true });
@@ -10186,34 +10578,50 @@
           finishFormulaProgress('数据已刷新');
           return;
         }
-        const result = await recalcAllCoreFormulas(rows, {
-          silent: true,
-          preloadedDailyRows: rows,
-          onProgress: (progress) => {
-            const label = typeof progress === 'string' ? progress : (progress?.label || '正在重新计算公式...');
-            setRefreshProgress(label);
-            showFormulaProgress(progress);
-          },
+        formulaRevisionRef.current += 1;
+        const refreshFormulaRevision = formulaRevisionRef.current;
+        const result = await runCoreFormulaTask(async () => {
+          const latestRows = await loadFormulaRowsForCurrentCountryAsin();
+          rows = latestRows;
+          return recalcAllCoreFormulas(latestRows, {
+            silent: true,
+            preloadedDailyRows: latestRows,
+            skipSummaryRefresh: true,
+            expectedFormulaRevision: refreshFormulaRevision,
+            onProgress: (progress) => {
+              const label = typeof progress === 'string' ? progress : (progress?.label || '正在重新计算公式...');
+              setRefreshProgress(label);
+              showFormulaProgress(progress);
+            },
+          });
         });
-        rows = await loadFormulaRowsForCurrentCountryAsin();
+        if (result?.stale) {
+          setRefreshProgress('检测到新的编辑，保留最新输入...');
+          await loadData({ page: curPageRef.current, size: pageSizeRef.current, skipFormula: true, skipBackgroundSummary: true, skipCurrentPageSummaryRefresh: true });
+          finishFormulaProgress('最新编辑已保留，后台继续同步');
+          return;
+        }
         setRefreshProgress('正在刷新全量周汇总...');
         showFormulaProgress({ label: '正在刷新全量周汇总...', percent: 88 });
-        const { mergedRows: summaryRows, summaryCols } = await mergeDailyRowsForWeeklySummary(rows, { updateDynamicColumns: true });
-        await refreshWeeklySummariesFromRows(summaryRows, summaryCols);
+        await runFullSummaryTask(async () => {
+          rows = await loadFormulaRowsForCurrentCountryAsin();
+          const { mergedRows: summaryRows, summaryCols } = await mergeDailyRowsForWeeklySummary(rows, { updateDynamicColumns: true });
+          return refreshWeeklySummariesFromRows(summaryRows, summaryCols);
+        });
         setRefreshProgress('正在重新加载结果...');
         showFormulaProgress({ label: '正在重新加载结果...', percent: 96 });
         await loadData({ page: curPageRef.current, size: pageSizeRef.current, skipFormula: true, skipBackgroundSummary: true, skipCurrentPageSummaryRefresh: true });
-        const ok = !result || result.success >= result.total || result.skipped >= result.total;
+        const ok = !result || result.failCount === 0;
         ctx.message[ok ? 'success' : 'warning'](ok ? '数据和周汇总已刷新' : '数据已刷新，部分公式计算失败');
         finishFormulaProgress(ok ? '刷新完成' : '刷新完成，部分公式失败');
       } catch (err) {
         resetFormulaProgress();
-        throw err;
+        ctx.message.warning(`刷新未完成：${err?.message || '未知错误'}`);
       } finally {
         setRefreshingData(false);
         setRefreshProgress('');
       }
-    }, [calcLoading, finishFormulaProgress, loadData, loadFormulaRowsForCurrentCountryAsin, loading, mergeDailyRowsForWeeklySummary, recalcAllCoreFormulas, refreshWeeklySummariesFromRows, refreshingData, resetFormulaProgress, showFormulaProgress]);
+    }, [calcLoading, finishFormulaProgress, loadData, loadFormulaRowsForCurrentCountryAsin, loading, mergeDailyRowsForWeeklySummary, recalcAllCoreFormulas, refreshWeeklySummariesFromRows, refreshingData, resetFormulaProgress, runCoreFormulaTask, runFullSummaryTask, showFormulaProgress, waitForPendingCellSaves]);
 
     const captureTableScroll = useCallback(() => {
       const wrap = tableWrapRef.current;
@@ -10299,7 +10707,8 @@
       try {
         await ctx.request({ url: updateConfig.url, method: 'post', params: { filterByTk: pkValue }, data: { [col.field]: valueToSave } });
         const nextRow = mergeSourcePatch(row, col.src, { [col.field]: valueToSave });
-        updateDataAndRefreshWeekly((prev) => prev.map((r) => (r.country_asin_date || r.id) === rowId ? mergeSourcePatch(r, col.src, { [col.field]: valueToSave }) : r));
+        const updateSavedRows = isFormulaSensitiveField(col) ? updateDataLocalOnly : updateDataAndRefreshWeekly;
+        updateSavedRows((prev) => prev.map((r) => (r.country_asin_date || r.id) === rowId ? mergeSourcePatch(r, col.src, { [col.field]: valueToSave }) : r));
         pushUndoEntry({ label: '编辑单元格', items: [{ kind: 'static', rowId, src: col.src, field: col.field, pkValue, oldValue: getCellValue(col, row) ?? null, newValue: valueToSave }] });
         if (isFormulaSensitiveField(col)) {
           enqueueCellFormulaSync([nextRow]);
@@ -10310,7 +10719,7 @@
         ctx.message.error(`保存失败：${err?.message || ''}`);
         return false;
       }
-    }, [captureTableScroll, enqueueCellFormulaSync, getCellValue, pushUndoEntry, restoreTableScroll, updateDataAndRefreshWeekly]);
+    }, [captureTableScroll, enqueueCellFormulaSync, getCellValue, pushUndoEntry, restoreTableScroll, updateDataAndRefreshWeekly, updateDataLocalOnly]);
 
     const btnStyle = (bg, color, border) => ({
       minHeight: '30px',
@@ -10844,7 +11253,7 @@
 
     const renderEditInput = (col) => {
       if (col.field === 'promo_day') return React.createElement(Select, { ref: inputRef, value: editValue, options: [{ label:'是',value:1},{label:'否',value:0}], style: { width: '100%' }, size: 'small', onChange: (v) => setEditValue(v), onBlur: () => saveEdit(), onKeyDown: (e) => { if (e.key === 'Escape') cancelEdit(); } });
-      if (col.field === 'order_structure_diagnostic') return React.createElement(Select, { ref: inputRef, value: editValue || undefined, options: ORDER_STRUCTURE_DIAGNOSED_OPTIONS, style: { width: '100%' }, size: 'small', onChange: (v) => { setEditValue(v); saveEdit(); }, onBlur: () => { if (editValue) saveEdit(); else cancelEdit(); }, onKeyDown: (e) => { if (e.key === 'Escape') cancelEdit(); } });
+      if (col.field === 'order_structure_diagnostic') return React.createElement(Select, { ref: inputRef, value: editValue || undefined, options: ORDER_STRUCTURE_DIAGNOSED_OPTIONS, style: { width: '100%' }, size: 'small', onChange: (v) => { setEditValue(v); saveEdit(v); }, onBlur: () => { if (editValue) saveEdit(); else cancelEdit(); }, onKeyDown: (e) => { if (e.key === 'Escape') cancelEdit(); } });
       const commonProps = { ref: inputRef, value: editValue, onBlur: () => saveEdit(), onKeyDown: (e) => { if (e.key === 'Escape') cancelEdit(); }, style: { width: '100%' }, size: 'small' };
       if (RATE_FIELDS.has(col.field)) return React.createElement(InputNumber, { ...commonProps, onChange: (v) => setEditValue(v), onPressEnter: () => saveEdit(), min: 0, max: 100, step: 0.01, precision: 2, addonAfter: '%' });
       if (MONEY_FIELDS.has(col.field)) return React.createElement(InputNumber, { ...commonProps, onChange: (v) => setEditValue(v), onPressEnter: () => saveEdit(), step: 0.01, precision: 2 });
