@@ -175,15 +175,17 @@ cycle_param AS (
         cycle_days_peak_min
     FROM v3_cfg_cycle_param
 ),
-product_label_cfg_dedup AS (
+retired_product_spec AS (
     SELECT
-        country,
         model,
-        MAX(label) AS label
-    FROM product_label_cfg
-    WHERE label IS NOT NULL
-      AND TRIM(label) <> ''
-    GROUP BY country, model
+        site
+    FROM v3_cfg_product_spec
+    WHERE product_status = '淘汰期'
+      AND model IS NOT NULL
+      AND TRIM(model) <> ''
+      AND site IS NOT NULL
+      AND TRIM(site) <> ''
+    GROUP BY model, site
 )
 
 -- ====================================================================
@@ -231,16 +233,14 @@ SELECT
     ds.quantity_receive,
     ds.days_on_sale,
 
-    COALESCE(
-        plc.label,
-        CASE
-            WHEN ds.days_on_sale IS NULL THEN NULL
-            WHEN ds.days_on_sale < 90 THEN '新品期'
-            WHEN ds.days_on_sale >= 90 AND ds.days_on_sale < 365 THEN '成长期'
-            WHEN ds.days_on_sale >= 365 THEN '成熟期'
-            ELSE NULL
-            END
-    ) AS product_label,
+    CASE
+        WHEN rps.model IS NOT NULL THEN '淘汰期'
+        WHEN ds.days_on_sale IS NULL THEN NULL
+        WHEN ds.days_on_sale < 90 THEN '新品期'
+        WHEN ds.days_on_sale >= 90 AND ds.days_on_sale < 365 THEN '成长期'
+        WHEN ds.days_on_sale >= 365 THEN '成熟期'
+        ELSE NULL
+        END AS product_label,
 
     ROUND(
             (
@@ -329,7 +329,7 @@ FROM base_target ds
          LEFT JOIN inv_calc inv ON ds.asin = inv.asin AND ds.country = inv.country
          LEFT JOIN stockout_lookup sl ON ds.asin = sl.asin AND ds.country = sl.country
          LEFT JOIN cycle_param cp ON ds.country = cp.site
-         LEFT JOIN product_label_cfg_dedup plc ON ds.country = plc.country AND ds.model = plc.model
+         LEFT JOIN retired_product_spec rps ON ds.country = rps.site AND ds.model = rps.model
          LEFT JOIN asin a ON CONCAT(ds.asin, '_', ds.country) = a.`unique`
          LEFT JOIN users u ON a.sale_owner = u.username
          LEFT JOIN users mgr ON mgr.username = u.manager
