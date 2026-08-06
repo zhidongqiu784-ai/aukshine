@@ -84,6 +84,7 @@ async function run() {
   const DATE_PICKER_LOCALE = {
     lang: {
       locale: 'zh_CN',
+      weekStart: 0,
       placeholder: '请选择日期',
       rangePlaceholder: ['开始日期', '结束日期'],
       today: '今天', now: '此刻', backToToday: '返回今天',
@@ -4099,30 +4100,27 @@ async function run() {
     };
 
     const DATE_FILTER_OPTIONS = [
-      { label: '全部日期',  value: 'all'        }, { label: '今天',      value: 'today'      },
-      { label: '昨天',      value: 'yesterday'  }, { label: '近 7 天',   value: '7d'         },
-      { label: '近 30 天',  value: '30d'        }, { label: '近 90 天',  value: '90d'        },
-      { label: '本月',      value: 'this_month' }, { label: '上月',      value: 'last_month' },
-      { label: '自定义',    value: 'custom'     },
+      { label: '全部周',     value: 'all'       },
+      { label: '最近 1 周',  value: 'recent_1w' },
+      { label: '最近 4 周',  value: 'recent_4w' },
+      { label: '最近 8 周',  value: 'recent_8w' },
+      { label: '最近 13 周', value: 'recent_13w' },
+      { label: '自定义周',   value: 'custom'    },
     ];
+    const RECENT_WEEK_COUNTS = {
+      recent_1w: 1,
+      recent_4w: 4,
+      recent_8w: 8,
+      recent_13w: 13,
+    };
 
-    const getDateRange = useMemo(() => {
-      if (dateFilterType === 'all')    return null;
-      if (dateFilterType === 'custom') return customDateRange;
-      const now = new Date();
-      const pad = (n) => String(n).padStart(2, '0');
-      const fmt = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-      const todayStr = fmt(now);
-      switch (dateFilterType) {
-        case 'today':      return [todayStr, todayStr];
-        case 'yesterday':  { const d = new Date(now); d.setDate(d.getDate() - 1); return [fmt(d), fmt(d)]; }
-        case '7d':         { const d = new Date(now); d.setDate(d.getDate() - 6); return [fmt(d), todayStr]; }
-        case '30d':        { const d = new Date(now); d.setDate(d.getDate() - 29); return [fmt(d), todayStr]; }
-        case '90d':        { const d = new Date(now); d.setDate(d.getDate() - 89); return [fmt(d), todayStr]; }
-        case 'this_month': { const d = new Date(now.getFullYear(), now.getMonth(), 1); return [fmt(d), todayStr]; }
-        case 'last_month': { const s = new Date(now.getFullYear(), now.getMonth() - 1, 1); const e = new Date(now.getFullYear(), now.getMonth(), 0); return [fmt(s), fmt(e)]; }
-        default: return null;
+    const weekFilterSpec = useMemo(() => {
+      if (dateFilterType === 'all') return null;
+      if (dateFilterType === 'custom') {
+        return customDateRange ? { type: 'custom', range: customDateRange } : null;
       }
+      const count = RECENT_WEEK_COUNTS[dateFilterType];
+      return count ? { type: 'recent', count } : null;
     }, [dateFilterType, customDateRange]);
 
     const isGroupCollapsed = useCallback((src) => collapsedGroups[src] !== false, [collapsedGroups]);
@@ -4938,10 +4936,33 @@ async function run() {
         const sqpFilterAnd = [];
         if (filterAsin)    sqpFilterAnd.push({ asin:    { $eq: filterAsin    } });
         if (filterCountry) sqpFilterAnd.push({ country: { $eq: filterCountry } });
-        const dateRange = getDateRange;
-        if (dateRange) {
-          sqpFilterAnd.push({ report_date: { $gte: dateRange[0] } });
-          sqpFilterAnd.push({ report_date: { $lte: dateRange[1] } });
+        if (weekFilterSpec?.type === 'recent') {
+          const latestWeekResponse = await ctx.request({
+            url: 'sqp_weekly_main:list',
+            method: 'get',
+            params: {
+              sort: '-report_date',
+              page: 1,
+              pageSize: weekFilterSpec.count,
+              filter: JSON.stringify({ $and: sqpFilterAnd }),
+            },
+          });
+          if (requestSeq !== requestSeqRef.current) return;
+          const latestWeekRows = Array.isArray(latestWeekResponse?.data?.data) ? latestWeekResponse.data.data : [];
+          const reportDates = latestWeekRows
+            .map((row) => normalizeChartDate(row?.report_date))
+            .filter(Boolean)
+            .sort();
+          if (!reportDates.length) {
+            setData([]);
+            setTotal(0);
+            return;
+          }
+          sqpFilterAnd.push({ report_date: { $gte: reportDates[0] } });
+          sqpFilterAnd.push({ report_date: { $lte: reportDates[reportDates.length - 1] } });
+        } else if (weekFilterSpec?.type === 'custom') {
+          sqpFilterAnd.push({ week_start_date: { $gte: weekFilterSpec.range[0] } });
+          sqpFilterAnd.push({ report_date: { $lte: weekFilterSpec.range[1] } });
         }
 
         let sortStr = 'report_date';
@@ -5074,7 +5095,17 @@ async function run() {
       } finally {
         if (requestSeq === requestSeqRef.current) setLoading(false);
       }
-    }, [filterAsin, filterCountry, hasRequiredUrlParams, getDateRange, loadActiveTermRefs, mergeTermColumns, sortConfig, getTermOrderIndex]);
+    }, [filterAsin, filterCountry, hasRequiredUrlParams, weekFilterSpec, loadActiveTermRefs, mergeTermColumns, sortConfig, getTermOrderIndex]);
+
+    const appliedWeekFilterRef = useRef('all:');
+    useEffect(() => {
+      if (!configReady || !filterCountry || !filterAsin) return;
+      const signature = `${dateFilterType}:${customDateRange?.join('|') || ''}`;
+      if (appliedWeekFilterRef.current === signature) return;
+      appliedWeekFilterRef.current = signature;
+      setCurPage(1);
+      load({ page: 1, size: pageSizeRef.current, skipFormula: true });
+    }, [configReady, customDateRange, dateFilterType, filterAsin, filterCountry, load]);
 
     useEffect(() => {
       if (!configReady) return;
@@ -7360,12 +7391,18 @@ async function run() {
         whiteSpace: 'nowrap',
         boxSizing: 'border-box',
         },
-        }, '日期范围'),
+        }, '周范围'),
         React.createElement(DatePicker.RangePicker, {
         locale: DATE_PICKER_LOCALE,
+        picker: 'week',
         value: customDateRange ? [ctx.libs.dayjs(customDateRange[0]), ctx.libs.dayjs(customDateRange[1])] : null,
         onChange: (dates) => {
-        if (dates && dates[0] && dates[1]) { const range = [dates[0].format('YYYY-MM-DD'), dates[1].format('YYYY-MM-DD')]; setCustomDateRange(range); setDateFilterType('custom'); }
+        if (dates && dates[0] && dates[1]) {
+          const start = dates[0].subtract(dates[0].day(), 'day');
+          const end = dates[1].add(6 - dates[1].day(), 'day');
+          setCustomDateRange([start.format('YYYY-MM-DD'), end.format('YYYY-MM-DD')]);
+          setDateFilterType('custom');
+        }
         else { setCustomDateRange(null); if (dateFilterType === 'custom') setDateFilterType('all'); }
         },
         size: 'small',
@@ -7375,7 +7412,7 @@ async function run() {
         background: dateFilterType === 'custom' ? '#f0f7ff' : '#fff',
         boxShadow: dateFilterType === 'custom' ? '0 0 0 2px rgba(22,119,255,0.12)' : 'none',
         },
-        placeholder: ['开始日期', '结束日期'],
+        placeholder: ['起始周', '结束周'],
         allowClear: true,
         }),
         React.createElement('span', { style: { fontSize: `${FONT_SIZE_SM}px`, color: '#888' } }, loading ? '加载中...' : `共 ${total} 条记录`),
