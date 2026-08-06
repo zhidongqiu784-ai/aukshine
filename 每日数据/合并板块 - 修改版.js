@@ -2626,6 +2626,10 @@
     return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
   };
   const isWeeklyImportBlank = (value) => WEEKLY_IMPORT_BLANK_MARKERS.has(String(value ?? '').trim().toUpperCase());
+  const normalizeDailyImportImageCellText = (value, cellImages) => {
+    const text = String(value ?? '').trim();
+    return cellImages?.length && text === '[object Object]' ? '' : text;
+  };
   const parseWeeklyImportValue = (rawValue, option) => {
     const text = String(rawValue ?? '').trim();
     if (isWeeklyImportBlank(text)) return undefined;
@@ -2778,7 +2782,9 @@
       }
       Object.entries(staticOptionsByColumn).forEach(([columnText, option]) => {
         const column = Number(columnText);
-        const rawValue = getWeeklyImportCellValue(sheet.getCell(rowNumber, column));
+        const cellImages = images.get(`${rowNumber}:${column}`) || [];
+        const cellValue = getWeeklyImportCellValue(sheet.getCell(rowNumber, column));
+        const rawValue = option.image ? normalizeDailyImportImageCellText(cellValue, cellImages) : cellValue;
         try {
           const value = parseWeeklyImportValue(rawValue, option);
           if (value !== undefined) {
@@ -2793,7 +2799,6 @@
         } catch (error) {
           errors.push(`第 ${rowNumber} 行“${option.label}”：${error?.message || '格式错误'}`);
         }
-        const cellImages = images.get(`${rowNumber}:${column}`) || [];
         if (cellImages.length && option.image) {
           resourceImages[option.resource] = resourceImages[option.resource] || {};
           resourceImages[option.resource][option.field] = [...(resourceImages[option.resource][option.field] || []), ...cellImages];
@@ -2813,8 +2818,11 @@
       const competitors = {};
       competitorConfigs.forEach((config) => {
         const rank = String(getWeeklyImportCellValue(sheet.getCell(rowNumber, config.rankColumn)) ?? '').trim();
-        const notes = String(getWeeklyImportCellValue(sheet.getCell(rowNumber, config.notesColumn)) ?? '').trim();
         const noteImages = images.get(`${rowNumber}:${config.notesColumn}`) || [];
+        const notes = normalizeDailyImportImageCellText(
+          getWeeklyImportCellValue(sheet.getCell(rowNumber, config.notesColumn)),
+          noteImages,
+        );
         const hasDailyData = !isWeeklyImportBlank(rank) || !isWeeklyImportBlank(notes) || noteImages.length;
         if (hasDailyData && !config.asin) {
           errors.push(`第 ${rowNumber} 行${config.role}有每日数据，但顶部 ${config.asinCell} 未填写竞对 ASIN`);
