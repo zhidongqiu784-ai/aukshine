@@ -10966,7 +10966,10 @@
       React.createElement('div', { onClick: () => setShowPanel(false), style: { position: 'fixed', inset: 0, zIndex: 1999, background: 'transparent' } }),
       React.createElement('div', { onClick: (e) => e.stopPropagation(), style: { position: 'fixed', top: `${panelPos.top}px`, left: `${panelPos.left}px`, zIndex: 2000, background: '#fff', border: '1px solid #e0e0e0', borderRadius: '8px', padding: '12px', boxShadow: '0 6px 20px rgba(0,0,0,0.15)', width: IS_ADMIN ? '820px' : '760px', maxHeight: '620px', overflowY: 'auto' } },
         React.createElement('div', { style: { fontWeight: 700, fontSize: `${FONT_SIZE_SM}px`, color: '#555', marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
-          React.createElement('span', null, '列设置'),
+          React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 } },
+            React.createElement('span', null, '列设置'),
+            React.createElement('span', { style: { fontSize: `${FONT_SIZE_XS}px`, color: '#8c8c8c', fontWeight: 400 } }, '（自定义视图中 关于“列设置”的调整会自动保存）')
+          ),
           canAdjustActiveColumnView && React.createElement('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } },
             React.createElement('button', { onClick: selectAll,   style: { padding: '2px 8px', fontSize: `${FONT_SIZE_XS}px`, background: '#52c41a', color: '#fff', border: 'none', borderRadius: '3px', cursor: 'pointer' } }, '全选'),
             React.createElement('button', { onClick: deselectAll, style: { padding: '2px 8px', fontSize: `${FONT_SIZE_XS}px`, background: '#ff4d4f', color: '#fff', border: 'none', borderRadius: '3px', cursor: 'pointer' } }, '全取消'),
@@ -10985,7 +10988,7 @@
               optionLabelProp: 'selectLabel',
             }),
             canSaveDefaultColumnView && React.createElement('button', { disabled: !currentUserId || columnViewSaving || columnViewSwitching, title: currentUserId ? (columnViewSaving ? '保存中' : '保存当前默认视图配置') : '未识别到当前用户，无法保存默认视图', 'aria-label': currentUserId ? (columnViewSaving ? '保存中' : '保存当前默认视图配置') : '未识别到当前用户，无法保存默认视图', onClick: saveCurrentDefaultColumnView, style: { ...iconButtonStyle({ disabled: !currentUserId || columnViewSaving || columnViewSwitching, bg: '#0f766e', disabledBg: '#99f6e4', color: '#fff', disabledColor: '#fff' }), width: '126px', padding: '0 10px', fontSize: `${FONT_SIZE_SM}px`, whiteSpace: 'nowrap' } }, columnViewSaving ? '保存中...' : '保存默认视图'),
-            React.createElement('button', { disabled: !currentUserId || columnViewCreating || columnViewSaving || columnViewSwitching, title: currentUserId ? (columnViewCreating ? '保存中' : '复制并保存为新视图') : '未识别到当前用户，无法保存视图', 'aria-label': currentUserId ? (columnViewCreating ? '保存中' : '复制并保存为新视图') : '未识别到当前用户，无法保存视图', onClick: () => createColumnViewFromCurrent(), style: { ...iconButtonStyle({ disabled: !currentUserId || columnViewCreating || columnViewSaving || columnViewSwitching, bg: '#1677ff', disabledBg: '#93c5fd', color: '#fff', disabledColor: '#fff' }), width: '120px', padding: '0 10px', fontSize: `${FONT_SIZE_SM}px`, whiteSpace: 'nowrap' } }, columnViewCreating ? '保存中...' : '复制并保存')
+            React.createElement('button', { disabled: !currentUserId || columnViewCreating || columnViewSaving || columnViewSwitching, title: currentUserId ? (columnViewCreating ? '保存中' : '复制并保存为新视图') : '未识别到当前用户，无法保存视图', 'aria-label': currentUserId ? (columnViewCreating ? '保存中' : '复制并保存为新视图') : '未识别到当前用户，无法保存视图', onClick: () => createColumnViewFromCurrent(), style: { ...iconButtonStyle({ disabled: !currentUserId || columnViewCreating || columnViewSaving || columnViewSwitching, bg: '#1677ff', disabledBg: '#93c5fd', color: '#fff', disabledColor: '#fff' }), width: '120px', padding: '0 10px', fontSize: `${FONT_SIZE_SM}px`, whiteSpace: 'nowrap' } }, columnViewCreating ? '保存中...' : '复制视图')
           )
         ),
         React.createElement(Input, {
