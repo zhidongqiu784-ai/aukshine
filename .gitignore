@@ -11,4 +11,4 @@ __pycache__/
 工作日志/
 
 # Local production credentials for the historical daily-data importer.
-每日数据/import_daily_history.local.json
+每日数据/每日数据导入工具/import_daily_history.local.json

@@ -4,10 +4,10 @@ r"""Validate and upsert historical daily data from the approved Excel template.
 The default mode is a read-only dry run. Production writes require both
 --execute and --confirm-production WRITE-PRODUCTION.
 
-python "D:\wayne\每日数据\import_daily_history.py" --file "<Excel文件路径>" --validate-only
-python "D:\wayne\每日数据\import_daily_history.py" --file "<Excel文件路径>" --timeout 120 --execute --confirm-production WRITE-PRODUCTION
-python "D:\wayne\每日数据\import_daily_history.py" --folder "C:\Users\Aniya\Desktop\每日数据历史导入" --validate-only
-python "D:\wayne\每日数据\import_daily_history.py" --folder "C:\Users\Aniya\Desktop\每日数据历史导入" --timeout 120 --execute --confirm-production WRITE-PRODUCTION
+python "D:\wayne\每日数据\每日数据导入工具\import_daily_history.py" --file "<Excel文件路径>" --validate-only
+python "D:\wayne\每日数据\每日数据导入工具\import_daily_history.py" --file "<Excel文件路径>" --timeout 120 --execute --confirm-production WRITE-PRODUCTION
+python "D:\wayne\每日数据\每日数据导入工具\import_daily_history.py" --folder "C:\Users\Aniya\Desktop\每日数据历史导入" --validate-only
+python "D:\wayne\每日数据\每日数据导入工具\import_daily_history.py" --folder "C:\Users\Aniya\Desktop\每日数据历史导入" --timeout 120 --execute --confirm-production WRITE-PRODUCTION
 """
 
 from __future__ import annotations
@@ -39,8 +39,7 @@ except ImportError as exc:  # pragma: no cover - environment-dependent message
 
 
 DEFAULT_API_BASE_URL = "https://erp.aukshine.com/api"
-# DEFAULT_EXCEL_FILE = Path(r"C:\Users\Aniya\Desktop\每日数据历史导入通用模板.xlsx")
-DEFAULT_EXCEL_FILE = Path(r"C:\Users\Aniya\Desktop\每日数据历史导入\B0GXKD9T6L-Holly.xlsx")
+DEFAULT_EXCEL_FILE = Path(__file__).with_name("导入历史数据模版.xlsx")
 LOCAL_CONFIG_FILE = Path(__file__).with_name("import_daily_history.local.json")
 
 
