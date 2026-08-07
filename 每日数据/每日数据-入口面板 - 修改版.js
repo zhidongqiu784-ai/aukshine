@@ -1,8 +1,10 @@
 const React = ctx.libs.React;
 const {
   Alert,
+  Button,
   Card,
   Empty,
+  Popover,
   Skeleton,
   Space,
   Spin,
@@ -12,7 +14,8 @@ const {
 } = ctx.libs.antd;
 
 const DETAIL_ROUTE = '/admin/d7djduic5ca';
-const VALID_STATUSES = ['重点', '普通', '新品'];
+const ACTIVE_STATUSES = ['重点', '普通', '新品'];
+const HISTORY_STATUS = '无需关注';
 const PAGE_SIZE = 500;
 const MAX_PAGES = 5;
 
@@ -50,6 +53,27 @@ async function fetchAllList(resourceName, params = {}) {
     if (pageRows.length < PAGE_SIZE) break;
   }
   return rows;
+}
+
+async function loadDailyAsinKeys() {
+  const res = await ctx.request({
+    url: 'daily_asins:query',
+    method: 'post',
+    data: {
+      dimensions: [
+        { field: ['asin_country'], alias: 'asin_country' },
+      ],
+      measures: [
+        { field: ['country_asin_date'], aggregation: 'count', alias: 'row_count' },
+      ],
+      limit: 5000,
+    },
+  });
+  return new Set(
+    extractArrayResponse(res)
+      .map((row) => normalizeText(row?.asin_country))
+      .filter(Boolean)
+  );
 }
 
 async function loadCurrentUser() {
@@ -142,26 +166,35 @@ function buildScope(users, currentUser) {
   };
 }
 
-function isValidAsinItem(item) {
+function isValidAsinItem(item, dailyAsinKeys) {
   const status = normalizeText(item?.status);
   const maintenanceLevel = normalizeText(item?.maintenance_level);
-  return VALID_STATUSES.includes(status) && maintenanceLevel !== '变体';
+  if (maintenanceLevel === '变体') return false;
+  if (ACTIVE_STATUSES.includes(status)) return true;
+  if (status !== HISTORY_STATUS) return false;
+  return dailyAsinKeys.has(normalizeText(item?.unique));
 }
 
-function flattenAsinRows(rows) {
+function flattenAsinRows(rows, dailyAsinKeys) {
   const map = new Map();
   rows.forEach((row) => {
     const model = normalizeText(row?.model);
-    if (!model) return;
+    const saleName = normalizeText(row?.sale_owner);
+    if (!model || !saleName) return;
     const data = {
       country: normalizeText(row?.country) || '未填站点',
-      saleName: normalizeText(row?.sale_owner) || '未填销售',
+      saleName,
       model,
       asin: normalizeText(row?.asin),
       status: normalizeText(row?.status) || '未填状态',
       maintenanceLevel: normalizeText(row?.maintenance_level),
+      unique: normalizeText(row?.unique),
     };
-    if (!data.asin || !isValidAsinItem({ status: data.status, maintenance_level: data.maintenanceLevel })) return;
+    if (!data.asin || !isValidAsinItem({
+      status: data.status,
+      maintenance_level: data.maintenanceLevel,
+      unique: data.unique,
+    }, dailyAsinKeys)) return;
     const key = [data.country, data.saleName, data.model, data.asin].join('__');
     if (!map.has(key)) map.set(key, data);
   });
@@ -213,10 +246,11 @@ function countTree(tree) {
   };
 }
 
-const statusColorMap = {
-  '\u91cd\u70b9': 'purple',
-  '\u65b0\u54c1': 'orange',
-  '\u666e\u901a': 'blue',
+const statusStyleMap = {
+  '\u91cd\u70b9': { color: '#c41d7f', background: '#fff0f6' },
+  '\u65b0\u54c1': { color: '#d46b08', background: '#fff7e6' },
+  '\u666e\u901a': { color: '#0958d9', background: '#e6f4ff' },
+  '\u65e0\u9700\u5173\u6ce8': { color: '#64748b', background: '#f1f5f9' },
 };
 
 const countryColorMap = {
@@ -238,20 +272,21 @@ function getCountryColor(country) {
 const asinLinkStyle = {
   display: 'inline-flex',
   alignItems: 'center',
-  gap: 4,
-  minHeight: 23,
-  padding: '1px 6px',
-  border: '1px solid #d9d9d9',
+  gap: 5,
+  minHeight: 24,
+  padding: '2px 4px 2px 7px',
+  border: '1px solid #dbe4ee',
   borderRadius: 4,
   background: '#fff',
-  color: '#1677ff',
-  fontSize: 13,
-  fontWeight: 600,
   textDecoration: 'none',
-  lineHeight: '19px',
+  boxShadow: '0 1px 2px rgba(15, 23, 42, 0.06)',
 };
 
 function renderAsin(item) {
+  const statusStyle = statusStyleMap[item.status] || {
+    color: '#64748b',
+    background: '#f1f5f9',
+  };
   return React.createElement(Tooltip, {
     key: `${item.country}_${item.saleName}_${item.model}_${item.asin}`,
     title: '进入每日数据详情',
@@ -262,14 +297,28 @@ function renderAsin(item) {
       rel: 'noreferrer',
       style: asinLinkStyle,
     },
-      React.createElement('span', null, item.asin),
+      React.createElement('span', {
+        style: {
+          color: '#2563eb',
+          fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace',
+          fontSize: 14,
+          fontWeight: 650,
+          fontVariantNumeric: 'tabular-nums',
+          letterSpacing: 0,
+          lineHeight: '18px',
+          whiteSpace: 'nowrap',
+        },
+      }, item.asin),
       React.createElement(Tag, {
-        color: statusColorMap[item.status] || 'default',
+        bordered: false,
         style: {
           marginInlineEnd: 0,
-          marginLeft: 2,
-          fontSize: 13,
-          lineHeight: '19px',
+          borderRadius: 3,
+          color: statusStyle.color,
+          background: statusStyle.background,
+          fontSize: 11,
+          fontWeight: 600,
+          lineHeight: '18px',
           paddingInline: 5,
         },
       }, item.status)
@@ -312,7 +361,7 @@ function renderModelRow(row, index) {
       style: {
         display: 'flex',
         flexWrap: 'wrap',
-        gap: 3,
+        gap: 4,
         minWidth: 0,
         overflow: 'visible',
       },
@@ -320,21 +369,41 @@ function renderModelRow(row, index) {
   );
 }
 
+function renderHistoryAsins(historyRows) {
+  return React.createElement('div', {
+    style: {
+      width: 420,
+      maxWidth: 'calc(100vw - 64px)',
+      maxHeight: 240,
+      overflowY: 'auto',
+      overflowX: 'hidden',
+    },
+  }, historyRows.map(renderModelRow));
+}
+
 function renderSaleGroup(saleName, models, index) {
   const rows = Object.keys(models).sort((a, b) => a.localeCompare(b)).map((model) => ({
     model,
     asinItems: models[model],
   }));
-  const modelCount = rows.length;
-  const maxAsinCount = rows.reduce((max, row) => Math.max(max, row.asinItems.length), 1);
-  const basisWidth = Math.min(660, Math.max(370, 260 + modelCount * 56 + maxAsinCount * 86));
+  const activeRows = rows.map((row) => ({
+    ...row,
+    asinItems: row.asinItems.filter((item) => item.status !== HISTORY_STATUS),
+  })).filter((row) => row.asinItems.length);
+  const historyRows = rows.map((row) => ({
+    ...row,
+    asinItems: row.asinItems.filter((item) => item.status === HISTORY_STATUS),
+  })).filter((row) => row.asinItems.length);
+  const historyCount = historyRows.reduce((sum, row) => sum + row.asinItems.length, 0);
   return React.createElement('div', {
     key: saleName,
     style: {
-      flex: `0 0 ${basisWidth}px`,
-      width: basisWidth,
+      display: 'flex',
+      flexDirection: 'column',
+      flex: '0 1 380px',
+      width: 380,
       maxWidth: '100%',
-      minWidth: 300,
+      minWidth: 0,
       border: '1px solid #e6ebf1',
       borderRadius: 5,
       background: '#fff',
@@ -361,7 +430,48 @@ function renderSaleGroup(saleName, models, index) {
       },
     }, saleName)
     ),
-    rows.map(renderModelRow)
+    activeRows.map(renderModelRow),
+    historyCount ? React.createElement(Popover, {
+      title: `${saleName} · 无需关注`,
+      content: renderHistoryAsins(historyRows),
+      trigger: 'click',
+      placement: 'bottomLeft',
+      overlayStyle: {
+        maxWidth: 'calc(100vw - 32px)',
+      },
+    },
+      React.createElement(Button, {
+        type: 'text',
+        block: true,
+        style: {
+          height: 40,
+          marginTop: 'auto',
+          paddingInline: 10,
+          borderTop: activeRows.length ? '1px solid #edf1f5' : 'none',
+          borderRadius: 0,
+          background: '#fafafa',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          color: '#475569',
+        },
+      },
+        React.createElement('span', {
+          style: {
+            fontSize: 13,
+            fontWeight: 600,
+          },
+        }, '查看无需关注'),
+        React.createElement(Tag, {
+          style: {
+            marginInlineEnd: 0,
+            fontSize: 12,
+            lineHeight: '20px',
+            fontVariantNumeric: 'tabular-nums',
+          },
+        }, `${historyCount} 个 ASIN`)
+      )
+    ) : null
   );
 }
 
@@ -431,7 +541,7 @@ function renderSourceTooltip() {
       },
     }, '入口数据口径'),
     renderTooltipSection('来源', [
-      ['业务数据', 'asin表'],
+      ['业务数据', 'asin表 + daily_asins表'],
       ['人员范围', 'users表'],
     ]),
     renderTooltipSection('字段', [
@@ -439,14 +549,16 @@ function renderSourceTooltip() {
       ['销售', 'asin.sale_owner'],
       ['型号', 'asin.model'],
       ['ASIN', 'asin.asin'],
+      ['历史组合', 'daily_asins.asin_country'],
     ]),
     renderTooltipSection('人员', [
       ['销售身份', 'users.username'],
       ['部门主管', 'users.department_manager'],
     ]),
     renderTooltipSection('筛选', [
-      ['状态', '重点 / 普通 / 新品'],
-      ['排除', '变体、无型号、无 ASIN'],
+      ['直接显示', '重点 / 普通 / 新品'],
+      ['折叠显示', '有每日数据历史的无需关注'],
+      ['排除', '变体、无销售、无型号、无 ASIN'],
     ]),
     renderTooltipSection('权限', [
       ['管理员', '全部数据'],
@@ -530,7 +642,7 @@ function renderCountry(country, sales) {
         flexWrap: 'wrap',
         gap: 8,
         padding: 8,
-        alignItems: 'flex-start',
+        alignItems: 'stretch',
       },
     }, saleEntries.map(([saleName, models], index) => renderSaleGroup(saleName, models, index)))
   );
@@ -589,8 +701,11 @@ Promise.resolve().then(async () => {
     const currentUser = await loadCurrentUser();
     const users = await fetchAllList('users', { sort: ['id'] }).catch(() => []);
     const scope = buildScope(users, currentUser);
-    const asinRows = await fetchAllList('asin', { sort: ['country', 'sale_owner', 'model', 'asin'] });
-    let items = flattenAsinRows(asinRows);
+    const [asinRows, dailyAsinKeys] = await Promise.all([
+      fetchAllList('asin', { sort: ['country', 'sale_owner', 'model', 'asin'] }),
+      loadDailyAsinKeys(),
+    ]);
+    let items = flattenAsinRows(asinRows, dailyAsinKeys);
     if (scope.allowedSaleNames) {
       items = items.filter((item) => scope.allowedSaleNames.has(item.saleName));
     }
