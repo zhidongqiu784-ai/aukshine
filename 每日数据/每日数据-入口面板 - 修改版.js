@@ -12,6 +12,7 @@ const {
   Tooltip,
   Typography,
 } = ctx.libs.antd;
+const { DownOutlined, RightOutlined } = ctx.libs.antdIcons;
 
 const DETAIL_ROUTE = '/admin/d7djduic5ca';
 const ACTIVE_STATUSES = ['重点', '普通', '新品'];
@@ -381,6 +382,65 @@ function renderHistoryAsins(historyRows) {
   }, historyRows.map(renderModelRow));
 }
 
+function HistoryAsinPopover({ historyRows, historyCount, hasActiveRows }) {
+  const [open, setOpen] = React.useState(false);
+  const ExpandIcon = open ? DownOutlined : RightOutlined;
+  return React.createElement(Popover, {
+    content: renderHistoryAsins(historyRows),
+    trigger: 'click',
+    placement: 'bottomLeft',
+    open,
+    onOpenChange: setOpen,
+    overlayStyle: {
+      maxWidth: 'calc(100vw - 32px)',
+    },
+  },
+    React.createElement(Button, {
+      type: 'text',
+      block: true,
+      'aria-expanded': open,
+      style: {
+        height: 40,
+        marginTop: 'auto',
+        paddingInline: 10,
+        borderTop: hasActiveRows ? '1px solid #edf1f5' : 'none',
+        borderRadius: 0,
+        background: '#fafafa',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        color: '#475569',
+      },
+    },
+      React.createElement('span', {
+        style: {
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          fontSize: 13,
+          fontWeight: 600,
+        },
+      },
+        React.createElement(ExpandIcon, {
+          style: {
+            fontSize: 12,
+            color: '#64748b',
+          },
+        }),
+        React.createElement('span', null, open ? '收起【无需关注】ASIN' : '展开【无需关注】ASIN')
+      ),
+      React.createElement(Tag, {
+        style: {
+          marginInlineEnd: 0,
+          fontSize: 12,
+          lineHeight: '20px',
+          fontVariantNumeric: 'tabular-nums',
+        },
+      }, `${historyCount} 个 ASIN`)
+    )
+  );
+}
+
 function renderSaleGroup(saleName, models, index) {
   const rows = Object.keys(models).sort((a, b) => a.localeCompare(b)).map((model) => ({
     model,
@@ -431,47 +491,11 @@ function renderSaleGroup(saleName, models, index) {
     }, saleName)
     ),
     activeRows.map(renderModelRow),
-    historyCount ? React.createElement(Popover, {
-      title: `${saleName} · 无需关注`,
-      content: renderHistoryAsins(historyRows),
-      trigger: 'click',
-      placement: 'bottomLeft',
-      overlayStyle: {
-        maxWidth: 'calc(100vw - 32px)',
-      },
-    },
-      React.createElement(Button, {
-        type: 'text',
-        block: true,
-        style: {
-          height: 40,
-          marginTop: 'auto',
-          paddingInline: 10,
-          borderTop: activeRows.length ? '1px solid #edf1f5' : 'none',
-          borderRadius: 0,
-          background: '#fafafa',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          color: '#475569',
-        },
-      },
-        React.createElement('span', {
-          style: {
-            fontSize: 13,
-            fontWeight: 600,
-          },
-        }, '查看无需关注'),
-        React.createElement(Tag, {
-          style: {
-            marginInlineEnd: 0,
-            fontSize: 12,
-            lineHeight: '20px',
-            fontVariantNumeric: 'tabular-nums',
-          },
-        }, `${historyCount} 个 ASIN`)
-      )
-    ) : null
+    historyCount ? React.createElement(HistoryAsinPopover, {
+      historyRows,
+      historyCount,
+      hasActiveRows: activeRows.length > 0,
+    }) : null
   );
 }
 
