@@ -3688,6 +3688,7 @@
     const [editorPos, setEditorPos] = useState({ top: 0, left: 0 });
     const cellRef = useRef(null);
     const editorRef = useRef(null);
+    const hoverTipMoveAtRef = useRef(0);
 
     useEffect(() => { setContent(value || ''); }, [value]);
 
@@ -3774,6 +3775,13 @@
       e?.preventDefault?.();
       e?.stopPropagation?.();
       setPreviewUrl(url);
+    };
+    const updateHoverTip = (e, force = false) => {
+      if (isEmpty) return;
+      const now = Date.now();
+      if (!force && now - hoverTipMoveAtRef.current < 32) return;
+      hoverTipMoveAtRef.current = now;
+      setHoverTip({ x: e.clientX, y: e.clientY });
     };
     const previewLayer = previewUrl && React.createElement('div', {
       style: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.88)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' },
@@ -3901,7 +3909,7 @@
     }
     const isEmpty = !cleanText && imageUrls.length === 0;
     return React.createElement(React.Fragment, null,
-      React.createElement('div', { ref: cellRef, onMouseEnter: (e) => { if (!isEmpty) setHoverTip({ x: e.clientX, y: e.clientY }); }, onMouseMove: (e) => { if (!isEmpty) setHoverTip({ x: e.clientX, y: e.clientY }); }, onMouseLeave: () => setHoverTip(null), style: { height: '46px', display: 'flex', alignItems: 'center', justifyContent: isEmpty ? 'center' : 'flex-start', gap: '5px', padding: '3px 5px', background: cellBackground || (content ? '#fafafa' : '#fff'), border: '1px solid #e5e7eb', borderRadius: '6px', cursor: 'cell', overflow: 'hidden', boxSizing: 'border-box' } },
+      React.createElement('div', { ref: cellRef, onMouseEnter: (e) => updateHoverTip(e, true), onMouseMove: updateHoverTip, onMouseLeave: () => setHoverTip(null), style: { height: '46px', display: 'flex', alignItems: 'center', justifyContent: isEmpty ? 'center' : 'flex-start', gap: '5px', padding: '3px 5px', background: cellBackground || (content ? '#fafafa' : '#fff'), border: '1px solid #e5e7eb', borderRadius: '6px', cursor: 'cell', overflow: 'hidden', boxSizing: 'border-box', contentVisibility: 'auto', containIntrinsicSize: '46px' } },
         isEmpty
           ? React.createElement('div', { style: { fontSize: '16px', color: '#999', lineHeight: '18px', fontWeight: 700, textAlign: 'center' } }, placeholder)
           : React.createElement(React.Fragment, null,
@@ -3909,6 +3917,8 @@
                 React.createElement('img', {
                   key: `${url}-${idx}`,
                   src: url,
+                  loading: 'lazy',
+                  decoding: 'async',
                   onMouseDown: (e) => openImagePreview(e, url),
                   onClick: (e) => openImagePreview(e, url),
                   style: { width: '34px', height: '34px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #d9d9d9', background: '#fff', flex: '0 0 auto', cursor: 'zoom-in' },
@@ -11448,6 +11458,235 @@
     );
 
     const tableWidth = visibleCols.reduce((s, c) => s + (c.width || 80), 0);
+    const pinnedCols = visibleCols.filter((col) => col.pinned);
+    const nonPinnedCols = visibleCols.filter((col) => !col.pinned);
+    const pinnedWidth = pinnedCols.reduce((sum, col) => sum + (col.width || 80), 0);
+    const visibleColumnIndexMap = Object.fromEntries(visibleCols.map((col, index) => [col.key, index]));
+    const canCompositePinnedCells = pinnedCols.length > 1
+      && visibleCols.slice(0, pinnedCols.length).every((col) => col.pinned)
+      && pinnedCols.every((col) => (
+        !col._isCompetitorSubColumn && !MERGED_WEEKLY_DISPLAY_FIELDS.has(col.field)
+      ));
+    const pinnedGridTemplate = pinnedCols.map((col) => `${col.width || 80}px`).join(' ');
+
+    const renderRegularHeaderCell = (col, nested = false) => {
+      const isPinned = col.pinned;
+      const leftOff = isPinned ? pinnedLeftMap[col.key] : undefined;
+      const hdrColor = getColHeaderColor(col);
+      const isHighlighted = highlightColumnKey === col.key;
+      return React.createElement(nested ? 'div' : 'th', {
+        rowSpan: nested ? undefined : (hasCompetitorColumns ? 2 : 1),
+        key: col.key,
+        draggable: true,
+        onDragStart: (e) => onDragStart(e, col.key),
+        onDragOver,
+        onDrop: (e) => onDrop(e, col.key),
+        onClick: () => handleSort(col.key),
+        style: {
+          position: nested ? 'relative' : 'sticky',
+          top: nested ? undefined : `${HEADER_GROUP_HEIGHT}px`,
+          left: nested ? undefined : (isPinned ? `${leftOff}px` : undefined),
+          zIndex: nested ? undefined : (isPinned ? 4 : 2),
+          width: `${col.width || 80}px`,
+          minWidth: nested ? 0 : undefined,
+          height: nested ? '100%' : undefined,
+          padding: '5px 16px 5px 6px',
+          background: isHighlighted ? '#FFF1B8' : hdrColor,
+          color: getTextColorForBg(hdrColor),
+          borderBottom: '2px solid rgba(0,0,0,0.12)',
+          borderRight: isPinned ? '2px solid rgba(0,0,0,0.15)' : '1px solid rgba(0,0,0,0.08)',
+          textAlign: 'center',
+          fontWeight: 600,
+          fontSize: `${FONT_SIZE_SM}px`,
+          userSelect: 'none',
+          cursor: 'pointer',
+          whiteSpace: 'normal',
+          lineHeight: '15px',
+          boxSizing: 'border-box',
+          overflow: 'hidden',
+          boxShadow: isHighlighted ? 'inset 0 0 0 2px #faad14' : undefined,
+        },
+      },
+        React.createElement('span', { style: { display: 'flex', alignItems: 'center', justifyContent: 'center', maxWidth: '100%', minWidth: 0, overflow: 'hidden', verticalAlign: 'middle' } },
+          renderHeaderLabel(col),
+          renderSortMark(col.key),
+        ),
+        React.createElement('div', { draggable: false, onMouseDown: (e) => onResizeStart(e, col.key), onClick: (e) => e.stopPropagation(), onDragStart: (e) => { e.preventDefault(); e.stopPropagation(); }, style: { position: 'absolute', right: 0, top: 0, bottom: 0, width: '6px', cursor: 'col-resize', zIndex: 2, background: 'transparent' } }),
+      );
+    };
+
+    const renderBodyCell = (row, rIdx, rowId, isSummaryRow, col, cIdx, nested = false) => {
+      const isPinned = col.pinned;
+      const leftOff = isPinned ? pinnedLeftMap[col.key] : undefined;
+      const dynFn = DYNAMIC_COLOR[col.field] || DYNAMIC_COLOR[col.key];
+      const cellColor = isSummaryRow ? '#0f172a' : (dynFn ? dynFn(row) : null);
+      const canEdit = !isSummaryRow && isCellEditable(col);
+      const isEditing = editingCell && editingCell.rowId === rowId && editingCell.colKey === col.key;
+      const selected = isCellSelected(rIdx, cIdx);
+      const isSelectionInputCell = selectionInputValue !== '' && selected && canEdit;
+      const isHighlighted = highlightColumnKey === col.key;
+      const isCrossHighlighted = isActiveCrossCell(rIdx, cIdx);
+      const importantCellKey = getImportantCellKey(row, col);
+      const isImportantCell = !!importantCellKey && importantCellKeySet.has(importantCellKey);
+      const bodyCellBackground = getBodyCellBackground(rIdx, cIdx, selected, col);
+      const cellBackground = isSummaryRow
+        ? WEEKLY_SUMMARY_BG
+        : (isHighlighted
+          ? '#FFF7D6'
+          : ((selected || isCrossHighlighted) ? bodyCellBackground : (isImportantCell ? IMPORTANT_CELL_BACKGROUND : bodyCellBackground)));
+      const cellBoxShadow = selected
+        ? 'inset 0 0 0 2px #1677ff'
+        : (isHighlighted
+          ? 'inset 0 0 0 2px #faad14'
+          : (isCrossHighlighted
+            ? (isPinned ? '1px 0 0 rgba(0,0,0,0.05)' : undefined)
+            : (isImportantCell
+              ? `inset 0 0 0 2px ${IMPORTANT_CELL_BORDER}`
+              : (isPinned ? '1px 0 0 rgba(0,0,0,0.05)' : undefined))));
+      const weeklyMergedCell = !isSummaryRow && MERGED_WEEKLY_DISPLAY_FIELDS.has(col.field)
+        ? weeklyMergedCellMap[rowId]?.[col.key]
+        : null;
+      const isWeeklyMergedDisplayCell = Boolean(weeklyMergedCell);
+      if (isWeeklyMergedDisplayCell && weeklyMergedCell.rowSpan === 0) return null;
+
+      const elementType = nested ? 'div' : 'td';
+      const position = nested ? 'relative' : (isPinned ? 'sticky' : 'relative');
+      const left = nested ? undefined : (isPinned ? `${leftOff}px` : undefined);
+      const zIndex = nested ? undefined : (isPinned ? 1 : undefined);
+      const sharedSizeStyle = nested ? { width: `${col.width || 80}px`, minWidth: 0, height: '100%' } : {};
+
+      if (!isSummaryRow && shouldUseRichEdit(col, canEdit)) {
+        const richCellKey = `${rowId || rIdx}__${col.key}`;
+        const richValue =
+          col._dynamicKind === 'keyword'
+            ? row[col.field]?.daily?.actual_rank
+            : col._dynamicKind === 'competitor'
+            ? row[col.field]?.daily?.[col._competitorField || 'notes']
+            : getCellValue(col, row);
+        const openRichEditorFromCell = (e) => {
+          if (e.target?.closest?.('[data-rich-editor-panel="1"]')) return;
+          e.preventDefault();
+          e.stopPropagation();
+          selectingRef.current = false;
+          selectionDraftRef.current = null;
+          selectionStore.setRange(null);
+          setSelectedRange(null);
+          setSelectionInputValue('');
+          const rect = e.currentTarget.getBoundingClientRect();
+          setRichEditOpenSignal({
+            cellKey: richCellKey,
+            tick: Date.now(),
+            rect: { top: rect.top, left: rect.left, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height },
+          });
+        };
+        const saveRich =
+          col._dynamicKind === 'keyword'
+            ? (next) => saveKeywordRichCell(row, col, next)
+            : col._dynamicKind === 'competitor'
+            ? (next) => saveCompetitorRichCell(row, col, next)
+            : (next) => saveStaticRichCell(row, col, next);
+
+        return React.createElement(elementType, {
+          key: col.key,
+          rowSpan: nested ? undefined : (weeklyMergedCell?.rowSpan || undefined),
+          onMouseDown: (e) => handleCellMouseDown(e, rIdx, cIdx, row, col),
+          onDoubleClickCapture: openRichEditorFromCell,
+          onMouseEnter: (e) => handleCellMouseEnter(e, rIdx, cIdx),
+          style: {
+            ...sharedSizeStyle,
+            position,
+            left,
+            zIndex,
+            background: cellBackground,
+            padding: '2px',
+            borderBottom: '1px solid #e8e8e8',
+            borderRight: isPinned ? '2px solid rgba(0,0,0,0.18)' : '1px solid #e8e8e8',
+            textAlign: 'center',
+            verticalAlign: 'middle',
+            boxSizing: 'border-box',
+            userSelect: 'none',
+            boxShadow: cellBoxShadow,
+          },
+        },
+          React.createElement(RichTextImageCell, {
+            value: richValue,
+            onSave: saveRich,
+            placeholder: '+',
+            cellKey: richCellKey,
+            openSignal: richEditOpenSignal,
+            cellBackground,
+            onAfterSaveExit: focusClipboardWithoutScroll,
+          }),
+          React.createElement(ImportantCellMarker, { visible: isImportantCell }),
+          React.createElement(SelectionOverlay, {
+            store: selectionStore,
+            rowIndex: rIdx,
+            columnIndex: cIdx,
+          })
+        );
+      }
+
+      const cachedCellDisplay = cellDisplayCache[rIdx]?.[cIdx];
+      const displayContent = isSelectionInputCell
+        ? selectionInputValue
+        : cachedCellDisplay?.displayContent;
+      const renderedContent = isSelectionInputCell
+        ? selectionInputValue
+        : cachedCellDisplay?.renderedContent;
+
+      return React.createElement(elementType, {
+        key: col.key,
+        rowSpan: nested ? undefined : (weeklyMergedCell?.rowSpan || undefined),
+        title: typeof renderedContent === 'string' ? renderedContent : (typeof displayContent === 'string' ? displayContent : undefined),
+        onMouseDown: (e) => handleCellMouseDown(e, rIdx, cIdx, row, col),
+        onDoubleClick: () => {
+          if (!canEdit || isEditing) return;
+          const currentValue = getCellValue(col, row);
+          if (editingCell || saving) {
+            pendingCellInteractionRef.current = { r: rIdx, c: cIdx, rowId, col, currentValue, openEditor: true };
+            return;
+          }
+          startEdit(rowId, col, currentValue);
+        },
+        style: {
+          ...sharedSizeStyle,
+          position,
+          left,
+          zIndex,
+          background: cellBackground,
+          padding: isEditing ? '3px 5px' : '5px 8px',
+          borderBottom: '1px solid #e8e8e8',
+          borderRight: isPinned ? '2px solid rgba(0,0,0,0.18)' : '1px solid #e8e8e8',
+          whiteSpace: isWeeklyMergedDisplayCell ? 'normal' : 'nowrap',
+          overflow: 'hidden',
+          textOverflow: isWeeklyMergedDisplayCell ? 'clip' : 'ellipsis',
+          textAlign: 'center',
+          verticalAlign: isWeeklyMergedDisplayCell ? 'middle' : undefined,
+          lineHeight: isWeeklyMergedDisplayCell ? '18px' : undefined,
+          color: cellColor || '#1a1a1a',
+          fontWeight: isSummaryRow ? 700 : (cellColor ? 600 : 500),
+          fontSize: `${FONT_SIZE}px`,
+          boxSizing: 'border-box',
+          userSelect: 'none',
+          cursor: canEdit && !isEditing ? 'cell' : 'default',
+          outline: canEdit && !isEditing ? '1px dashed transparent' : undefined,
+          boxShadow: cellBoxShadow,
+        },
+        onMouseEnter: (e) => {
+          handleCellMouseEnter(e, rIdx, cIdx);
+          if (canEdit && !isEditing) e.currentTarget.style.outline = '1px dashed #1890ff';
+        },
+        onMouseLeave: canEdit && !isEditing ? (e) => { e.currentTarget.style.outline = '1px dashed transparent'; } : undefined,
+      },
+        isEditing ? renderEditInput(col) : renderedContent,
+        React.createElement(ImportantCellMarker, { visible: isImportantCell }),
+        React.createElement(SelectionOverlay, {
+          store: selectionStore,
+          rowIndex: rIdx,
+          columnIndex: cIdx,
+        })
+      );
+    };
     const managerInputStyle = { width: '100%', padding: '4px 8px', border: '1px solid #d9d9d9', borderRadius: 4, fontSize: `${FONT_SIZE_SM}px` };
     const sortedManagerItems = [...managerItems].sort((a, b) => {
       const ai = getCompetitorRoleIndex(a.role);
@@ -12132,7 +12371,7 @@
         onDragOver: onTableDragOver,
         onMouseUp: stopSelecting,
         onMouseLeave: stopSelecting,
-        style: { overflowX: 'auto', overflowY: 'auto', height: tableWrapHeight, borderRadius: '8px', border: '1px solid #d9d9d9', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', background: '#fff', outline: 'none' }
+        style: { overflowX: 'auto', overflowY: 'auto', height: tableWrapHeight, borderRadius: '8px', border: '1px solid #d9d9d9', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', background: '#fff', outline: 'none', willChange: 'scroll-position' }
       },
         !hasRequiredUrlParams
           ? React.createElement('div', { style: { padding: '40px', textAlign: 'center', color: '#999', fontSize: `${FONT_SIZE}px` } }, '暂无数据 请重新进入页面')
@@ -12184,9 +12423,41 @@
                 })
               ),
               React.createElement('table', { style: { borderCollapse: 'separate', borderSpacing: 0, tableLayout: 'fixed', background: '#fff', width: `${tableWidth}px` } },
+                canCompositePinnedCells && React.createElement('colgroup', null,
+                  visibleCols.map((col) => React.createElement('col', { key: `col_${col.key}`, style: { width: `${col.width || 80}px` } }))
+                ),
                 React.createElement('thead', null,
                   React.createElement('tr', null,
-                    visibleCols.map((col) => {
+                    canCompositePinnedCells && React.createElement('th', {
+                      colSpan: pinnedCols.length,
+                      rowSpan: hasCompetitorColumns ? 2 : 1,
+                      style: {
+                        position: 'sticky',
+                        top: `${HEADER_GROUP_HEIGHT}px`,
+                        left: 0,
+                        zIndex: 4,
+                        width: `${pinnedWidth}px`,
+                        height: `${HEADER_MAIN_HEIGHT + (hasCompetitorColumns ? HEADER_SUB_HEIGHT : 0)}px`,
+                        padding: 0,
+                        background: '#fff',
+                        verticalAlign: 'middle',
+                        boxSizing: 'border-box',
+                        overflow: 'hidden',
+                      },
+                    },
+                      React.createElement('div', {
+                        style: {
+                          position: 'absolute',
+                          inset: 0,
+                          display: 'grid',
+                          gridTemplateColumns: pinnedGridTemplate,
+                          width: `${pinnedWidth}px`,
+                          height: '100%',
+                          alignItems: 'stretch',
+                        },
+                      }, pinnedCols.map((col) => renderRegularHeaderCell(col, true)))
+                    ),
+                    (canCompositePinnedCells ? nonPinnedCols : visibleCols).map((col) => {
                       const isPinned = col.pinned;
                       const leftOff  = isPinned ? pinnedLeftMap[col.key] : undefined;
                       const hdrColor = getColHeaderColor(col);
@@ -12238,43 +12509,11 @@
                         );
                       }
 
-                      const isHighlighted = highlightColumnKey === col.key;
-                      return React.createElement('th', {
-                        rowSpan: hasCompetitorColumns ? 2 : 1,
-                        key: col.key, draggable: true,
-                        onDragStart: (e) => onDragStart(e, col.key),
-                        onDragOver,
-                        onDrop: (e) => onDrop(e, col.key),
-                        onClick: () => handleSort(col.key),
-                        style: {
-                          position: 'sticky', top: `${HEADER_GROUP_HEIGHT}px`, left: isPinned ? `${leftOff}px` : undefined,
-                          zIndex: isPinned ? 4 : 2,
-                          width: `${col.width || 80}px`,
-                          padding: '5px 16px 5px 6px',
-                          background: isHighlighted ? '#FFF1B8' : hdrColor,
-                          color: getTextColorForBg(hdrColor),
-                          borderBottom: '2px solid rgba(0,0,0,0.12)',
-                          borderRight: isPinned ? '2px solid rgba(0,0,0,0.15)' : '1px solid rgba(0,0,0,0.08)',
-                          textAlign: 'center', fontWeight: 600,
-                          fontSize: `${FONT_SIZE_SM}px`,
-                          userSelect: 'none', cursor: 'pointer',
-                          whiteSpace: 'normal',
-                          lineHeight: '15px',
-                          boxSizing: 'border-box',
-                          overflow: 'hidden',
-                          boxShadow: isHighlighted ? 'inset 0 0 0 2px #faad14' : undefined,
-                        },
-                      },
-                        React.createElement('span', { style: { display: 'flex', alignItems: 'center', justifyContent: 'center', maxWidth: '100%', minWidth: 0, overflow: 'hidden', verticalAlign: 'middle' } },
-                          renderHeaderLabel(col),
-                          renderSortMark(col.key),
-                        ),
-                        React.createElement('div', { draggable: false, onMouseDown: (e) => onResizeStart(e, col.key), onClick: (e) => e.stopPropagation(), onDragStart: (e) => { e.preventDefault(); e.stopPropagation(); }, style: { position: 'absolute', right: 0, top: 0, bottom: 0, width: '6px', cursor: 'col-resize', zIndex: 2, background: 'transparent' } }),
-                      );
+                      return renderRegularHeaderCell(col);
                     })
                   ),
                   hasCompetitorColumns && React.createElement('tr', null,
-                    visibleCols.map((col) => {
+                    (canCompositePinnedCells ? nonPinnedCols : visibleCols).map((col) => {
                       if (!col._isCompetitorSubColumn) return null;
                       const isPinned = col.pinned;
                       const leftOff = isPinned ? pinnedLeftMap[col.key] : undefined;
@@ -12319,171 +12558,55 @@
                     const rowId = row.country_asin_date || row.country_asin_week_range || row.id;
                     const isSummaryRow = row.__rowType === WEEKLY_SUMMARY_ROW_TYPE;
                     return React.createElement('tr', { key: rowId || rIdx, style: { background: isSummaryRow ? WEEKLY_SUMMARY_BG : (rIdx % 2 === 0 ? '#fff' : '#fafafa') } },
-                      visibleCols.map((col, cIdx) => {
-                        const isPinned  = col.pinned;
-                        const leftOff   = isPinned ? pinnedLeftMap[col.key] : undefined;
-                        const dynFn     = DYNAMIC_COLOR[col.field] || DYNAMIC_COLOR[col.key];
-                        const cellColor = isSummaryRow ? '#0f172a' : (dynFn ? dynFn(row) : null);
-                        const isNum     = ALL_NUMERIC.has(col.field) || col.field === 'promo_day';
-                        const canEdit   = !isSummaryRow && isCellEditable(col);
-                        const isEditing = editingCell && editingCell.rowId === rowId && editingCell.colKey === col.key;
-                        const selected  = isCellSelected(rIdx, cIdx);
-                        const isSelectionInputCell = selectionInputValue !== '' && selected && canEdit;
-                        const isHighlighted = highlightColumnKey === col.key;
-                        const isCrossHighlighted = isActiveCrossCell(rIdx, cIdx);
-                        const importantCellKey = getImportantCellKey(row, col);
-                        const isImportantCell = !!importantCellKey && importantCellKeySet.has(importantCellKey);
-                        const bodyCellBackground = getBodyCellBackground(rIdx, cIdx, selected, col);
-                        const cellBackground = isSummaryRow
-                          ? WEEKLY_SUMMARY_BG
-                          : (isHighlighted
-                            ? '#FFF7D6'
-                            : ((selected || isCrossHighlighted) ? bodyCellBackground : (isImportantCell ? IMPORTANT_CELL_BACKGROUND : bodyCellBackground)));
-                        const cellBoxShadow = selected
-                          ? 'inset 0 0 0 2px #1677ff'
-                          : (isHighlighted
-                            ? 'inset 0 0 0 2px #faad14'
-                            : (isCrossHighlighted
-                              ? (isPinned ? '1px 0 0 rgba(0,0,0,0.05)' : undefined)
-                              : (isImportantCell
-                                ? `inset 0 0 0 2px ${IMPORTANT_CELL_BORDER}`
-                                : (isPinned ? '1px 0 0 rgba(0,0,0,0.05)' : undefined))));
-                        const weeklyMergedCell = !isSummaryRow && MERGED_WEEKLY_DISPLAY_FIELDS.has(col.field)
-                          ? weeklyMergedCellMap[rowId]?.[col.key]
-                          : null;
-                        const isWeeklyMergedDisplayCell = Boolean(weeklyMergedCell);
-                        if (isWeeklyMergedDisplayCell && weeklyMergedCell.rowSpan === 0) return null;
-
-                        if (!isSummaryRow && shouldUseRichEdit(col, canEdit)) {
-                          const richCellKey = `${rowId || rIdx}__${col.key}`;
-                          const richValue =
-                            col._dynamicKind === 'keyword'
-                              ? row[col.field]?.daily?.actual_rank
-                              : col._dynamicKind === 'competitor'
-                              ? row[col.field]?.daily?.[col._competitorField || 'notes']
-                              : getCellValue(col, row);
-                          const openRichEditorFromCell = (e) => {
-                            if (e.target?.closest?.('[data-rich-editor-panel="1"]')) return;
-                            e.preventDefault();
-                            e.stopPropagation();
-                            selectingRef.current = false;
-                            selectionDraftRef.current = null;
-                            selectionStore.setRange(null);
-                            setSelectedRange(null);
-                            setSelectionInputValue('');
-                            const rect = e.currentTarget.getBoundingClientRect();
-                            setRichEditOpenSignal({
-                              cellKey: richCellKey,
-                              tick: Date.now(),
-                              rect: { top: rect.top, left: rect.left, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height },
-                            });
-                          };
-                          const saveRich =
-                            col._dynamicKind === 'keyword'
-                              ? (next) => saveKeywordRichCell(row, col, next)
-                              : col._dynamicKind === 'competitor'
-                              ? (next) => saveCompetitorRichCell(row, col, next)
-                              : (next) => saveStaticRichCell(row, col, next);
-
-                          return React.createElement('td', {
-                            key: col.key,
-                            rowSpan: weeklyMergedCell?.rowSpan || undefined,
-                            onMouseDown: (e) => handleCellMouseDown(e, rIdx, cIdx, row, col),
-                            onDoubleClickCapture: openRichEditorFromCell,
-                            onMouseEnter: (e) => handleCellMouseEnter(e, rIdx, cIdx),
-                            style: {
-                              position: isPinned ? 'sticky' : 'relative',
-                              left: isPinned ? `${leftOff}px` : undefined,
-                              zIndex: isPinned ? 1 : undefined,
-                              background: cellBackground,
-                              padding: '2px',
-                              borderBottom: '1px solid #e8e8e8',
-                              borderRight: isPinned ? '2px solid rgba(0,0,0,0.18)' : '1px solid #e8e8e8',
-                              textAlign: 'center',
-                              verticalAlign: 'middle',
-                              boxSizing: 'border-box',
-                              userSelect: 'none',
-                              boxShadow: cellBoxShadow,
-                            },
-                          },
-                            React.createElement(RichTextImageCell, {
-                              value: richValue,
-                              onSave: saveRich,
-                              placeholder: '+',
-                              cellKey: richCellKey,
-                              openSignal: richEditOpenSignal,
-                              cellBackground,
-                              onAfterSaveExit: focusClipboardWithoutScroll,
-                            }),
-                            React.createElement(ImportantCellMarker, { visible: isImportantCell }),
-                            React.createElement(SelectionOverlay, {
-                              store: selectionStore,
-                              rowIndex: rIdx,
-                              columnIndex: cIdx,
-                            })
-                          );
-                        }
-
-                        const cachedCellDisplay = cellDisplayCache[rIdx]?.[cIdx];
-                        const displayContent = isSelectionInputCell
-                          ? selectionInputValue
-                          : cachedCellDisplay?.displayContent;
-                        const renderedContent = isSelectionInputCell
-                          ? selectionInputValue
-                          : cachedCellDisplay?.renderedContent;
-
-                        return React.createElement('td', {
-                          key: col.key,
-                          rowSpan: weeklyMergedCell?.rowSpan || undefined,
-                          title: typeof renderedContent === 'string' ? renderedContent : (typeof displayContent === 'string' ? displayContent : undefined),
-                          onMouseDown: (e) => handleCellMouseDown(e, rIdx, cIdx, row, col),
-                          onDoubleClick: () => {
-                            if (!canEdit || isEditing) return;
-                            const currentValue = getCellValue(col, row);
-                            if (editingCell || saving) {
-                              pendingCellInteractionRef.current = { r: rIdx, c: cIdx, rowId, col, currentValue, openEditor: true };
-                              return;
-                            }
-                            startEdit(rowId, col, currentValue);
-                          },
-                          style: {
-                            position: isPinned ? 'sticky' : 'relative',
-                            left: isPinned ? `${leftOff}px` : undefined,
-                            zIndex: isPinned ? 1 : undefined,
-                            background: cellBackground,
-                            padding: isEditing ? '3px 5px' : '5px 8px',
-                            borderBottom: '1px solid #e8e8e8',
-                            borderRight: isPinned ? '2px solid rgba(0,0,0,0.18)' : '1px solid #e8e8e8',
-                            whiteSpace: isWeeklyMergedDisplayCell ? 'normal' : 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: isWeeklyMergedDisplayCell ? 'clip' : 'ellipsis',
-                            textAlign: 'center',
-                            verticalAlign: isWeeklyMergedDisplayCell ? 'middle' : undefined,
-                            lineHeight: isWeeklyMergedDisplayCell ? '18px' : undefined,
-                            color: cellColor || '#1a1a1a',
-                            fontWeight: isSummaryRow ? 700 : (cellColor ? 600 : 500),
-                            fontSize: `${FONT_SIZE}px`,
-                            boxSizing: 'border-box',
-                            userSelect: 'none',
-                            cursor: canEdit && !isEditing ? 'cell' : 'default',
-                            outline: canEdit && !isEditing ? '1px dashed transparent' : undefined,
-                            boxShadow: cellBoxShadow,
-                          },
-                          onMouseEnter: (e) => {
-                            handleCellMouseEnter(e, rIdx, cIdx);
-                            if (canEdit && !isEditing) e.currentTarget.style.outline = '1px dashed #1890ff';
-                          },
-                          onMouseLeave: canEdit && !isEditing ? (e) => { e.currentTarget.style.outline = '1px dashed transparent'; } : undefined,
+                      canCompositePinnedCells && React.createElement('td', {
+                        colSpan: pinnedCols.length,
+                        style: {
+                          position: 'sticky',
+                          left: 0,
+                          zIndex: 1,
+                          width: `${pinnedWidth}px`,
+                          height: '1px',
+                          padding: 0,
+                          background: isSummaryRow ? WEEKLY_SUMMARY_BG : (rIdx % 2 === 0 ? '#fff' : '#fafafa'),
+                          verticalAlign: 'middle',
+                          boxSizing: 'border-box',
+                          overflow: 'hidden',
                         },
-                          isEditing ? renderEditInput(col) : renderedContent,
-                          React.createElement(ImportantCellMarker, { visible: isImportantCell }),
-                          React.createElement(SelectionOverlay, {
-                            store: selectionStore,
-                            rowIndex: rIdx,
-                            columnIndex: cIdx,
-                          })
-                        );
-                      })
+                      },
+                        React.createElement('div', {
+                          style: {
+                            display: 'grid',
+                            gridTemplateColumns: pinnedGridTemplate,
+                            width: `${pinnedWidth}px`,
+                            height: '100%',
+                            alignItems: 'stretch',
+                          },
+                        }, pinnedCols.map((col) => renderBodyCell(
+                          row,
+                          rIdx,
+                          rowId,
+                          isSummaryRow,
+                          col,
+                          visibleColumnIndexMap[col.key],
+                          true,
+                        )))
+                      ),
+                      canCompositePinnedCells && nonPinnedCols.map((col) => renderBodyCell(
+                        row,
+                        rIdx,
+                        rowId,
+                        isSummaryRow,
+                        col,
+                        visibleColumnIndexMap[col.key],
+                      )),
+                      !canCompositePinnedCells && visibleCols.map((col, cIdx) => renderBodyCell(
+                        row,
+                        rIdx,
+                        rowId,
+                        isSummaryRow,
+                        col,
+                        cIdx,
+                      ))
                     );
                   })
                 )
